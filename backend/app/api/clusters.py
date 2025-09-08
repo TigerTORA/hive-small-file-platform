@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.models.cluster import Cluster
 from app.schemas.cluster import ClusterCreate, ClusterResponse
+from app.monitor.mock_table_scanner import MockTableScanner
 
 router = APIRouter()
 
@@ -28,3 +29,21 @@ async def get_cluster(cluster_id: int, db: Session = Depends(get_db)):
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     return cluster
+
+@router.post("/{cluster_id}/test")
+async def test_cluster_connection(cluster_id: int, db: Session = Depends(get_db)):
+    """Test cluster connections"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        scanner = MockTableScanner(cluster)
+        results = scanner.test_connections()
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "connections": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")

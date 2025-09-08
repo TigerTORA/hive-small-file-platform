@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Small file threshold (in bytes)
     SMALL_FILE_THRESHOLD: int = 128 * 1024 * 1024  # 128MB
     
+    # Sentry
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "development"
+    
     class Config:
         env_file = ".env"
 

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.models.table_metric import TableMetric
 from app.models.cluster import Cluster
-from app.schemas.table_metric import TableMetricResponse
+from app.schemas.table_metric import TableMetricResponse, ScanRequest
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.mock_table_scanner import MockTableScanner
 
@@ -73,6 +73,60 @@ async def get_tables(cluster_id: int, database_name: str, db: Session = Depends(
             return {"database": database_name, "tables": tables}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get tables: {str(e)}")
+
+@router.post("/scan")
+async def scan_tables(
+    scan_request: ScanRequest,
+    db: Session = Depends(get_db)
+):
+    """Unified scan endpoint for tables - can scan single table or database"""
+    cluster = db.query(Cluster).filter(Cluster.id == scan_request.cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        scanner = MockTableScanner(cluster)
+        
+        if scan_request.table_name and scan_request.database_name:
+            # Scan single table
+            with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
+                tables = connector.get_tables(scan_request.database_name)
+                table_info = next((t for t in tables if t['table_name'] == scan_request.table_name), None)
+                if not table_info:
+                    raise HTTPException(status_code=404, detail="Table not found")
+            
+            if not scanner.hive_connector.connect():
+                raise Exception("Failed to connect to MetaStore")
+            if not scanner.hdfs_scanner.connect():
+                raise Exception("Failed to connect to HDFS")
+            
+            try:
+                table_result = scanner.scan_table(db, scan_request.database_name, table_info)
+                return {
+                    "cluster_id": scan_request.cluster_id,
+                    "database_name": scan_request.database_name,
+                    "table_name": scan_request.table_name,
+                    "scan_result": table_result,
+                    "status": "completed"
+                }
+            finally:
+                scanner.hive_connector.disconnect()
+                scanner.hdfs_scanner.disconnect()
+        
+        elif scan_request.database_name:
+            # Scan database
+            result = scanner.scan_database_tables(db, scan_request.database_name)
+            return {
+                "cluster_id": scan_request.cluster_id,
+                "database_name": scan_request.database_name,
+                "scan_result": result,
+                "status": "completed"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Either database_name or both database_name and table_name must be provided")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
 @router.post("/scan/{cluster_id}/{database_name}")
 async def scan_database_tables(

@@ -21,3 +21,8 @@ class TableMetricResponse(TableMetricBase):
     
     class Config:
         from_attributes = True
+
+class ScanRequest(BaseModel):
+    cluster_id: int
+    database_name: Optional[str] = None
+    table_name: Optional[str] = None
