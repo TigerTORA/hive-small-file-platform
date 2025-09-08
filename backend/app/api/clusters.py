@@ -47,3 +47,48 @@ async def test_cluster_connection(cluster_id: int, db: Session = Depends(get_db)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+
+@router.get("/health-check")
+async def check_all_clusters_health(db: Session = Depends(get_db)):
+    """Check health of all clusters - DRAFT VERSION"""
+    all_clusters = db.query(Cluster).all()
+    health_results = []
+    
+    for cluster in all_clusters:
+        try:
+            scanner = MockTableScanner(cluster)
+            test_results = scanner.test_connections()
+            
+            # Simple logic to determine health
+            metastore_healthy = test_results.get("metastore_connection", False)
+            hdfs_healthy = test_results.get("hdfs_connection", False)
+            overall_healthy = metastore_healthy and hdfs_healthy
+            
+            health_status = {
+                "cluster_id": cluster.id,
+                "cluster_name": cluster.name,
+                "overall_health": "healthy" if overall_healthy else "unhealthy",
+                "metastore_status": "ok" if metastore_healthy else "failed",
+                "hdfs_status": "ok" if hdfs_healthy else "failed",
+                "last_check": "2025-01-08T10:00:00Z",  # hardcoded for now
+                "details": test_results
+            }
+            
+        except Exception as e:
+            health_status = {
+                "cluster_id": cluster.id,
+                "cluster_name": cluster.name,
+                "overall_health": "error",
+                "metastore_status": "error",
+                "hdfs_status": "error", 
+                "last_check": "2025-01-08T10:00:00Z",
+                "error_message": str(e)
+            }
+            
+        health_results.append(health_status)
+    
+    return {
+        "total_clusters": len(all_clusters),
+        "healthy_count": len([r for r in health_results if r["overall_health"] == "healthy"]),
+        "clusters": health_results
+    }
