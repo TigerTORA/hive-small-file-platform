@@ -1,0 +1,343 @@
+<template>
+  <div class="tasks">
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <span>任务管理</span>
+          <el-button type="primary" @click="showCreateDialog = true">
+            <el-icon><Plus /></el-icon>
+            创建任务
+          </el-button>
+        </div>
+      </template>
+
+      <el-table :data="tasks" stripe v-loading="loading">
+        <el-table-column prop="task_name" label="任务名称" width="200" />
+        <el-table-column prop="database_name" label="数据库" width="120" />
+        <el-table-column prop="table_name" label="表名" width="200" />
+        <el-table-column prop="merge_strategy" label="合并策略" width="120">
+          <template #default="{ row }">
+            <el-tag :type="row.merge_strategy === 'concatenate' ? 'success' : 'warning'" size="small">
+              {{ row.merge_strategy === 'concatenate' ? '文件合并' : '重写插入' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)" size="small">
+              {{ getStatusText(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="files_before" label="处理前文件数" width="120" />
+        <el-table-column prop="files_after" label="处理后文件数" width="120" />
+        <el-table-column prop="created_time" label="创建时间" width="160">
+          <template #default="{ row }">
+            {{ formatTime(row.created_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'pending'"
+              type="primary"
+              size="small"
+              @click="executeTask(row)"
+            >
+              执行
+            </el-button>
+            <el-button
+              v-if="row.status === 'running'"
+              type="warning"
+              size="small"
+              @click="cancelTask(row)"
+            >
+              取消
+            </el-button>
+            <el-button type="info" size="small" @click="viewLogs(row)">
+              日志
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <!-- 创建任务对话框 -->
+    <el-dialog v-model="showCreateDialog" title="创建合并任务" width="600px">
+      <el-form :model="taskForm" :rules="taskRules" ref="taskFormRef" label-width="120px">
+        <el-form-item label="集群" prop="cluster_id">
+          <el-select v-model="taskForm.cluster_id" placeholder="选择集群">
+            <el-option
+              v-for="cluster in clusters"
+              :key="cluster.id"
+              :label="cluster.name"
+              :value="cluster.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="任务名称" prop="task_name">
+          <el-input v-model="taskForm.task_name" placeholder="请输入任务名称" />
+        </el-form-item>
+        <el-form-item label="数据库" prop="database_name">
+          <el-input v-model="taskForm.database_name" placeholder="请输入数据库名" />
+        </el-form-item>
+        <el-form-item label="表名" prop="table_name">
+          <el-input v-model="taskForm.table_name" placeholder="请输入表名" />
+        </el-form-item>
+        <el-form-item label="分区过滤">
+          <el-input v-model="taskForm.partition_filter" placeholder="如: dt='2023-12-01'" />
+        </el-form-item>
+        <el-form-item label="合并策略">
+          <el-radio-group v-model="taskForm.merge_strategy">
+            <el-radio label="concatenate">文件合并 (CONCATENATE)</el-radio>
+            <el-radio label="insert_overwrite">重写插入 (INSERT OVERWRITE)</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="目标文件大小">
+          <el-input-number
+            v-model="taskForm.target_file_size"
+            :min="1024 * 1024"
+            :step="64 * 1024 * 1024"
+            placeholder="字节"
+          />
+          <span style="margin-left: 8px; color: #909399;">字节（可选）</span>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showCreateDialog = false">取消</el-button>
+          <el-button type="primary" @click="createTask">创建</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 日志查看对话框 -->
+    <el-dialog v-model="showLogsDialog" title="任务日志" width="800px">
+      <div class="logs-container">
+        <div v-if="taskLogs.length === 0" class="no-logs">
+          暂无日志记录
+        </div>
+        <div v-else>
+          <div
+            v-for="log in taskLogs"
+            :key="log.id"
+            :class="['log-entry', `log-${log.log_level.toLowerCase()}`]"
+          >
+            <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+            <span class="log-level">{{ log.log_level }}</span>
+            <span class="log-message">{{ log.message }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { tasksApi, type MergeTask, type MergeTaskCreate } from '@/api/tasks'
+import { clustersApi, type Cluster } from '@/api/clusters'
+import dayjs from 'dayjs'
+
+// 数据
+const tasks = ref<MergeTask[]>([])
+const clusters = ref<Cluster[]>([])
+const loading = ref(false)
+const showCreateDialog = ref(false)
+const showLogsDialog = ref(false)
+const taskLogs = ref<any[]>([])
+
+// 表单数据
+const taskForm = ref<MergeTaskCreate>({
+  cluster_id: 0,
+  task_name: '',
+  table_name: '',
+  database_name: '',
+  partition_filter: '',
+  merge_strategy: 'concatenate'
+})
+
+const taskRules = {
+  cluster_id: [{ required: true, message: '请选择集群', trigger: 'change' }],
+  task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
+  database_name: [{ required: true, message: '请输入数据库名', trigger: 'blur' }],
+  table_name: [{ required: true, message: '请输入表名', trigger: 'blur' }]
+}
+
+const taskFormRef = ref()
+
+// 方法
+const loadTasks = async () => {
+  loading.value = true
+  try {
+    tasks.value = await tasksApi.list()
+  } catch (error) {
+    console.error('Failed to load tasks:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadClusters = async () => {
+  try {
+    clusters.value = await clustersApi.list()
+  } catch (error) {
+    console.error('Failed to load clusters:', error)
+  }
+}
+
+const createTask = async () => {
+  try {
+    await taskFormRef.value.validate()
+    await tasksApi.create(taskForm.value)
+    
+    ElMessage.success('任务创建成功')
+    showCreateDialog.value = false
+    resetTaskForm()
+    loadTasks()
+  } catch (error) {
+    console.error('Failed to create task:', error)
+  }
+}
+
+const executeTask = async (task: MergeTask) => {
+  try {
+    await tasksApi.execute(task.id)
+    ElMessage.success('任务执行已启动')
+    loadTasks()
+  } catch (error) {
+    console.error('Failed to execute task:', error)
+  }
+}
+
+const cancelTask = async (task: MergeTask) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要取消任务 "${task.task_name}" 吗？`,
+      '确认取消',
+      {
+        confirmButtonText: '取消任务',
+        cancelButtonText: '不取消',
+        type: 'warning'
+      }
+    )
+    
+    await tasksApi.cancel(task.id)
+    ElMessage.success('任务已取消')
+    loadTasks()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to cancel task:', error)
+    }
+  }
+}
+
+const viewLogs = async (task: MergeTask) => {
+  try {
+    taskLogs.value = await tasksApi.getLogs(task.id)
+    showLogsDialog.value = true
+  } catch (error) {
+    console.error('Failed to load task logs:', error)
+  }
+}
+
+const resetTaskForm = () => {
+  taskForm.value = {
+    cluster_id: 0,
+    task_name: '',
+    table_name: '',
+    database_name: '',
+    partition_filter: '',
+    merge_strategy: 'concatenate'
+  }
+}
+
+const getStatusType = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'pending': 'info',
+    'running': 'warning',
+    'success': 'success',
+    'failed': 'danger'
+  }
+  return statusMap[status] || 'info'
+}
+
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'pending': '等待中',
+    'running': '运行中',
+    'success': '成功',
+    'failed': '失败'
+  }
+  return statusMap[status] || status
+}
+
+const formatTime = (time: string): string => {
+  return dayjs(time).format('MM-DD HH:mm:ss')
+}
+
+onMounted(() => {
+  loadTasks()
+  loadClusters()
+})
+</script>
+
+<style scoped>
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logs-container {
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: #f5f5f5;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.no-logs {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+}
+
+.log-entry {
+  margin-bottom: 8px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.log-time {
+  color: #909399;
+  margin-right: 8px;
+}
+
+.log-level {
+  display: inline-block;
+  width: 60px;
+  text-align: center;
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.log-info .log-level {
+  color: #409eff;
+}
+
+.log-warning .log-level {
+  color: #e6a23c;
+}
+
+.log-error .log-level {
+  color: #f56c6c;
+}
+
+.log-message {
+  color: #2c3e50;
+}
+</style>
