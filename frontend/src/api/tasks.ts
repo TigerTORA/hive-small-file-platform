@@ -85,5 +85,10 @@ export const tasksApi = {
   // 获取扫描进度
   getScanProgress(clusterId: number): Promise<any> {
     return api.get(`/tables/scan-progress/${clusterId}`)
+  },
+
+  // 获取任务预览
+  getTaskPreview(id: number): Promise<any> {
+    return api.get(`/tasks/${id}/preview`)
   }
 }
