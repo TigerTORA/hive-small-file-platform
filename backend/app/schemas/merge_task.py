@@ -7,7 +7,7 @@ class MergeTaskBase(BaseModel):
     table_name: str = Field(..., max_length=200)
     database_name: str = Field(..., max_length=100)
     partition_filter: Optional[str] = Field(None, max_length=500)
-    merge_strategy: str = Field(default="concatenate", pattern="^(concatenate|insert_overwrite)$")
+    merge_strategy: str = Field(default="safe_merge", pattern="^(concatenate|insert_overwrite|safe_merge)$")
     target_file_size: Optional[int] = Field(None, ge=1024)
 
 class MergeTaskCreate(MergeTaskBase):

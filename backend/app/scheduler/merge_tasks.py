@@ -51,8 +51,14 @@ def execute_merge_task(self, task_id: int):
             }
         )
         
-        # 获取合并引擎
-        engine = MergeEngineFactory.get_engine(cluster)
+        # 获取合并引擎，根据任务的策略选择引擎
+        engine_type = None
+        if task.merge_strategy == 'safe_merge':
+            engine_type = 'safe_hive'
+        elif task.merge_strategy in ['concatenate', 'insert_overwrite']:
+            engine_type = 'hive'
+        
+        engine = MergeEngineFactory.get_engine(cluster, engine_type)
         
         # 验证任务
         validation = engine.validate_task(task)
@@ -68,12 +74,47 @@ def execute_merge_task(self, task_id: int):
             meta={
                 'status': 'executing',
                 'task_name': task.task_name,
-                'table': f"{task.database_name}.{task.table_name}"
+                'table': f"{task.database_name}.{task.table_name}",
+                'phase': 'starting_merge'
             }
         )
         
-        # 执行合并
-        result = engine.execute_merge(task, db)
+        # 执行合并，监控不同阶段的进度
+        try:
+            # 为 safe_merge 引擎添加进度回调
+            if task.merge_strategy == 'safe_merge':
+                # SafeHiveMergeEngine 的进度监控
+                def progress_callback(phase, message):
+                    current_task.update_state(
+                        state='PROGRESS',
+                        meta={
+                            'status': 'executing',
+                            'task_name': task.task_name,
+                            'table': f"{task.database_name}.{task.table_name}",
+                            'phase': phase,
+                            'message': message
+                        }
+                    )
+                
+                # 如果引擎支持进度回调，则设置
+                if hasattr(engine, 'set_progress_callback'):
+                    engine.set_progress_callback(progress_callback)
+            
+            result = engine.execute_merge(task, db)
+            
+        except Exception as merge_error:
+            # 合并执行失败，更新详细错误信息
+            current_task.update_state(
+                state='FAILURE',
+                meta={
+                    'status': 'failed',
+                    'task_name': task.task_name,
+                    'table': f"{task.database_name}.{task.table_name}",
+                    'error': str(merge_error),
+                    'phase': 'execution_failed'
+                }
+            )
+            raise merge_error
         
         if result['success']:
             logger.info(f"Merge task {task_id} completed successfully: {result['message']}")
@@ -214,7 +255,7 @@ def batch_create_merge_tasks(cluster_id: int, small_file_threshold: int = 1000):
                     continue
                 
                 # 创建合并任务
-                merge_strategy = 'concatenate'  # 默认策略，可以根据表格式优化
+                merge_strategy = 'safe_merge'  # 默认使用安全合并策略
                 
                 new_task = MergeTask(
                     cluster_id=cluster_id,

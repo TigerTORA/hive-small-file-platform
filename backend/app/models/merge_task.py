@@ -16,7 +16,7 @@ class MergeTask(Base):
     partition_filter = Column(String(500), nullable=True)  # e.g., "dt='2023-01-01'"
     
     # Task configuration
-    merge_strategy = Column(String(50), default="concatenate")  # concatenate, insert_overwrite
+    merge_strategy = Column(String(50), default="safe_merge")  # concatenate, insert_overwrite, safe_merge
     target_file_size = Column(Integer, nullable=True)  # target file size in bytes
     
     # Task status

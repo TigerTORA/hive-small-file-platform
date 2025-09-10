@@ -7,7 +7,7 @@ export interface MergeTask {
   table_name: string
   database_name: string
   partition_filter?: string
-  merge_strategy: 'concatenate' | 'insert_overwrite'
+  merge_strategy: 'concatenate' | 'insert_overwrite' | 'safe_merge'
   target_file_size?: number
   status: string
   celery_task_id?: string
@@ -26,7 +26,7 @@ export interface MergeTaskCreate {
   table_name: string
   database_name: string
   partition_filter?: string
-  merge_strategy?: 'concatenate' | 'insert_overwrite'
+  merge_strategy?: 'concatenate' | 'insert_overwrite' | 'safe_merge'
   target_file_size?: number
 }
 
@@ -59,5 +59,31 @@ export const tasksApi = {
   // 获取任务日志
   getLogs(id: number): Promise<any[]> {
     return api.get(`/tasks/${id}/logs`)
+  },
+
+  // 获取表信息（包括分区状态）
+  getTableInfo(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/info`)
+  },
+
+  // 获取表分区列表
+  getTablePartitions(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/partitions`)
+  },
+
+  // 获取合并预览
+  getMergePreview(clusterId: number, databaseName: string, tableName: string, partitionFilter?: string): Promise<any> {
+    const params = partitionFilter ? `?partition_filter=${encodeURIComponent(partitionFilter)}` : ''
+    return api.post(`/tables/${clusterId}/${databaseName}/${tableName}/merge-preview${params}`)
+  },
+
+  // 批量扫描所有数据库
+  scanAllDatabases(clusterId: number, maxTablesPerDb: number = 20): Promise<any> {
+    return api.post(`/tables/scan-all-databases/${clusterId}?max_tables_per_db=${maxTablesPerDb}`)
+  },
+
+  // 获取扫描进度
+  getScanProgress(clusterId: number): Promise<any> {
+    return api.get(`/tables/scan-progress/${clusterId}`)
   }
 }

@@ -11,6 +11,7 @@ class ClusterBase(BaseModel):
     hive_metastore_url: str = Field(..., max_length=500)
     hdfs_namenode_url: str = Field(..., max_length=500)
     hdfs_user: str = Field(default="hdfs", max_length=100)
+    hdfs_password: Optional[str] = Field(None, max_length=255)
     small_file_threshold: int = Field(default=128*1024*1024, ge=1024)
     scan_enabled: bool = True
 
@@ -26,6 +27,7 @@ class ClusterUpdate(BaseModel):
     hive_metastore_url: Optional[str] = Field(None, max_length=500)
     hdfs_namenode_url: Optional[str] = Field(None, max_length=500)
     hdfs_user: Optional[str] = Field(None, max_length=100)
+    hdfs_password: Optional[str] = Field(None, max_length=255)
     small_file_threshold: Optional[int] = Field(None, ge=1024)
     scan_enabled: Optional[bool] = None
     status: Optional[str] = Field(None, pattern="^(active|inactive|error)$")

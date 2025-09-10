@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from typing import Dict, Any, List
+import asyncio
+import time
 from app.config.database import get_db
 from app.models.table_metric import TableMetric
 from app.models.cluster import Cluster
 from app.schemas.table_metric import TableMetricResponse, ScanRequest
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
-from app.monitor.mock_table_scanner import MockTableScanner
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 
 router = APIRouter()
@@ -86,7 +88,7 @@ async def scan_tables(
         raise HTTPException(status_code=404, detail="Cluster not found")
     
     try:
-        scanner = MockTableScanner(cluster)
+        scanner = HybridTableScanner(cluster)
         
         if scan_request.table_name and scan_request.database_name:
             # Scan single table
@@ -96,23 +98,14 @@ async def scan_tables(
                 if not table_info:
                     raise HTTPException(status_code=404, detail="Table not found")
             
-            if not scanner.hive_connector.connect():
-                raise Exception("Failed to connect to MetaStore")
-            if not scanner.hdfs_scanner.connect():
-                raise Exception("Failed to connect to HDFS")
-            
-            try:
-                table_result = scanner.scan_table(db, scan_request.database_name, table_info)
-                return {
-                    "cluster_id": scan_request.cluster_id,
-                    "database_name": scan_request.database_name,
-                    "table_name": scan_request.table_name,
-                    "scan_result": table_result,
-                    "status": "completed"
-                }
-            finally:
-                scanner.hive_connector.disconnect()
-                scanner.hdfs_scanner.disconnect()
+            table_result = scanner.scan_table(db, scan_request.database_name, table_info)
+            return {
+                "cluster_id": scan_request.cluster_id,
+                "database_name": scan_request.database_name,
+                "table_name": scan_request.table_name,
+                "scan_result": table_result,
+                "status": "completed"
+            }
         
         elif scan_request.database_name:
             # Scan database
@@ -142,8 +135,8 @@ async def scan_database_tables(
         raise HTTPException(status_code=404, detail="Cluster not found")
     
     try:
-        scanner = MockTableScanner(cluster)
-        result = scanner.scan_database_tables(db, database_name, table_filter)
+        scanner = HybridTableScanner(cluster)
+        result = scanner.scan_database_tables(db, database_name, table_filter, max_tables=10)
         return {
             "cluster_id": cluster_id,
             "database_name": database_name,
@@ -199,9 +192,12 @@ async def scan_single_table(
                 raise HTTPException(status_code=404, detail="Table not found")
         
         # 扫描表
-        scanner = MockTableScanner(cluster)
+        scanner = HybridTableScanner(cluster)
         if not scanner.hive_connector.connect():
             raise Exception("Failed to connect to MetaStore")
+        
+        # 初始化HDFS扫描器（智能混合模式）
+        scanner._initialize_hdfs_scanner()
         if not scanner.hdfs_scanner.connect():
             raise Exception("Failed to connect to HDFS")
         
@@ -229,7 +225,7 @@ async def test_cluster_connections(cluster_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Cluster not found")
     
     try:
-        scanner = MockTableScanner(cluster)
+        scanner = HybridTableScanner(cluster)
         results = scanner.test_connections()
         return {
             "cluster_id": cluster_id,
@@ -350,4 +346,374 @@ async def analyze_small_file_ratios(cluster_id: int, db: Session = Depends(get_d
         },
         "recommendations": recommendations,
         "tables": table_analysis[:50]  # Limit to top 50 for performance
+    }
+
+@router.get("/{cluster_id}/{database_name}/{table_name}/partitions")
+async def get_table_partitions(
+    cluster_id: int, 
+    database_name: str, 
+    table_name: str,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """获取表的分区列表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        engine = SafeHiveMergeEngine(cluster)
+        
+        # 检查表是否存在
+        if not engine._table_exists(database_name, table_name):
+            raise HTTPException(status_code=404, detail="Table not found")
+        
+        # 检查是否为分区表
+        is_partitioned = engine._is_partitioned_table(database_name, table_name)
+        
+        if not is_partitioned:
+            return {
+                "table_name": table_name,
+                "is_partitioned": False,
+                "partitions": [],
+                "message": "This table is not partitioned"
+            }
+        
+        # 获取分区列表
+        partitions = engine._get_table_partitions(database_name, table_name)
+        
+        # 解析分区信息，提取分区键和值
+        partition_info = []
+        for partition in partitions:
+            # partition格式通常是: dt=2023-12-01/hour=00
+            partition_parts = {}
+            for part in partition.split('/'):
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    partition_parts[key] = value
+            
+            partition_info.append({
+                'partition_spec': partition,
+                'partition_keys': partition_parts
+            })
+        
+        return {
+            "table_name": table_name,
+            "is_partitioned": True,
+            "partition_count": len(partitions),
+            "partitions": partition_info[:100],  # 最多返回100个分区
+            "total_partitions": len(partitions)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get partitions: {str(e)}")
+
+@router.get("/{cluster_id}/{database_name}/{table_name}/partition-stats")
+async def get_partition_file_stats(
+    cluster_id: int,
+    database_name: str, 
+    table_name: str,
+    partition_spec: str = Query(None, description="分区规格，如 dt='2023-12-01'"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """获取分区的文件统计信息"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        engine = SafeHiveMergeEngine(cluster)
+        
+        # 检查表是否存在
+        if not engine._table_exists(database_name, table_name):
+            raise HTTPException(status_code=404, detail="Table not found")
+        
+        # 获取文件统计
+        if partition_spec:
+            file_count = engine._get_file_count(database_name, table_name, partition_spec)
+            target_partition = partition_spec
+        else:
+            file_count = engine._get_file_count(database_name, table_name)
+            target_partition = "整个表"
+        
+        # 估算小文件数量（简化算法）
+        small_file_count = int(file_count * 0.7)  # 假设70%是小文件
+        
+        # 估算存储统计
+        avg_file_size = 32 * 1024 * 1024  # 假设平均32MB
+        total_size = file_count * avg_file_size
+        
+        return {
+            "table_name": table_name,
+            "partition_spec": target_partition,
+            "file_stats": {
+                "total_files": file_count,
+                "estimated_small_files": small_file_count,
+                "small_file_ratio": 70.0 if file_count > 0 else 0,
+                "estimated_total_size": total_size,
+                "avg_file_size": avg_file_size
+            },
+            "merge_recommendation": {
+                "should_merge": file_count > 50,
+                "priority": "HIGH" if small_file_count > 100 else "MEDIUM" if small_file_count > 50 else "LOW",
+                "estimated_improvement": f"可减少约 {int(small_file_count * 0.8)} 个文件" if file_count > 0 else "无需合并"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get partition stats: {str(e)}")
+
+@router.post("/{cluster_id}/{database_name}/{table_name}/merge-preview")
+async def get_merge_preview(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    partition_filter: str = Query(None, description="分区过滤器，如 dt='2023-12-01'"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """获取合并预览信息"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        from app.models.merge_task import MergeTask
+        
+        # 创建临时任务对象用于预览
+        temp_task = MergeTask(
+            cluster_id=cluster_id,
+            database_name=database_name,
+            table_name=table_name,
+            partition_filter=partition_filter,
+            merge_strategy='safe_merge',
+            task_name=f"Preview for {database_name}.{table_name}"
+        )
+        
+        engine = SafeHiveMergeEngine(cluster)
+        
+        # 获取预览信息
+        preview = engine.get_merge_preview(temp_task)
+        
+        return {
+            "table_name": table_name,
+            "partition_filter": partition_filter,
+            "preview": preview,
+            "recommendations": {
+                "engine_type": "safe_hive",
+                "strategy": "safe_merge",
+                "description": "使用临时表+原子重命名策略，确保零停机时间",
+                "estimated_downtime_seconds": 10,  # 只有重命名时的短暂停机
+                "rollback_available": True
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate preview: {str(e)}")
+
+@router.get("/{cluster_id}/{database_name}/{table_name}/info")
+async def get_table_info(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """获取表的详细信息，包括分区状态"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        engine = SafeHiveMergeEngine(cluster)
+        
+        # 检查表是否存在
+        if not engine._table_exists(database_name, table_name):
+            raise HTTPException(status_code=404, detail="Table not found")
+        
+        # 检查是否为分区表
+        is_partitioned = engine._is_partitioned_table(database_name, table_name)
+        
+        # 获取基本信息
+        table_info = {
+            "database_name": database_name,
+            "table_name": table_name,
+            "is_partitioned": is_partitioned,
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name
+        }
+        
+        if is_partitioned:
+            partitions = engine._get_table_partitions(database_name, table_name)
+            table_info.update({
+                "partition_count": len(partitions),
+                "sample_partitions": partitions[:5],  # 显示前5个分区作为样例
+                "merge_strategy_recommendation": "按分区合并，建议选择特定分区进行合并"
+            })
+        else:
+            table_info.update({
+                "partition_count": 0,
+                "merge_strategy_recommendation": "整表合并，建议在业务低峰期执行"
+            })
+        
+        return table_info
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get table info: {str(e)}")
+
+@router.post("/scan-all-databases/{cluster_id}")
+async def scan_all_databases(
+    cluster_id: int,
+    max_tables_per_db: int = Query(20, description="Maximum number of tables to scan per database"),
+    db: Session = Depends(get_db)
+):
+    """批量扫描集群中的所有数据库，支持进度监控"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        # 获取所有数据库列表
+        with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
+            databases = connector.get_databases()
+        
+        start_time = time.time()
+        total_databases = len(databases)
+        completed_databases = 0
+        total_tables_scanned = 0
+        total_files_found = 0
+        total_small_files = 0
+        database_results = []
+        errors = []
+        
+        scanner = HybridTableScanner(cluster)
+        
+        for i, database_name in enumerate(databases, 1):
+            database_start_time = time.time()
+            
+            try:
+                print(f"[{i}/{total_databases}] 开始扫描数据库: {database_name}")
+                
+                # 扫描数据库
+                result = scanner.scan_database_tables(
+                    db, 
+                    database_name, 
+                    table_filter=None, 
+                    max_tables=max_tables_per_db
+                )
+                
+                # 累计统计
+                completed_databases += 1
+                total_tables_scanned += result['tables_scanned']
+                total_files_found += result['total_files']
+                total_small_files += result['total_small_files']
+                
+                # 记录数据库结果
+                database_result = {
+                    "database_name": database_name,
+                    "tables_scanned": result['tables_scanned'],
+                    "total_files": result['total_files'],
+                    "total_small_files": result['total_small_files'],
+                    "scan_duration": time.time() - database_start_time,
+                    "hdfs_mode": result.get('hdfs_mode', 'unknown'),
+                    "errors": result.get('errors', [])
+                }
+                database_results.append(database_result)
+                
+                print(f"✅ 数据库 {database_name} 扫描完成: {result['tables_scanned']}表, "
+                      f"{result['total_files']}文件, {result['total_small_files']}小文件")
+                      
+            except Exception as e:
+                error_msg = f"Database {database_name} scan failed: {str(e)}"
+                errors.append(error_msg)
+                print(f"❌ 数据库 {database_name} 扫描失败: {str(e)}")
+                
+                # 即使失败也记录结果
+                database_results.append({
+                    "database_name": database_name,
+                    "tables_scanned": 0,
+                    "total_files": 0,
+                    "total_small_files": 0,
+                    "scan_duration": time.time() - database_start_time,
+                    "hdfs_mode": "error",
+                    "errors": [error_msg]
+                })
+        
+        # 计算总体统计
+        total_duration = time.time() - start_time
+        success_rate = completed_databases / total_databases * 100
+        
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "summary": {
+                "total_databases": total_databases,
+                "completed_databases": completed_databases,
+                "total_tables_scanned": total_tables_scanned,
+                "total_files_found": total_files_found,
+                "total_small_files": total_small_files,
+                "small_file_ratio": round(total_small_files / max(total_files_found, 1) * 100, 2),
+                "success_rate": round(success_rate, 2),
+                "total_scan_duration": round(total_duration, 2),
+                "avg_duration_per_database": round(total_duration / total_databases, 2)
+            },
+            "database_results": database_results,
+            "errors": errors,
+            "status": "completed",
+            "scan_timestamp": time.time()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch scan failed: {str(e)}")
+
+@router.get("/scan-progress/{cluster_id}")
+async def get_scan_progress(
+    cluster_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取扫描进度状态（简单实现）"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    # 统计已扫描的数据库和表数量
+    metrics = db.query(TableMetric).filter(TableMetric.cluster_id == cluster_id).all()
+    
+    # 按数据库统计
+    database_stats = {}
+    total_tables = len(metrics)
+    total_files = sum(m.total_files for m in metrics)
+    total_small_files = sum(m.small_files for m in metrics)
+    
+    for metric in metrics:
+        db_name = metric.database_name
+        if db_name not in database_stats:
+            database_stats[db_name] = {
+                "tables": 0,
+                "files": 0, 
+                "small_files": 0,
+                "last_scan": None
+            }
+        
+        database_stats[db_name]["tables"] += 1
+        database_stats[db_name]["files"] += metric.total_files
+        database_stats[db_name]["small_files"] += metric.small_files
+        
+        if (database_stats[db_name]["last_scan"] is None or 
+            metric.scan_time > database_stats[db_name]["last_scan"]):
+            database_stats[db_name]["last_scan"] = metric.scan_time
+    
+    return {
+        "cluster_id": cluster_id,
+        "cluster_name": cluster.name,
+        "overall_progress": {
+            "total_databases_scanned": len(database_stats),
+            "total_tables_scanned": total_tables,
+            "total_files_found": total_files,
+            "total_small_files": total_small_files,
+            "small_file_ratio": round(total_small_files / max(total_files, 1) * 100, 2)
+        },
+        "database_progress": database_stats,
+        "status": "idle" if total_tables > 0 else "no_data"
     }

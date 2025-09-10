@@ -82,16 +82,66 @@
           <el-input v-model="taskForm.database_name" placeholder="请输入数据库名" />
         </el-form-item>
         <el-form-item label="表名" prop="table_name">
-          <el-input v-model="taskForm.table_name" placeholder="请输入表名" />
+          <el-input 
+            v-model="taskForm.table_name" 
+            placeholder="请输入表名" 
+            @blur="checkTablePartitions"
+          />
         </el-form-item>
-        <el-form-item label="分区过滤">
-          <el-input v-model="taskForm.partition_filter" placeholder="如: dt='2023-12-01'" />
+        
+        <!-- 表信息显示 -->
+        <el-form-item v-if="tableInfo" label="表信息">
+          <el-tag :type="tableInfo.is_partitioned ? 'success' : 'info'" size="small">
+            {{ tableInfo.is_partitioned ? '分区表' : '普通表' }}
+          </el-tag>
+          <span v-if="tableInfo.is_partitioned" style="margin-left: 8px; color: #606266;">
+            共 {{ tableInfo.partition_count }} 个分区
+          </span>
         </el-form-item>
+        
+        <!-- 分区选择 -->
+        <el-form-item v-if="tableInfo?.is_partitioned" label="分区选择">
+          <el-button 
+            size="small" 
+            @click="loadPartitions"
+            :loading="partitionsLoading"
+            style="margin-bottom: 8px;"
+          >
+            加载分区列表
+          </el-button>
+          
+          <div v-if="partitions.length > 0" style="max-height: 200px; overflow-y: auto; border: 1px solid #dcdfe6; border-radius: 4px; padding: 8px;">
+            <el-checkbox-group v-model="selectedPartitions">
+              <div v-for="partition in partitions" :key="partition.partition_spec">
+                <el-checkbox :label="partition.partition_spec">
+                  {{ partition.partition_spec }}
+                </el-checkbox>
+              </div>
+            </el-checkbox-group>
+          </div>
+          
+          <el-input 
+            v-if="!tableInfo?.is_partitioned" 
+            v-model="taskForm.partition_filter" 
+            placeholder="手动输入分区过滤器，如: dt='2023-12-01'"
+            style="margin-top: 8px;"
+          />
+        </el-form-item>
+        
+        <!-- 非分区表的分区过滤器输入 -->
+        <el-form-item v-else label="分区过滤">
+          <el-input v-model="taskForm.partition_filter" placeholder="如: dt='2023-12-01' (可选)" />
+        </el-form-item>
+        
         <el-form-item label="合并策略">
           <el-radio-group v-model="taskForm.merge_strategy">
+            <el-radio label="safe_merge">安全合并 (推荐)</el-radio>
             <el-radio label="concatenate">文件合并 (CONCATENATE)</el-radio>
             <el-radio label="insert_overwrite">重写插入 (INSERT OVERWRITE)</el-radio>
           </el-radio-group>
+          <div style="margin-top: 4px; font-size: 12px; color: #909399;">
+            安全合并使用临时表+重命名策略，确保零停机时间
+          </div>
         </el-form-item>
         <el-form-item label="目标文件大小">
           <el-input-number
@@ -149,6 +199,12 @@ const showCreateDialog = ref(false)
 const showLogsDialog = ref(false)
 const taskLogs = ref<any[]>([])
 
+// 分区相关数据
+const tableInfo = ref<any>(null)
+const partitions = ref<any[]>([])
+const selectedPartitions = ref<string[]>([])
+const partitionsLoading = ref(false)
+
 // 表单数据
 const taskForm = ref<MergeTaskCreate>({
   cluster_id: 0,
@@ -156,7 +212,7 @@ const taskForm = ref<MergeTaskCreate>({
   table_name: '',
   database_name: '',
   partition_filter: '',
-  merge_strategy: 'concatenate'
+  merge_strategy: 'safe_merge'
 })
 
 const taskRules = {
@@ -191,7 +247,18 @@ const loadClusters = async () => {
 const createTask = async () => {
   try {
     await taskFormRef.value.validate()
-    await tasksApi.create(taskForm.value)
+    
+    // 准备任务数据
+    const taskData = { ...taskForm.value }
+    
+    // 处理分区选择
+    if (tableInfo.value?.is_partitioned && selectedPartitions.value.length > 0) {
+      // 构建分区过滤器：多个分区用OR连接
+      const partitionFilters = selectedPartitions.value.map(partition => `(${partition})`)
+      taskData.partition_filter = partitionFilters.join(' OR ')
+    }
+    
+    await tasksApi.create(taskData)
     
     ElMessage.success('任务创建成功')
     showCreateDialog.value = false
@@ -199,6 +266,7 @@ const createTask = async () => {
     loadTasks()
   } catch (error) {
     console.error('Failed to create task:', error)
+    ElMessage.error('创建任务失败')
   }
 }
 
@@ -250,8 +318,12 @@ const resetTaskForm = () => {
     table_name: '',
     database_name: '',
     partition_filter: '',
-    merge_strategy: 'concatenate'
+    merge_strategy: 'safe_merge'
   }
+  // 清空分区相关数据
+  tableInfo.value = null
+  partitions.value = []
+  selectedPartitions.value = []
 }
 
 const getStatusType = (status: string): string => {
@@ -276,6 +348,51 @@ const getStatusText = (status: string): string => {
 
 const formatTime = (time: string): string => {
   return dayjs(time).format('MM-DD HH:mm:ss')
+}
+
+// 检查表分区信息
+const checkTablePartitions = async () => {
+  if (!taskForm.value.cluster_id || !taskForm.value.database_name || !taskForm.value.table_name) {
+    return
+  }
+  
+  try {
+    tableInfo.value = await tasksApi.getTableInfo(
+      taskForm.value.cluster_id,
+      taskForm.value.database_name,
+      taskForm.value.table_name
+    )
+    // 清空之前的分区数据
+    partitions.value = []
+    selectedPartitions.value = []
+  } catch (error) {
+    console.error('Failed to get table info:', error)
+    tableInfo.value = null
+  }
+}
+
+// 加载分区列表
+const loadPartitions = async () => {
+  if (!taskForm.value.cluster_id || !taskForm.value.database_name || !taskForm.value.table_name) {
+    ElMessage.warning('请先选择集群、数据库和表名')
+    return
+  }
+  
+  partitionsLoading.value = true
+  try {
+    const response = await tasksApi.getTablePartitions(
+      taskForm.value.cluster_id,
+      taskForm.value.database_name,
+      taskForm.value.table_name
+    )
+    partitions.value = response.partitions || []
+    selectedPartitions.value = []
+  } catch (error) {
+    console.error('Failed to load partitions:', error)
+    ElMessage.error('加载分区列表失败')
+  } finally {
+    partitionsLoading.value = false
+  }
 }
 
 onMounted(() => {

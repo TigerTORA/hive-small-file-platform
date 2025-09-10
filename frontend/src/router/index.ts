@@ -1,7 +1,7 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(),
   routes: [
     {
       path: '/',
@@ -24,6 +24,13 @@ const router = createRouter({
       name: 'Tables',
       component: () => import('@/views/Tables.vue'),
       meta: { title: '表管理' }
+    },
+    {
+      path: '/tables/:clusterId/:database/:tableName',
+      name: 'TableDetail',
+      component: () => import('@/views/TableDetail.vue'),
+      meta: { title: '表详情' },
+      props: true
     },
     {
       path: '/tasks',

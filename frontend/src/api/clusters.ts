@@ -57,7 +57,22 @@ export const clustersApi = {
   },
 
   // 测试集群连接
-  testConnection(id: number): Promise<any> {
-    return api.post(`/clusters/${id}/test`)
+  testConnection(id: number, mode: string = 'mock'): Promise<any> {
+    return api.post(`/clusters/${id}/test?mode=${mode}`)
+  },
+
+  // 测试真实连接
+  testConnectionReal(id: number): Promise<any> {
+    return api.post(`/clusters/${id}/test-real`)
+  },
+
+  // 创建集群时验证连接
+  createWithValidation(cluster: ClusterCreate): Promise<Cluster> {
+    return api.post('/clusters/?validate_connection=true', cluster)
+  },
+
+  // 测试连接配置（不创建集群）
+  testConnectionConfig(cluster: ClusterCreate): Promise<any> {
+    return api.post('/clusters/test-connection', cluster)
   }
 }

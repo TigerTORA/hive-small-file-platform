@@ -14,7 +14,7 @@
             <span class="user-info">
               <el-icon><User /></el-icon>
               管理员
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              <el-icon class="el-icon--right"><CaretBottom /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -75,6 +75,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { 
+  User, 
+  CaretBottom, 
+  DataBoard, 
+  Monitor, 
+  Connection, 
+  Grid, 
+  List, 
+  Setting 
+} from '@element-plus/icons-vue'
 </script>
 
 <style scoped>

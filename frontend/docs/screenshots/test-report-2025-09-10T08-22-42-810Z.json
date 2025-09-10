@@ -1,0 +1,259 @@
+{
+  "timestamp": "2025-09-10T08-22-42-810Z",
+  "testResults": [
+    {
+      "name": "Dashboard - Dashboard Title",
+      "status": "PASS",
+      "details": "Element visible and accessible",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:22:47.097Z"
+    },
+    {
+      "name": "Dashboard - Statistics Cards",
+      "status": "FAIL",
+      "details": "Element not found: .stats-card, .summary-card, [class*=\"stat\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:22:52.099Z"
+    },
+    {
+      "name": "Dashboard - Charts",
+      "status": "FAIL",
+      "details": "Element not found: .chart-container, [class*=\"chart\"], canvas",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:22:57.102Z"
+    },
+    {
+      "name": "Dashboard - Batch Scan Button",
+      "status": "FAIL",
+      "details": "Element not found: button[class*=\"scan\"], button:has-text(\"扫描\"), .scan-button",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:02.104Z"
+    },
+    {
+      "name": "Dashboard - Batch Scan Button",
+      "status": "WARNING",
+      "details": "Scan button not found or not visible",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:02.106Z"
+    },
+    {
+      "name": "Dashboard - Overall Functionality",
+      "status": "PASS",
+      "details": "Dashboard loads and displays data correctly",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:05.168Z"
+    },
+    {
+      "name": "Tables - Table List",
+      "status": "FAIL",
+      "details": "Element not found: .table, table, .el-table, [class*=\"table\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:12.377Z"
+    },
+    {
+      "name": "Tables - Table Names",
+      "status": "FAIL",
+      "details": "Element not found: .table-name, td:has-text(\"catalog_sales\"), [class*=\"table-name\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:17.378Z"
+    },
+    {
+      "name": "Tables - Table Type Tags",
+      "status": "FAIL",
+      "details": "Element not found: .table-type, .tag, .el-tag, [class*=\"type\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:22.379Z"
+    },
+    {
+      "name": "Tables - Storage Format Info",
+      "status": "FAIL",
+      "details": "Element not found: [title*=\"ORC\"], [class*=\"format\"], td:contains(\"ORC\")",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:22.384Z"
+    },
+    {
+      "name": "Tables - Hover Effects",
+      "status": "WARNING",
+      "details": "No clickable table elements found",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:22.385Z"
+    },
+    {
+      "name": "Tables - Overall Functionality",
+      "status": "PASS",
+      "details": "Tables management page loads and displays data",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:22.385Z"
+    },
+    {
+      "name": "Table Detail - Table Metadata",
+      "status": "WARNING",
+      "details": "Element not found: .table-info, .metadata, [class*=\"detail\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:31.139Z"
+    },
+    {
+      "name": "Table Detail - Table Type and Format",
+      "status": "WARNING",
+      "details": "Element not found: .table-type, .storage-format, [class*=\"type\"], [class*=\"format\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:36.140Z"
+    },
+    {
+      "name": "Table Detail - Intelligent Recommendations",
+      "status": "WARNING",
+      "details": "Element not found: .recommendations, [class*=\"recommend\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:41.142Z"
+    },
+    {
+      "name": "Table Detail - Partition Information",
+      "status": "WARNING",
+      "details": "Element not found: .partition-info, [class*=\"partition\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:46.143Z"
+    },
+    {
+      "name": "Table Detail - Owner and Creation Info",
+      "status": "WARNING",
+      "details": "Element not found: .owner, .creation-time, [class*=\"owner\"], [class*=\"created\"]",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:51.145Z"
+    },
+    {
+      "name": "Table Detail - Different Table Types",
+      "status": "PASS",
+      "details": "Can navigate between different table types",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:53.889Z"
+    },
+    {
+      "name": "Table Detail - Overall Functionality",
+      "status": "PASS",
+      "details": "Table detail page displays enhanced metadata",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:23:53.889Z"
+    },
+    {
+      "name": "Navigation - Breadcrumbs",
+      "status": "WARNING",
+      "details": "Breadcrumb navigation not found",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:01.895Z"
+    },
+    {
+      "name": "Navigation - Menu Items",
+      "status": "FAIL",
+      "details": "Only able to navigate to 0 pages",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:01.901Z"
+    },
+    {
+      "name": "Navigation - Browser History",
+      "status": "PASS",
+      "details": "Back and forward navigation works",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:04.168Z"
+    },
+    {
+      "name": "Navigation - Overall Functionality",
+      "status": "PASS",
+      "details": "Navigation system works correctly",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:04.238Z"
+    },
+    {
+      "name": "Performance - Page Load Time",
+      "status": "PASS",
+      "details": "Page loaded in 660ms",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:04.899Z"
+    },
+    {
+      "name": "Performance - Desktop Responsive Design",
+      "status": "PASS",
+      "details": "Layout adapts to 1920x1080",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:05.994Z"
+    },
+    {
+      "name": "Performance - Tablet Responsive Design",
+      "status": "PASS",
+      "details": "Layout adapts to 768x1024",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:07.043Z"
+    },
+    {
+      "name": "Performance - Mobile Responsive Design",
+      "status": "PASS",
+      "details": "Layout adapts to 375x667",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:08.075Z"
+    },
+    {
+      "name": "Performance - Overall Assessment",
+      "status": "PASS",
+      "details": "Performance and responsive design tests completed",
+      "screenshotPath": null,
+      "timestamp": "2025-09-10T08:24:08.078Z"
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "Dashboard Main View",
+      "path": "test-results/screenshots/01-dashboard-main.png"
+    },
+    {
+      "name": "Dashboard After Wait",
+      "path": "test-results/screenshots/03-dashboard-after-wait.png"
+    },
+    {
+      "name": "Tables Management Page",
+      "path": "test-results/screenshots/04-tables-management.png"
+    },
+    {
+      "name": "Table Detail Page",
+      "path": "test-results/screenshots/06-table-detail.png"
+    },
+    {
+      "name": "TEXT Table Detail",
+      "path": "test-results/screenshots/07-text-table-detail.png"
+    },
+    {
+      "name": "Final Navigation State",
+      "path": "test-results/screenshots/08-navigation-final.png"
+    },
+    {
+      "name": "Responsive Design - Desktop",
+      "path": "test-results/screenshots/09-responsive-desktop.png"
+    },
+    {
+      "name": "Responsive Design - Tablet",
+      "path": "test-results/screenshots/09-responsive-tablet.png"
+    },
+    {
+      "name": "Responsive Design - Mobile",
+      "path": "test-results/screenshots/09-responsive-mobile.png"
+    }
+  ],
+  "errors": [
+    {
+      "error": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.stats-card, .summary-card, [class*=\"stat\"]') to be visible\u001b[22m\n",
+      "stack": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.stats-card, .summary-card, [class*=\"stat\"]') to be visible\u001b[22m\n\n    at testDashboard (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:101:20)\n    at async runComprehensiveTest (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:473:5)",
+      "context": "Dashboard element check: Statistics Cards",
+      "timestamp": "2025-09-10T08:22:52.099Z"
+    },
+    {
+      "error": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.chart-container, [class*=\"chart\"], canvas') to be visible\u001b[22m\n",
+      "stack": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.chart-container, [class*=\"chart\"], canvas') to be visible\u001b[22m\n\n    at testDashboard (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:101:20)\n    at async runComprehensiveTest (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:473:5)",
+      "context": "Dashboard element check: Charts",
+      "timestamp": "2025-09-10T08:22:57.102Z"
+    },
+    {
+      "error": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button[class*=\"scan\"], button:has-text(\"扫描\"), .scan-button') to be visible\u001b[22m\n",
+      "stack": "page.waitForSelector: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button[class*=\"scan\"], button:has-text(\"扫描\"), .scan-button') to be visible\u001b[22m\n\n    at testDashboard (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:101:20)\n    at async runComprehensiveTest (/Users/luohu/new_project/hive-small-file-platform/frontend/comprehensive-test.js:473:5)",
+      "context": "Dashboard element check: Batch Scan Button",
+      "timestamp": "2025-09-10T08:23:02.104Z"
+    }
+  ]
+}

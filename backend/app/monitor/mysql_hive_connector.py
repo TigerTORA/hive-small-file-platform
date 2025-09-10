@@ -72,19 +72,26 @@ class MySQLHiveMetastoreConnector:
         
         try:
             with self._connection.cursor() as cursor:
-                # 获取表基本信息和存储路径
+                # 获取表详细信息和存储元数据
                 query = """
                 SELECT 
                     t.TBL_NAME,
                     s.LOCATION as table_path,
                     t.TBL_TYPE,
+                    t.OWNER as table_owner,
+                    FROM_UNIXTIME(t.CREATE_TIME) as table_create_time,
+                    s.INPUT_FORMAT,
+                    s.OUTPUT_FORMAT,
+                    ser.SLIB as serde_lib,
                     COUNT(p.PART_ID) as partition_count
                 FROM TBLS t 
                 JOIN SDS s ON t.SD_ID = s.SD_ID 
                 JOIN DBS d ON t.DB_ID = d.DB_ID
                 LEFT JOIN PARTITIONS p ON p.TBL_ID = t.TBL_ID
+                LEFT JOIN SERDES ser ON s.SERDE_ID = ser.SERDE_ID
                 WHERE d.NAME = %s
-                GROUP BY t.TBL_NAME, s.LOCATION, t.TBL_TYPE
+                GROUP BY t.TBL_NAME, s.LOCATION, t.TBL_TYPE, t.OWNER, t.CREATE_TIME, 
+                         s.INPUT_FORMAT, s.OUTPUT_FORMAT, ser.SLIB
                 ORDER BY t.TBL_NAME
                 """
                 cursor.execute(query, (database_name,))
@@ -92,10 +99,20 @@ class MySQLHiveMetastoreConnector:
                 
                 tables = []
                 for row in results:
+                    # 解析存储格式
+                    input_format = row.get('INPUT_FORMAT', '')
+                    storage_format = self._extract_storage_format(input_format)
+                    
                     tables.append({
                         'table_name': row['TBL_NAME'],
                         'table_path': row['table_path'],
                         'table_type': row['TBL_TYPE'],
+                        'table_owner': row.get('table_owner'),
+                        'table_create_time': row.get('table_create_time'),
+                        'input_format': row.get('INPUT_FORMAT'),
+                        'output_format': row.get('OUTPUT_FORMAT'),
+                        'serde_lib': row.get('serde_lib'),
+                        'storage_format': storage_format,
                         'is_partitioned': row['partition_count'] > 0,
                         'partition_count': row['partition_count'] or 0
                     })
@@ -182,3 +199,30 @@ class MySQLHiveMetastoreConnector:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.disconnect()
+    
+    def _extract_storage_format(self, input_format: str) -> str:
+        """
+        从INPUT_FORMAT中提取存储格式
+        Args:
+            input_format: Hive输入格式类名
+        Returns:
+            简化的存储格式名称
+        """
+        if not input_format:
+            return 'UNKNOWN'
+        
+        format_mapping = {
+            'parquet': 'PARQUET',
+            'orc': 'ORC', 
+            'avro': 'AVRO',
+            'text': 'TEXT',
+            'sequence': 'SEQUENCE',
+            'rcfile': 'RCFILE'
+        }
+        
+        input_format_lower = input_format.lower()
+        for key, value in format_mapping.items():
+            if key in input_format_lower:
+                return value
+        
+        return 'OTHER'

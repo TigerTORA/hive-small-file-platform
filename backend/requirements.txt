@@ -17,6 +17,9 @@ passlib==1.7.4
 bcrypt==4.1.2
 sentry-sdk==1.40.5
 
+# Kerberos authentication dependencies (optional)
+# requests-gssapi==1.2.3  # Disabled due to Python 3.13 compatibility issues
+
 # Testing dependencies
 pytest==7.4.3
 pytest-asyncio==0.21.1

@@ -5,8 +5,18 @@ from typing import Dict, List, Tuple, Optional
 from urllib.parse import urljoin, urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+import os
 
 logger = logging.getLogger(__name__)
+
+# 尝试导入Kerberos相关模块
+try:
+    from requests_gssapi import HTTPSPNEGOAuth, OPTIONAL
+    KERBEROS_AVAILABLE = True
+    logger.info("Kerberos authentication support available (via GSSAPI)")
+except ImportError:
+    logger.warning("Kerberos authentication not available - install requests-gssapi for Kerberos support")
+    KERBEROS_AVAILABLE = False
 
 class WebHDFSScanner:
     """
@@ -14,36 +24,56 @@ class WebHDFSScanner:
     使用HTTP协议连接HDFS，无需安装特殊的Python库
     """
     
-    def __init__(self, namenode_url: str, user: str = "hdfs", webhdfs_port: int = 9870):
+    def __init__(self, namenode_url: str, user: str = "hdfs", webhdfs_port: int = 9870, password: str = None):
         """
-        初始化WebHDFS扫描器
+        初始化WebHDFS/HttpFS扫描器
         Args:
-            namenode_url: NameNode URL, e.g., hdfs://nameservice1 or http://namenode:9870
+            namenode_url: NameNode URL, e.g., hdfs://nameservice1, http://namenode:9870, or http://httpfs:14000
             user: HDFS用户名
-            webhdfs_port: WebHDFS端口，默认9870
+            webhdfs_port: WebHDFS/HttpFS端口，默认9870
+            password: 用户密码（用于Kerberos认证）
         """
         self.user = user
+        self.password = password
         self._connected = False
+        self.auth = None
+        self.is_httpfs = False
         
-        # 解析URL并构造WebHDFS基础URL
+        # 解析URL并构造WebHDFS/HttpFS基础URL
         if namenode_url.startswith('hdfs://'):
             # 从HDFS URL推断WebHDFS URL
             parsed = urlparse(namenode_url)
             if parsed.hostname:
                 self.webhdfs_base_url = f"http://{parsed.hostname}:{webhdfs_port}/webhdfs/v1"
             else:
-                # 处理nameservice情况，尝试常见的WebHDFS端口
-                # 这里需要根据实际环境配置
+                # 处理nameservice情况
                 self.webhdfs_base_url = f"http://192.168.0.105:{webhdfs_port}/webhdfs/v1"
         elif namenode_url.startswith('http://'):
             # 直接使用HTTP URL
             parsed = urlparse(namenode_url)
-            self.webhdfs_base_url = f"http://{parsed.netloc}/webhdfs/v1"
+            # 检查是否是HttpFS（端口14000）
+            if parsed.port == 14000:
+                self.is_httpfs = True
+                self.webhdfs_base_url = f"http://{parsed.netloc}/webhdfs/v1"
+            else:
+                self.webhdfs_base_url = f"http://{parsed.netloc}/webhdfs/v1"
         else:
-            # 假设是主机名
+            # 假设是主机名，检查端口判断类型
+            if webhdfs_port == 14000:
+                self.is_httpfs = True
             self.webhdfs_base_url = f"http://{namenode_url}:{webhdfs_port}/webhdfs/v1"
         
-        logger.info(f"WebHDFS base URL: {self.webhdfs_base_url}")
+        # 设置认证方式
+        if KERBEROS_AVAILABLE:
+            try:
+                # 尝试使用GSSAPI Kerberos认证
+                self.auth = HTTPSPNEGOAuth(mutual_authentication=OPTIONAL)
+                logger.info(f"Using Kerberos authentication (GSSAPI) for {'HttpFS' if self.is_httpfs else 'WebHDFS'}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Kerberos auth: {e}")
+                self.auth = None
+        
+        logger.info(f"{'HttpFS' if self.is_httpfs else 'WebHDFS'} base URL: {self.webhdfs_base_url}")
         
         # HTTP会话
         self.session = requests.Session()
@@ -71,19 +101,44 @@ class WebHDFSScanner:
         self.session.close()
         logger.info("Disconnected from WebHDFS")
     
+    def _normalize_path(self, path: str) -> str:
+        """将HDFS URI转换为HTTP路径"""
+        if path.startswith('hdfs://'):
+            # 从HDFS URI中提取路径部分
+            parsed = urlparse(path)
+            return parsed.path
+        else:
+            # 已经是路径格式，直接返回
+            return path
+
     def _get_request(self, path: str, operation: str, **params) -> requests.Response:
-        """发送WebHDFS GET请求"""
-        url = urljoin(self.webhdfs_base_url, path.lstrip('/'))
+        """发送WebHDFS/HttpFS GET请求"""
+        # 先转换HDFS URI为HTTP路径
+        normalized_path = self._normalize_path(path)
+        # 确保路径正确拼接
+        if not normalized_path.startswith('/'):
+            normalized_path = '/' + normalized_path
+        url = self.webhdfs_base_url + normalized_path
+        
+        logger.debug(f"WebHDFS请求URL: {url}")
+        
         params.update({
             'op': operation,
             'user.name': self.user
         })
-        return self.session.get(url, params=params)
+        
+        # 使用认证（如果可用）
+        if self.auth:
+            return self.session.get(url, params=params, auth=self.auth)
+        else:
+            return self.session.get(url, params=params)
     
     def test_connection(self) -> Dict[str, any]:
-        """测试WebHDFS连接"""
+        """测试WebHDFS/HttpFS连接"""
+        service_type = 'HttpFS' if self.is_httpfs else 'WebHDFS'
+        
         if not self.connect():
-            return {'status': 'error', 'message': 'Failed to connect to WebHDFS'}
+            return {'status': 'error', 'message': f'Failed to connect to {service_type}'}
         
         try:
             # 测试根目录列出
@@ -95,17 +150,24 @@ class WebHDFSScanner:
                 
                 return {
                     'status': 'success',
+                    'service_type': service_type,
                     'webhdfs_url': self.webhdfs_base_url,
                     'user': self.user,
+                    'auth_method': 'Kerberos' if self.auth else 'Simple',
                     'sample_paths': sample_files
                 }
             else:
                 return {
                     'status': 'error', 
-                    'message': f'HTTP {response.status_code}: {response.text}'
+                    'message': f'HTTP {response.status_code}: {response.text}',
+                    'service_type': service_type
                 }
         except Exception as e:
-            return {'status': 'error', 'message': str(e)}
+            return {
+                'status': 'error', 
+                'message': str(e),
+                'service_type': service_type
+            }
         finally:
             self.disconnect()
     
@@ -135,10 +197,19 @@ class WebHDFSScanner:
         }
         
         try:
+            # 先转换HDFS URI为HTTP路径用于调试
+            normalized_path = self._normalize_path(path)
+            logger.info(f"扫描路径: {path} -> {normalized_path}")
+            
             # 检查路径是否存在
             response = self._get_request(path, "GETFILESTATUS")
+            logger.info(f"路径状态检查: HTTP {response.status_code}")
+            
             if response.status_code != 200:
-                stats['error'] = f"Path does not exist or inaccessible: {path}"
+                error_msg = response.text[:500] if response.text else "No error details"
+                stats['error'] = f"Path does not exist or inaccessible: {path} (HTTP {response.status_code})"
+                logger.warning(f"路径不存在或无法访问: {path}, HTTP {response.status_code}")
+                logger.warning(f"HTTP响应内容: {error_msg}")
                 return stats
             
             # 递归遍历目录获取所有文件

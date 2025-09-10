@@ -1,6 +1,7 @@
 from typing import Dict, Type, Optional
 from app.engines.base_engine import BaseMergeEngine
 from app.engines.hive_engine import HiveMergeEngine
+from app.engines.safe_hive_engine import SafeHiveMergeEngine
 from app.models.cluster import Cluster
 
 class MergeEngineFactory:
@@ -12,6 +13,7 @@ class MergeEngineFactory:
     # 注册的引擎类
     _engines: Dict[str, Type[BaseMergeEngine]] = {
         'hive': HiveMergeEngine,
+        'safe_hive': SafeHiveMergeEngine,
         # 可以扩展其他引擎，如 Spark 引擎、Impala 引擎等
         # 'spark': SparkMergeEngine,
         # 'impala': ImpalaMergeEngine,
@@ -54,14 +56,14 @@ class MergeEngineFactory:
         Returns:
             引擎类
         """
-        # 目前默认使用 Hive 引擎
+        # 默认使用安全的 Hive 引擎
         # 将来可以根据集群的特征自动选择最佳引擎
         # 例如：
         # - 如果集群有 Spark，可以选择 Spark 引擎
         # - 如果集群有 Impala，可以选择 Impala 引擎
         # - 根据表的格式和大小选择最适合的引擎
         
-        return cls._engines['hive']
+        return cls._engines['safe_hive']
     
     @classmethod
     def register_engine(cls, name: str, engine_class: Type[BaseMergeEngine]):
@@ -87,6 +89,7 @@ class MergeEngineFactory:
         """
         return {
             'hive': 'Hive SQL Engine - 使用 Hive SQL 命令进行文件合并',
+            'safe_hive': 'Safe Hive Engine - 使用临时表+重命名的安全合并策略',
             # 'spark': 'Spark Engine - 使用 Spark 进行分布式文件合并',
             # 'impala': 'Impala Engine - 使用 Impala SQL 进行文件合并',
         }
@@ -110,6 +113,16 @@ class MergeEngineFactory:
                 'supports_preview': True,
                 'parallel_execution': False,
                 'typical_performance': 'medium'
+            },
+            'safe_hive': {
+                'supported_strategies': ['safe_merge'],
+                'supported_formats': ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE', 'PARQUET', 'ORC'],
+                'supports_partitions': True,
+                'supports_preview': True,
+                'parallel_execution': False,
+                'typical_performance': 'medium',
+                'zero_downtime': True,
+                'rollback_support': True
             }
             # 可以为其他引擎添加能力信息
         }

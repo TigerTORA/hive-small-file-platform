@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from app.api import clusters, tables, tasks, errors
+from app.api import clusters, tables, tasks, errors, dashboard
 from app.config.database import engine, Base
 from app.config.settings import settings
 from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog
@@ -40,6 +40,7 @@ app.include_router(clusters.router, prefix="/api/v1/clusters", tags=["clusters"]
 app.include_router(tables.router, prefix="/api/v1/tables", tags=["tables"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(errors.router, prefix="/api/v1/errors", tags=["errors"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 
 @app.get("/")
 async def root():

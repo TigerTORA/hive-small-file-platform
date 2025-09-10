@@ -6,12 +6,28 @@ export interface TableMetric {
   database_name: string
   table_name: string
   table_path: string
+  
+  // Enhanced metadata fields
+  table_type?: string
+  storage_format?: string
+  input_format?: string
+  output_format?: string
+  serde_lib?: string
+  table_owner?: string
+  table_create_time?: string
+  partition_columns?: string
+  
+  // File metrics
   total_files: number
   small_files: number
   total_size: number
   avg_file_size: number
+  
+  // Partition info
   is_partitioned: boolean
   partition_count: number
+  
+  // Scan metadata
   scan_time: string
   scan_duration: number
 }

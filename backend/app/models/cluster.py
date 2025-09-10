@@ -19,6 +19,7 @@ class Cluster(Base):
     # HDFS connection info
     hdfs_namenode_url = Column(String(500), nullable=False)
     hdfs_user = Column(String(100), default="hdfs")
+    hdfs_password = Column(String(255), nullable=True)  # 用于Kerberos认证
     
     # Status and timestamps
     status = Column(String(20), default="active")  # active, inactive, error

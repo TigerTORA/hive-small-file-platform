@@ -23,7 +23,16 @@
 
       <el-table :data="tableMetrics" stripe v-loading="loading">
         <el-table-column prop="database_name" label="数据库" width="120" />
-        <el-table-column prop="table_name" label="表名" width="200" />
+        <el-table-column prop="table_name" label="表名" width="200">
+          <template #default="{ row }">
+            <router-link 
+              :to="`/tables/${selectedCluster}/${row.database_name}/${row.table_name}`"
+              class="table-name-link"
+            >
+              {{ row.table_name }}
+            </router-link>
+          </template>
+        </el-table-column>
         <el-table-column prop="total_files" label="总文件数" width="100" />
         <el-table-column prop="small_files" label="小文件数" width="100">
           <template #default="{ row }">
@@ -183,5 +192,22 @@ onMounted(() => {
 .text-danger {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.table-name-link {
+  color: #409eff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.table-name-link:hover {
+  color: #66b1ff;
+  background-color: #f0f9ff;
+  transform: translateX(2px);
+  text-decoration: underline;
 }
 </style>
