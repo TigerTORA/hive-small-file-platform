@@ -1,0 +1,35 @@
+{
+  "name": "hive-small-file-platform",
+  "version": "1.0.0",
+  "description": "Hive小文件治理平台 - 统一管理和监控Hive集群小文件问题",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"cd backend && uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev\" \"cd frontend && node test-dashboard-integration.js\"",
+    "start": "npm run dev",
+    "build": "cd frontend && npm run build",
+    "test": "./scripts/update-dashboard.sh && echo '测试仪表板已更新'",
+    "dashboard": "./scripts/update-dashboard.sh",
+    "dashboard:force": "./scripts/update-dashboard.sh --force",
+    "precommit": ".githooks/pre-commit",
+    "setup": "npm run setup:hooks && npm run dashboard",
+    "setup:hooks": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit && chmod +x scripts/update-dashboard.sh",
+    "validate": "npm run dashboard && echo '✅ 验证通过 - 测试仪表板已更新'",
+    "check": "curl -s http://localhost:3001/api/test/overview | jq '.data'"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": ".githooks/pre-commit"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "husky": "^8.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/hive-small-file-platform.git"
+  },
+  "keywords": ["hive", "small-files", "management", "platform", "testing", "dashboard"],
+  "author": "Hive Team",
+  "license": "MIT"
+}

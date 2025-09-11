@@ -61,6 +61,11 @@
               <el-icon><Setting /></el-icon>
               <span>系统设置</span>
             </el-menu-item>
+            
+            <el-menu-item index="/test-dashboard">
+              <el-icon><DataBoard /></el-icon>
+              <span>测试中心</span>
+            </el-menu-item>
           </el-menu>
         </el-aside>
 

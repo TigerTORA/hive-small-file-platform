@@ -5,19 +5,26 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/dashboard'
+      redirect: '/clusters'
+    },
+    {
+      path: '/clusters',
+      name: 'ClustersManagement',
+      component: () => import('@/views/ClustersManagement.vue'),
+      meta: { title: '集群管理' }
+    },
+    {
+      path: '/clusters/:id',
+      name: 'ClusterDetail',
+      component: () => import('@/views/ClusterDetail.vue'),
+      meta: { title: '集群详情' },
+      props: true
     },
     {
       path: '/dashboard',
       name: 'Dashboard',
       component: () => import('@/views/Dashboard.vue'),
       meta: { title: '监控仪表板' }
-    },
-    {
-      path: '/clusters',
-      name: 'Clusters',
-      component: () => import('@/views/Clusters.vue'),
-      meta: { title: '集群管理' }
     },
     {
       path: '/tables',
@@ -43,6 +50,12 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('@/views/Settings.vue'),
       meta: { title: '系统设置' }
+    },
+    {
+      path: '/test-dashboard',
+      name: 'TestDashboard',
+      component: () => import('@/views/TestDashboard.vue'),
+      meta: { title: '测试中心' }
     }
   ]
 })
