@@ -30,6 +30,29 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 ```
 
+### Code Quality and Formatting
+
+```bash
+# Install quality tools (included in requirements.txt)
+pip install black flake8 isort mypy pre-commit
+
+# Auto-format code
+python scripts/format_code.py
+
+# Check code quality
+python scripts/quality_check.py
+
+# Set up pre-commit hooks (optional)
+pre-commit install
+pre-commit run --all-files
+
+# Manual quality checks
+black --check backend/app
+flake8 backend/app
+isort --check-only backend/app
+mypy backend/app
+```
+
 ### Frontend Development
 
 ```bash
