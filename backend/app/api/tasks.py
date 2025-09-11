@@ -89,14 +89,17 @@ async def execute_task(task_id: int, db: Session = Depends(get_db)):
     if task.status in ["running", "success"]:
         raise HTTPException(status_code=400, detail=f"Task is already {task.status}")
     
-    # 模拟任务执行
+    # 导入Celery任务
+    from app.scheduler.merge_tasks import execute_merge_task
+    
+    # 启动真实的后台任务
+    result = execute_merge_task.delay(task_id)
+    
+    # 更新任务状态和Celery任务ID
     task.status = "running"
     task.started_time = datetime.utcnow()
-    task.celery_task_id = f"mock-{uuid.uuid4().hex[:8]}"
+    task.celery_task_id = result.id
     db.commit()
-    
-    # 这里可以启动后台任务
-    # result = execute_merge_task.delay(task_id)
     
     return {
         "message": "Task execution started", 
@@ -122,28 +125,72 @@ async def cancel_task(task_id: int, db: Session = Depends(get_db)):
     
     return {"message": "Task cancelled successfully"}
 
-@router.post("/{task_id}/simulate-complete")
-async def simulate_complete_task(task_id: int, db: Session = Depends(get_db)):
-    """模拟完成任务 (仅用于演示)"""
+@router.get("/{task_id}/logs")
+async def get_task_logs(task_id: int, db: Session = Depends(get_db)):
+    """Get logs for a specific task"""
+    # 验证任务是否存在
     task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.status != "running":
-        raise HTTPException(status_code=400, detail="Task is not running")
+    # 查询任务日志
+    from app.models.task_log import TaskLog
+    logs = db.query(TaskLog).filter(
+        TaskLog.task_id == task_id
+    ).order_by(TaskLog.timestamp.asc()).all()
     
-    # 模拟任务完成
-    import random
-    task.status = "success"
-    task.completed_time = datetime.utcnow()
-    task.files_before = random.randint(1000, 10000)
-    task.files_after = random.randint(100, task.files_before // 5)
-    task.size_saved = random.randint(1024*1024*100, 1024*1024*1024*10)  # 100MB to 10GB
-    db.commit()
+    return [
+        {
+            "id": log.id,
+            "log_level": log.log_level,
+            "message": log.message,
+            "details": log.details,
+            "timestamp": log.timestamp
+        }
+        for log in logs
+    ]
+
+@router.get("/{task_id}/preview")
+async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
+    """Get merge preview for a specific task"""
+    # 验证任务是否存在
+    task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
     
-    return {
-        "message": "Task completed successfully",
-        "files_before": task.files_before,
-        "files_after": task.files_after,
-        "size_saved": task.size_saved
-    }
+    # 获取集群信息
+    cluster = db.query(Cluster).filter(Cluster.id == task.cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        # 导入引擎工厂
+        from app.engines.engine_factory import MergeEngineFactory
+        
+        # 根据任务的合并策略选择引擎
+        engine_type = None
+        if task.merge_strategy == 'safe_merge':
+            engine_type = 'safe_hive'
+        elif task.merge_strategy in ['concatenate', 'insert_overwrite']:
+            engine_type = 'hive'
+        
+        # 获取合并引擎
+        engine = MergeEngineFactory.get_engine(cluster, engine_type)
+        
+        # 获取预览信息
+        preview = engine.get_merge_preview(task)
+        
+        return {
+            "task_id": task.id,
+            "task_name": task.task_name,
+            "table": f"{task.database_name}.{task.table_name}",
+            "merge_strategy": task.merge_strategy,
+            "preview": preview
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to generate preview: {str(e)}"
+        )
+

@@ -36,8 +36,16 @@
             {{ formatTime(row.created_time) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="250">
           <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'pending'"
+              type="success"
+              size="small"
+              @click="showPreview(row)"
+            >
+              预览
+            </el-button>
             <el-button
               v-if="row.status === 'pending'"
               type="primary"
@@ -181,6 +189,84 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 预览对话框 -->
+    <el-dialog v-model="showPreviewDialog" title="合并预览" width="700px">
+      <div v-if="previewLoading" style="text-align: center; padding: 20px;">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <div style="margin-top: 10px;">正在生成预览...</div>
+      </div>
+      
+      <div v-else-if="previewData" class="preview-container">
+        <div class="preview-section">
+          <h3>任务信息</h3>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="任务名称">{{ previewData.task_name }}</el-descriptions-item>
+            <el-descriptions-item label="目标表">{{ previewData.table }}</el-descriptions-item>
+            <el-descriptions-item label="合并策略">
+              <el-tag :type="previewData.merge_strategy === 'safe_merge' ? 'success' : 'warning'">
+                {{ getStrategyName(previewData.merge_strategy) }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="preview-section">
+          <h3>预期效果</h3>
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-statistic title="合并前文件数" :value="previewData.preview.estimated_files_before" />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic title="合并后文件数" :value="previewData.preview.estimated_files_after" />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic 
+                title="预计节省空间" 
+                :value="formatBytes(previewData.preview.estimated_size_reduction)" 
+                suffix="B" 
+              />
+            </el-col>
+            <el-col :span="6">
+              <el-statistic 
+                title="预计耗时" 
+                :value="previewData.preview.estimated_duration" 
+                suffix="秒" 
+              />
+            </el-col>
+          </el-row>
+        </div>
+
+        <div v-if="previewData.preview.warnings && previewData.preview.warnings.length > 0" class="preview-section">
+          <h3>注意事项</h3>
+          <el-alert 
+            v-for="(warning, index) in previewData.preview.warnings" 
+            :key="index"
+            :title="warning" 
+            type="warning" 
+            show-icon 
+            style="margin-bottom: 10px;"
+          />
+        </div>
+
+        <div v-if="previewData.preview.is_partitioned" class="preview-section">
+          <h3>分区信息</h3>
+          <p>
+            <el-tag type="info">分区表</el-tag>
+            <span style="margin-left: 10px;">共 {{ previewData.preview.partitions?.length || 0 }} 个分区</span>
+          </p>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showPreviewDialog = false">关闭</el-button>
+          <el-button v-if="previewData && !previewLoading" type="primary" @click="executeTaskFromPreview">
+            确认执行
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -197,7 +283,11 @@ const clusters = ref<Cluster[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const showLogsDialog = ref(false)
+const showPreviewDialog = ref(false)
 const taskLogs = ref<any[]>([])
+const previewData = ref<any>(null)
+const previewLoading = ref(false)
+const previewingTask = ref<MergeTask | null>(null)
 
 // 分区相关数据
 const tableInfo = ref<any>(null)
@@ -350,6 +440,49 @@ const formatTime = (time: string): string => {
   return dayjs(time).format('MM-DD HH:mm:ss')
 }
 
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const getStrategyName = (strategy: string): string => {
+  const strategyMap: Record<string, string> = {
+    'safe_merge': '安全合并',
+    'concatenate': '文件合并',
+    'insert_overwrite': '重写插入'
+  }
+  return strategyMap[strategy] || strategy
+}
+
+// 显示任务预览
+const showPreview = async (task: MergeTask) => {
+  try {
+    previewingTask.value = task
+    previewData.value = null
+    showPreviewDialog.value = true
+    previewLoading.value = true
+    
+    const preview = await tasksApi.getTaskPreview(task.id)
+    previewData.value = preview
+  } catch (error) {
+    console.error('Failed to load task preview:', error)
+    ElMessage.error('获取预览信息失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+// 从预览对话框执行任务
+const executeTaskFromPreview = async () => {
+  if (previewingTask.value) {
+    showPreviewDialog.value = false
+    await executeTask(previewingTask.value)
+  }
+}
+
 // 检查表分区信息
 const checkTablePartitions = async () => {
   if (!taskForm.value.cluster_id || !taskForm.value.database_name || !taskForm.value.table_name) {
@@ -456,5 +589,25 @@ onMounted(() => {
 
 .log-message {
   color: #2c3e50;
+}
+
+.preview-container {
+  padding: 16px 0;
+}
+
+.preview-section {
+  margin-bottom: 24px;
+}
+
+.preview-section:last-child {
+  margin-bottom: 0;
+}
+
+.preview-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #2c3e50;
+  border-bottom: 1px solid #e4e7ed;
+  padding-bottom: 8px;
 }
 </style>
