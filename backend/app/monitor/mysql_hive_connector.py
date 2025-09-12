@@ -1,11 +1,11 @@
 import logging
 from typing import List, Dict, Optional
 import pymysql
-from urllib.parse import urlparse
+from .base_connector import BaseMetastoreConnector
 
 logger = logging.getLogger(__name__)
 
-class MySQLHiveMetastoreConnector:
+class MySQLHiveMetastoreConnector(BaseMetastoreConnector):
     """
     连接 MySQL 版本的 Hive MetaStore 数据库获取表信息
     专门适配 CDP 集群的 MySQL MetaStore
@@ -17,47 +17,26 @@ class MySQLHiveMetastoreConnector:
         Args:
             metastore_url: MySQL connection URL, e.g., mysql://user:pass@host:3306/hive
         """
-        self.metastore_url = metastore_url
-        self._connection = None
+        super().__init__(metastore_url)
     
-    def connect(self) -> bool:
-        """建立数据库连接"""
-        try:
-            parsed = urlparse(self.metastore_url)
-            self._connection = pymysql.connect(
-                host=parsed.hostname,
-                port=parsed.port or 3306,
-                database=parsed.path.lstrip('/'),
-                user=parsed.username,
-                password=parsed.password,
-                charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
-            )
-            logger.info(f"Connected to MySQL Hive MetaStore: {parsed.hostname}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to MySQL Hive MetaStore: {e}")
-            return False
+    def _create_connection(self):
+        """创建MySQL连接"""
+        return pymysql.connect(
+            host=self.parsed_url.hostname,
+            port=self.parsed_url.port or 3306,
+            database=self.parsed_url.path.lstrip('/'),
+            user=self.parsed_url.username,
+            password=self.parsed_url.password,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
     
-    def disconnect(self):
-        """关闭数据库连接"""
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+    def _execute_query(self, query: str, params: tuple = None) -> List[Dict]:
+        """执行查询"""
+        with self._connection.cursor() as cursor:
+            cursor.execute(query, params or ())
+            return cursor.fetchall()
     
-    def get_databases(self) -> List[str]:
-        """获取所有数据库名称"""
-        if not self._connection:
-            raise ConnectionError("Not connected to MetaStore")
-        
-        try:
-            with self._connection.cursor() as cursor:
-                cursor.execute("SELECT NAME FROM DBS ORDER BY NAME")
-                results = cursor.fetchall()
-                return [row['NAME'] for row in results]
-        except Exception as e:
-            logger.error(f"Failed to get databases: {e}")
-            return []
     
     def get_tables(self, database_name: str) -> List[Dict]:
         """

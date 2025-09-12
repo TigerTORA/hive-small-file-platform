@@ -2,11 +2,11 @@ import logging
 from typing import List, Dict, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from urllib.parse import urlparse
+from .base_connector import BaseMetastoreConnector
 
 logger = logging.getLogger(__name__)
 
-class HiveMetastoreConnector:
+class HiveMetastoreConnector(BaseMetastoreConnector):
     """
     直接连接 Hive MetaStore 数据库获取表信息
     避免通过 Hive SQL 查询的开销
@@ -18,32 +18,24 @@ class HiveMetastoreConnector:
         Args:
             metastore_url: PostgreSQL connection URL, e.g., postgresql://user:pass@host:5432/hive_metastore
         """
-        self.metastore_url = metastore_url
-        self._connection = None
+        super().__init__(metastore_url)
     
-    def connect(self) -> bool:
-        """建立数据库连接"""
-        try:
-            parsed = urlparse(self.metastore_url)
-            self._connection = psycopg2.connect(
-                host=parsed.hostname,
-                port=parsed.port or 5432,
-                database=parsed.path.lstrip('/'),
-                user=parsed.username,
-                password=parsed.password,
-                cursor_factory=RealDictCursor
-            )
-            logger.info(f"Connected to Hive MetaStore: {parsed.hostname}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to Hive MetaStore: {e}")
-            return False
+    def _create_connection(self):
+        """创建PostgreSQL连接"""
+        return psycopg2.connect(
+            host=self.parsed_url.hostname,
+            port=self.parsed_url.port or 5432,
+            database=self.parsed_url.path.lstrip('/'),
+            user=self.parsed_url.username,
+            password=self.parsed_url.password,
+            cursor_factory=RealDictCursor
+        )
     
-    def disconnect(self):
-        """关闭数据库连接"""
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+    def _execute_query(self, query: str, params: tuple = None) -> List[Dict]:
+        """执行查询"""
+        with self._connection.cursor() as cursor:
+            cursor.execute(query, params or ())
+            return cursor.fetchall()
     
     def get_databases(self) -> List[str]:
         """获取所有数据库名称"""
