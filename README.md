@@ -155,6 +155,22 @@ celery -A app.scheduler.celery_app beat --loglevel=info
 
 提示：将徽章中的 `your-username/hive-small-file-platform` 替换为实际仓库路径即可显示状态。
 
+## 迁移与配置（升级指南）
+
+- 数据库迁移（新增扫描日志持久化表）
+  - 进入 `backend/`，执行：
+    - `alembic upgrade head`
+  - 说明：本次升级新增 `scan_task_logs` 表用于持久化扫描任务日志。建议生产环境使用 Alembic 管理迁移，不依赖自动建表。
+
+- 前端 API 基址配置（多环境）
+  - 复制 `frontend/.env.example` 为 `.env`，并按需修改：
+    - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+  - 前端已读取 `VITE_API_BASE_URL`，未设置时将回退到 `http://localhost:8000/api/v1`。
+
+- 生产环境关闭自动建表
+  - 后端环境变量：`AUTO_CREATE_SCHEMA=false`
+  - 后端默认在开发环境下自动建表。生产请关闭并依赖 Alembic 迁移。
+
 ## 配置说明
 
 ### 环境变量配置 (.env)
@@ -352,3 +368,7 @@ MIT License
 ## 联系方式
 
 如有问题，请通过 Issue 联系我们。
+
+---
+
+CI 演示占位：本行用于触发 CI 并演示 PR 工作流（可在合并前移除）。
