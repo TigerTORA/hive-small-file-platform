@@ -21,7 +21,8 @@ if settings.SENTRY_DSN:
         traces_sample_rate=1.0,
     )
 
-Base.metadata.create_all(bind=engine)
+if settings.AUTO_CREATE_SCHEMA:
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Hive Small File Management Platform",

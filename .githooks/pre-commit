@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Pre-commit hook - simplified version
+echo "Running pre-commit checks..."
+
+# Check if we're in the project root
+if [ ! -f "package.json" ]; then
+    echo "Error: Not in project root directory"
+    exit 1
+fi
+
+# Run dashboard update only if needed
+if [ -f ".last-dashboard-update" ]; then
+    LAST_UPDATE=$(cat .last-dashboard-update)
+    CURRENT_TIME=$(date +%s)
+    TIME_DIFF=$((CURRENT_TIME - LAST_UPDATE))
+    
+    # Only update if more than 1 hour has passed (3600 seconds)
+    if [ $TIME_DIFF -gt 3600 ]; then
+        echo "Updating dashboard (last update was $TIME_DIFF seconds ago)..."
+        ./scripts/update-dashboard.sh
+    else
+        echo "Dashboard recently updated, skipping..."
+    fi
+else
+    echo "No previous update timestamp found, updating dashboard..."
+    ./scripts/update-dashboard.sh
+fi
+
+echo "Pre-commit checks completed successfully"
+exit 0

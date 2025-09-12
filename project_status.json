@@ -1,5 +1,5 @@
 {
-  "generated_at": "2025-09-12T01:18:05.479502Z",
+  "generated_at": "2025-09-12T03:06:55.757205Z",
   "last_repo_update": "2025-09-12T00:36:35Z",
   "features": {
     "completed": 86,
@@ -8,12 +8,12 @@
     "last_update": "2025-09-08"
   },
   "api": {
-    "get": 33,
+    "get": 37,
     "post": 16,
     "put": 1,
     "delete": 1,
     "patch": 0,
-    "total": 51
+    "total": 55
   },
   "tests": {
     "backend": {
@@ -46,7 +46,7 @@
     },
     "frontend": {
       "vitest_files": 7,
-      "misc_files": 44,
+      "misc_files": 16,
       "paths": [
         "frontend/src/test/ClustersManagement.test.ts",
         "frontend/src/test/ClusterDetail.test.ts",
@@ -56,49 +56,21 @@
         "frontend/src/test/components/ClusterCard.test.ts",
         "frontend/src/test/api/dashboard.test.ts",
         "frontend/test-cluster-interface.js",
-        "frontend/test-deletion-operations.js",
-        "frontend/test-dependency-scenarios.js",
         "frontend/test-dashboard-integration.js",
-        "frontend/test-runner-aggregator.js",
         "frontend/test-end-to-end-user-flow.js",
-        "frontend/test-full-scan-workflow.js",
         "frontend/test-crud-operations.js",
-        "frontend/test-verification.js",
-        "frontend/test-dashboard-e2e.js",
-        "frontend/test-dashboard-collector.js",
-        "frontend/test-integration-validation.js",
-        "frontend/test-constraint-errors.js",
-        "frontend/test-httpfs-configuration.js",
-        "frontend/test-dashboard-verification.js",
-        "frontend/test-cluster-navigation.js",
-        "frontend/test-enhanced-connection-ui.js",
         "frontend/test-enhanced-table.js",
         "frontend/test-navigation-routing.js",
-        "frontend/test-complete-e2e-coverage.js",
-        "frontend/test-user-experience-integrity.js",
-        "frontend/test-cluster-issues.js",
-        "frontend/test-httpfs-label-verification.js",
-        "frontend/test-dashboard-component.js",
         "frontend/test-enhanced-functionality.js",
         "frontend/test-api-connection.js",
-        "frontend/test-real-connection-features.js",
         "frontend/test-enhancement-summary.js",
-        "frontend/test-complete-tdd-validation.js",
         "frontend/test-reporter.js",
         "frontend/test-forms-validation.js",
-        "frontend/test-enhanced-table-detail.js",
-        "frontend/test-simple-validation.js",
         "frontend/test-data-manager.js",
-        "frontend/test-dashboard-layout.js",
-        "frontend/test-api-simple.js",
         "frontend/test-rules-validator.js",
         "frontend/test-config.js",
-        "frontend/test-end-to-end-user-journey.js",
         "frontend/test-utils.js",
-        "frontend/test-buttons-comprehensive.js",
-        "frontend/test-buttons-functionality.js",
-        "frontend/test-dashboard-debug.js",
-        "frontend/test-table-navigation.js"
+        "frontend/test-buttons-functionality.js"
       ]
     },
     "frontend_artifacts": {
@@ -1307,10 +1279,11 @@
           }
         ]
       }
-    }
+    },
+    "coverage": {}
   },
   "metrics": {
-    "loc_estimate": 52176
+    "loc_estimate": 37980
   },
   "hints": [
     "Run 'make test' for live test results.",

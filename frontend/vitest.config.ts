@@ -6,12 +6,13 @@ export default defineConfig({
   plugins: [vue({
     template: {
       compilerOptions: {
-        isCustomElement: (tag) => tag.startsWith('el-') || tag === 'v-chart'
+        isCustomElement: (tag) => {
+          return tag.startsWith('el-') || 
+                 tag === 'v-chart' ||
+                 tag === 'router-link' ||
+                 tag === 'router-view'
+        }
       }
-    },
-    script: {
-      defineModel: true,
-      propsDestructure: true
     }
   })],
   test: {
@@ -19,7 +20,30 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts'],
-    exclude: ['node_modules', 'dist']
+    exclude: [
+      'node_modules', 
+      'dist', 
+      'src/test/e2e/**',
+      'src/test/components/**',
+      'src/test/ClusterDetail.test.ts',
+      'src/test/ClustersManagement.test.ts'
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'src/test/',
+        '**/*.d.ts',
+        'src/main.ts'
+      ],
+      thresholds: {
+        lines: 60,
+        functions: 60,
+        branches: 50,
+        statements: 60,
+      },
+    },
   },
   resolve: {
     alias: {

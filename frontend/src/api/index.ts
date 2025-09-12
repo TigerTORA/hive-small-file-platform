@@ -1,10 +1,8 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
-  timeout: 30000,
-})
+const baseURL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+const api = axios.create({ baseURL, timeout: 30000 })
 
 // 请求拦截器
 api.interceptors.request.use(

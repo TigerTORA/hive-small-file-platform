@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 
-// Mock Element Plus message components
+// Mock Element Plus message components only
 vi.mock('element-plus', () => ({
   ElMessage: {
     success: vi.fn(),

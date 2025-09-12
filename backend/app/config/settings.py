@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: Optional[str] = None
     SENTRY_ENVIRONMENT: str = "development"
+
+    # Schema management (dev convenience only)
+    AUTO_CREATE_SCHEMA: bool = True
     
     class Config:
         env_file = ".env"
