@@ -12,7 +12,7 @@ class TableMetric(Base):
     # Table identification
     database_name = Column(String(100), nullable=False, index=True)
     table_name = Column(String(200), nullable=False, index=True)
-    table_path = Column(String(500), nullable=False)
+    table_path = Column(String(500), nullable=True)
     
     # Table metadata (enhanced)
     table_type = Column(String(50), nullable=True)  # EXTERNAL_TABLE, MANAGED_TABLE, VIEW

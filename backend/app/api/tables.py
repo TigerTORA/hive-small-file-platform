@@ -9,6 +9,8 @@ from app.models.cluster import Cluster
 from app.schemas.table_metric import TableMetricResponse, ScanRequest
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.hybrid_table_scanner import HybridTableScanner
+from app.services.scan_service import scan_task_manager
+from app.schemas.scan_task import ScanTaskResponse, ScanTaskProgress
 
 router = APIRouter()
 
@@ -122,6 +124,31 @@ async def scan_tables(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
+@router.post("/scan/{cluster_id}")
+async def scan_all_cluster_databases_with_progress(
+    cluster_id: int,
+    max_tables_per_db: int = Query(10, description="Maximum number of tables to scan per database"),
+    db: Session = Depends(get_db)
+):
+    """启动带进度追踪的集群扫描任务"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        # 启动进度追踪的扫描任务
+        task_id = scan_task_manager.scan_cluster_with_progress(db, cluster_id, max_tables_per_db)
+        
+        return {
+            "cluster_id": cluster_id,
+            "task_id": task_id,
+            "status": "started",
+            "message": "扫描任务已启动，请使用task_id查询进度"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start scan: {str(e)}")
+
 @router.post("/scan/{cluster_id}/{database_name}")
 async def scan_database_tables(
     cluster_id: int, 
@@ -216,6 +243,51 @@ async def scan_single_table(
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Table scan failed: {str(e)}")
+
+@router.post("/scan-mock/{cluster_id}/{database_name}/{table_name}")
+async def scan_single_table_mock(
+    cluster_id: int, 
+    database_name: str, 
+    table_name: str,
+    db: Session = Depends(get_db)
+):
+    """Scan a single table for small files using mock data (for testing)"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        import random
+        from datetime import datetime
+        
+        # 生成模拟的扫描结果
+        total_files = random.randint(10, 500)
+        small_files = random.randint(5, total_files // 2)
+        
+        mock_result = {
+            "cluster_id": cluster_id,
+            "database_name": database_name,
+            "table_name": table_name,
+            "scan_result": {
+                "table_name": table_name,
+                "total_files": total_files,
+                "small_files": small_files,
+                "small_file_ratio": round(small_files / total_files * 100, 2) if total_files > 0 else 0,
+                "avg_file_size": random.randint(10000000, 200000000),  # 10MB to 200MB
+                "total_size": random.randint(100000000, 10000000000),  # 100MB to 10GB
+                "is_partitioned": random.choice([True, False]),
+                "partition_count": random.randint(0, 50) if random.choice([True, False]) else 0,
+                "scan_mode": "mock",
+                "scan_time": datetime.now().isoformat(),
+                "scan_duration": round(random.uniform(0.5, 3.0), 2)
+            },
+            "status": "completed"
+        }
+        
+        return mock_result
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Mock table scan failed: {str(e)}")
 
 @router.get("/test-connection/{cluster_id}")
 async def test_cluster_connections(cluster_id: int, db: Session = Depends(get_db)):
@@ -666,6 +738,29 @@ async def scan_all_databases(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch scan failed: {str(e)}")
+
+@router.get("/scan-progress/{task_id}", response_model=ScanTaskProgress)
+async def get_scan_task_progress(
+    task_id: str,
+    db: Session = Depends(get_db)
+):
+    """获取扫描任务的实时进度"""
+    task = scan_task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    logs = scan_task_manager.get_task_logs(task_id)
+    
+    return ScanTaskProgress(
+        task_id=task_id,
+        status=task.status,
+        progress_percentage=task.progress_percentage,
+        current_item=task.current_item,
+        completed_items=task.completed_items,
+        total_items=task.total_items,
+        estimated_remaining_seconds=task.estimated_remaining_seconds,
+        logs=logs
+    )
 
 @router.get("/scan-progress/{cluster_id}")
 async def get_scan_progress(

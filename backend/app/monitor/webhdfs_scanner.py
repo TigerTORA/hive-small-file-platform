@@ -150,6 +150,7 @@ class WebHDFSScanner:
                 
                 return {
                     'status': 'success',
+                    'message': f'{service_type} 连接成功，发现 {len(sample_files)} 个目录/文件',
                     'service_type': service_type,
                     'webhdfs_url': self.webhdfs_base_url,
                     'user': self.user,

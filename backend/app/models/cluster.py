@@ -33,3 +33,4 @@ class Cluster(Base):
     # Relationships
     table_metrics = relationship("TableMetric", back_populates="cluster")
     merge_tasks = relationship("MergeTask", back_populates="cluster")
+    scan_tasks = relationship("ScanTask", back_populates="cluster")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.config.database import Base
@@ -19,10 +19,25 @@ class MergeTask(Base):
     merge_strategy = Column(String(50), default="safe_merge")  # concatenate, insert_overwrite, safe_merge
     target_file_size = Column(Integer, nullable=True)  # target file size in bytes
     
-    # Task status
-    status = Column(String(20), default="pending", index=True)  # pending, running, success, failed
+    # Task status and state management
+    status = Column(String(20), default="pending", index=True)  # pending, running, success, failed, cancelled
     celery_task_id = Column(String(100), nullable=True)
     error_message = Column(Text, nullable=True)
+    
+    # Progress tracking
+    progress = Column(Float, default=0.0)  # 0.0 - 100.0
+    current_phase = Column(String(100), nullable=True)  # e.g., "preparing", "merging", "validating"
+    
+    # Resource locking
+    table_lock_acquired = Column(Boolean, default=False)
+    lock_holder = Column(String(100), nullable=True)  # task ID or process ID that holds the lock
+    
+    # Strategy selection metadata
+    strategy_reason = Column(Text, nullable=True)  # Explanation for strategy selection
+    auto_selected = Column(Boolean, default=True)  # Whether strategy was auto-selected
+    
+    # Performance metrics
+    estimated_duration = Column(Integer, nullable=True)  # Estimated duration in seconds
     
     # Execution info
     files_before = Column(Integer, nullable=True)

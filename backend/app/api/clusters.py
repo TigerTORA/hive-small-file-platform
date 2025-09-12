@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime
 from app.config.database import get_db
 from app.models.cluster import Cluster
+from app.models.table_metric import TableMetric
 from app.schemas.cluster import ClusterCreate, ClusterResponse, ClusterUpdate
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 
@@ -119,6 +121,75 @@ async def get_cluster(cluster_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Cluster not found")
     return cluster
 
+@router.get("/{cluster_id}/stats")
+async def get_cluster_stats(cluster_id: int, db: Session = Depends(get_db)):
+    """Get cluster statistics"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        # 统计数据库数量 (通过distinct database_name)
+        total_databases = db.query(func.count(func.distinct(TableMetric.database_name)))\
+            .filter(TableMetric.cluster_id == cluster_id).scalar() or 0
+        
+        # 统计总表数
+        total_tables = db.query(func.count(TableMetric.id))\
+            .filter(TableMetric.cluster_id == cluster_id).scalar() or 0
+        
+        # 统计有小文件的表数
+        small_file_tables = db.query(func.count(TableMetric.id))\
+            .filter(TableMetric.cluster_id == cluster_id)\
+            .filter(TableMetric.small_files > 0).scalar() or 0
+        
+        # 统计小文件总数
+        total_small_files = db.query(func.sum(TableMetric.small_files))\
+            .filter(TableMetric.cluster_id == cluster_id).scalar() or 0
+        
+        return {
+            "total_databases": total_databases,
+            "total_tables": total_tables,
+            "small_file_tables": small_file_tables,
+            "total_small_files": total_small_files
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cluster stats: {str(e)}")
+
+@router.get("/{cluster_id}/databases")
+async def get_cluster_databases(cluster_id: int, db: Session = Depends(get_db)):
+    """Get databases for cluster"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    try:
+        # 从已扫描的表指标中获取数据库列表
+        databases = db.query(TableMetric.database_name.distinct())\
+            .filter(TableMetric.cluster_id == cluster_id)\
+            .all()
+        
+        # 转换为字符串列表
+        database_list = [db_row[0] for db_row in databases]
+        
+        # 如果没有扫描过的数据库，尝试连接MetaStore获取
+        if not database_list:
+            try:
+                scanner = HybridTableScanner(cluster)
+                from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
+                with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as metastore_connector:
+                    database_list = metastore_connector.get_databases()
+            except Exception as e:
+                # 如果连接失败，返回空列表和警告
+                return {
+                    "databases": [],
+                    "warning": f"Failed to fetch databases from MetaStore: {str(e)}",
+                    "suggestion": "Please run a database scan first"
+                }
+        
+        return database_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cluster databases: {str(e)}")
+
 @router.put("/{cluster_id}", response_model=ClusterResponse)
 async def update_cluster(cluster_id: int, cluster_update: ClusterUpdate, db: Session = Depends(get_db)):
     """Update cluster configuration"""
@@ -232,6 +303,11 @@ async def test_cluster_connection(cluster_id: int, mode: str = "mock", db: Sessi
 async def test_cluster_connection_real(cluster_id: int, db: Session = Depends(get_db)):
     """Test real cluster connections with intelligent fallback"""
     return await test_cluster_connection(cluster_id, mode="real", db=db)
+
+@router.get("/{cluster_id}/test-connection")
+async def get_cluster_test_connection(cluster_id: int, mode: str = "mock", db: Session = Depends(get_db)):
+    """Legacy GET endpoint for cluster connection testing (for backward compatibility)"""
+    return await test_cluster_connection(cluster_id, mode=mode, db=db)
 
 @router.post("/test-connection")
 async def test_connection_without_cluster(cluster: ClusterCreate):

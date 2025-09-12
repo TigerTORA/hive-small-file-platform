@@ -1,168 +1,101 @@
 from typing import Dict, Type, Optional
 from app.engines.base_engine import BaseMergeEngine
-from app.engines.hive_engine import HiveMergeEngine
 from app.engines.safe_hive_engine import SafeHiveMergeEngine
 from app.models.cluster import Cluster
 
 class MergeEngineFactory:
     """
-    合并引擎工厂类
-    根据集群配置和策略选择合适的合并引擎
+    简化的合并引擎工厂类
+    统一使用SafeHiveMergeEngine，支持智能策略选择
     """
     
-    # 注册的引擎类
-    _engines: Dict[str, Type[BaseMergeEngine]] = {
-        'hive': HiveMergeEngine,
-        'safe_hive': SafeHiveMergeEngine,
-        # 可以扩展其他引擎，如 Spark 引擎、Impala 引擎等
-        # 'spark': SparkMergeEngine,
-        # 'impala': ImpalaMergeEngine,
-    }
+    # 统一使用SafeHiveMergeEngine，支持多种策略
+    _default_engine: Type[BaseMergeEngine] = SafeHiveMergeEngine
     
     @classmethod
     def get_engine(cls, cluster: Cluster, engine_type: Optional[str] = None) -> BaseMergeEngine:
         """
         获取合并引擎实例
+        统一使用SafeHiveMergeEngine，支持智能策略选择
         
         Args:
             cluster: 集群配置对象
-            engine_type: 指定的引擎类型，如果不指定则自动选择
+            engine_type: 保留参数以维持向后兼容性（已弃用）
         
         Returns:
-            合并引擎实例
-        
-        Raises:
-            ValueError: 当指定的引擎类型不存在时
+            SafeHiveMergeEngine实例
         """
-        if engine_type:
-            # 使用指定的引擎类型
-            if engine_type not in cls._engines:
-                raise ValueError(f"Unknown engine type: {engine_type}")
-            engine_class = cls._engines[engine_type]
-        else:
-            # 自动选择引擎类型
-            engine_class = cls._auto_select_engine(cluster)
-        
-        return engine_class(cluster)
+        # 统一使用SafeHiveMergeEngine
+        return cls._default_engine(cluster)
     
     @classmethod
-    def _auto_select_engine(cls, cluster: Cluster) -> Type[BaseMergeEngine]:
+    def get_engine_capabilities(cls) -> Dict[str, any]:
         """
-        根据集群配置自动选择合并引擎
+        获取SafeHiveMergeEngine的能力信息
         
-        Args:
-            cluster: 集群配置对象
-            
-        Returns:
-            引擎类
-        """
-        # 默认使用安全的 Hive 引擎
-        # 将来可以根据集群的特征自动选择最佳引擎
-        # 例如：
-        # - 如果集群有 Spark，可以选择 Spark 引擎
-        # - 如果集群有 Impala，可以选择 Impala 引擎
-        # - 根据表的格式和大小选择最适合的引擎
-        
-        return cls._engines['safe_hive']
-    
-    @classmethod
-    def register_engine(cls, name: str, engine_class: Type[BaseMergeEngine]):
-        """
-        注册新的引擎类
-        
-        Args:
-            name: 引擎名称
-            engine_class: 引擎类
-        """
-        if not issubclass(engine_class, BaseMergeEngine):
-            raise ValueError("Engine class must inherit from BaseMergeEngine")
-        
-        cls._engines[name] = engine_class
-    
-    @classmethod
-    def list_engines(cls) -> Dict[str, str]:
-        """
-        列出所有可用的引擎
-        
-        Returns:
-            引擎名称到描述的映射
-        """
-        return {
-            'hive': 'Hive SQL Engine - 使用 Hive SQL 命令进行文件合并',
-            'safe_hive': 'Safe Hive Engine - 使用临时表+重命名的安全合并策略',
-            # 'spark': 'Spark Engine - 使用 Spark 进行分布式文件合并',
-            # 'impala': 'Impala Engine - 使用 Impala SQL 进行文件合并',
-        }
-    
-    @classmethod
-    def get_engine_capabilities(cls, engine_type: str) -> Dict[str, any]:
-        """
-        获取指定引擎的能力信息
-        
-        Args:
-            engine_type: 引擎类型
-            
         Returns:
             引擎能力信息字典
         """
-        capabilities = {
-            'hive': {
-                'supported_strategies': ['concatenate', 'insert_overwrite'],
-                'supported_formats': ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE', 'PARQUET', 'ORC'],
-                'supports_partitions': True,
-                'supports_preview': True,
-                'parallel_execution': False,
-                'typical_performance': 'medium'
-            },
-            'safe_hive': {
-                'supported_strategies': ['safe_merge'],
-                'supported_formats': ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE', 'PARQUET', 'ORC'],
-                'supports_partitions': True,
-                'supports_preview': True,
-                'parallel_execution': False,
-                'typical_performance': 'medium',
-                'zero_downtime': True,
-                'rollback_support': True
-            }
-            # 可以为其他引擎添加能力信息
+        return {
+            'supported_strategies': ['concatenate', 'insert_overwrite', 'safe_merge'],
+            'supported_formats': ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE', 'PARQUET', 'ORC'],
+            'supports_partitions': True,
+            'supports_preview': True,
+            'parallel_execution': False,
+            'typical_performance': 'medium',
+            'zero_downtime': True,
+            'rollback_support': True,
+            'smart_strategy_selection': True
         }
-        
-        return capabilities.get(engine_type, {})
     
     @classmethod
-    def recommend_strategy(cls, cluster: Cluster, table_format: str, 
-                          file_count: int, partition_count: int = 0) -> str:
+    def recommend_strategy(cls, cluster: Cluster, table_format: str = None, 
+                          file_count: int = 0, partition_count: int = 0, 
+                          table_size: int = 0, is_production: bool = True) -> str:
         """
-        推荐合并策略
+        智能推荐合并策略
         
         Args:
             cluster: 集群配置
             table_format: 表存储格式
             file_count: 文件数量
-            partition_count: 分区数量
+            partition_count: 分区数量  
+            table_size: 表大小（字节）
+            is_production: 是否为生产环境
             
         Returns:
             推荐的合并策略
         """
+        # 生产环境优先使用安全合并策略
+        if is_production and table_size > 1024 * 1024 * 1024:  # 大于1GB
+            return 'safe_merge'
+        
         # 基于表格式和文件数量推荐策略
         if table_format in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
-            # 对于这些格式，CONCATENATE 通常更高效
-            if file_count < 1000:
-                return 'concatenate'
+            # 对于行存储格式
+            if file_count < 100:
+                return 'concatenate'  # 文件少时，CONCATENATE最快
+            elif file_count < 1000:
+                return 'insert_overwrite'  # 中等文件数，INSERT OVERWRITE更可靠
             else:
-                return 'insert_overwrite'  # 文件太多时，INSERT OVERWRITE 更可靠
+                return 'safe_merge'  # 文件太多时，使用安全合并
+        elif table_format in ['PARQUET', 'ORC']:
+            # 对于列存储格式，INSERT OVERWRITE 通常更好
+            if file_count < 500:
+                return 'insert_overwrite'
+            else:
+                return 'safe_merge'  # 大量文件时使用安全合并
         else:
-            # 对于列存储格式（Parquet、ORC），INSERT OVERWRITE 通常更好
-            return 'insert_overwrite'
+            # 未知格式，默认使用安全合并
+            return 'safe_merge'
     
     @classmethod
-    def validate_strategy_compatibility(cls, engine_type: str, merge_strategy: str, 
-                                      table_format: str) -> Dict[str, any]:
+    def validate_strategy_compatibility(cls, merge_strategy: str, 
+                                      table_format: str = None) -> Dict[str, any]:
         """
         验证策略兼容性
         
         Args:
-            engine_type: 引擎类型
             merge_strategy: 合并策略
             table_format: 表格式
             
@@ -175,16 +108,74 @@ class MergeEngineFactory:
             'recommendations': []
         }
         
-        capabilities = cls.get_engine_capabilities(engine_type)
+        capabilities = cls.get_engine_capabilities()
         
         # 检查引擎是否支持该策略
         if merge_strategy not in capabilities.get('supported_strategies', []):
             result['compatible'] = False
-            result['warnings'].append(f"Engine {engine_type} does not support strategy {merge_strategy}")
+            result['warnings'].append(f"SafeHiveMergeEngine does not support strategy {merge_strategy}")
+            return result
         
         # 检查策略和表格式的兼容性
-        if merge_strategy == 'concatenate' and table_format not in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
-            result['warnings'].append(f"CONCATENATE strategy may not work well with {table_format} format")
-            result['recommendations'].append("Consider using INSERT OVERWRITE strategy instead")
+        if table_format:
+            if merge_strategy == 'concatenate' and table_format not in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
+                result['warnings'].append(f"CONCATENATE strategy may not work optimally with {table_format} format")
+                result['recommendations'].append("Consider using INSERT OVERWRITE or SAFE_MERGE strategy instead")
+            
+            if merge_strategy == 'insert_overwrite' and table_format in ['PARQUET', 'ORC']:
+                result['recommendations'].append("For large tables, consider using SAFE_MERGE for zero-downtime operation")
         
         return result
+    
+    @classmethod 
+    def create_smart_merge_task(cls, cluster: Cluster, database_name: str, table_name: str,
+                               table_format: str = None, file_count: int = 0,
+                               table_size: int = 0, partition_count: int = 0) -> Dict[str, any]:
+        """
+        创建智能合并任务，自动选择最佳策略
+        
+        Args:
+            cluster: 集群配置
+            database_name: 数据库名
+            table_name: 表名
+            table_format: 表格式
+            file_count: 文件数量
+            table_size: 表大小
+            partition_count: 分区数量
+            
+        Returns:
+            任务配置字典
+        """
+        # 智能推荐策略
+        recommended_strategy = cls.recommend_strategy(
+            cluster=cluster,
+            table_format=table_format,
+            file_count=file_count,
+            table_size=table_size,
+            partition_count=partition_count,
+            is_production=True
+        )
+        
+        # 验证策略兼容性
+        validation = cls.validate_strategy_compatibility(recommended_strategy, table_format)
+        
+        return {
+            'database_name': database_name,
+            'table_name': table_name,
+            'recommended_strategy': recommended_strategy,
+            'validation': validation,
+            'task_name': f"Smart merge for {database_name}.{table_name}",
+            'strategy_reason': cls._get_strategy_reason(recommended_strategy, file_count, table_format, table_size)
+        }
+    
+    @classmethod
+    def _get_strategy_reason(cls, strategy: str, file_count: int, table_format: str, table_size: int) -> str:
+        """
+        获取策略选择原因
+        """
+        reasons = {
+            'concatenate': f"文件数量较少({file_count})且为行存储格式({table_format})，CONCATENATE最高效",
+            'insert_overwrite': f"中等文件数量({file_count})，INSERT OVERWRITE平衡性能和可靠性", 
+            'safe_merge': f"大量文件({file_count})或大表({table_size // (1024*1024)}MB)，使用零停机安全合并"
+        }
+        return reasons.get(strategy, f"根据表特征选择{strategy}策略")

@@ -9,6 +9,7 @@ from app.monitor.webhdfs_scanner import WebHDFSScanner
 from app.monitor.enhanced_webhdfs_scanner import EnhancedWebHDFSScanner
 from app.monitor.intelligent_hybrid_scanner import IntelligentHybridScanner
 from app.monitor.mock_hdfs_scanner import MockHDFSScanner
+from app.monitor.beeline_connector import BeelineConnector
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.models.partition_metric import PartitionMetric
@@ -385,25 +386,80 @@ class HybridTableScanner:
             results['tests']['hdfs'] = {'status': 'error', 'message': error_msg}
             self._add_hdfs_suggestions(results, {'message': error_msg})
         
-        # 3. 综合评估
+        # 3. 测试 HiveServer2/Beeline 连接
+        add_log('info', '正在测试 HiveServer2/Beeline 连接...')
+        try:
+            beeline_connector = BeelineConnector(
+                host=self.cluster.hive_host,
+                port=self.cluster.hive_port,
+                username=self.cluster.hdfs_user,  # 使用HDFS用户作为Hive用户
+                password=self.cluster.hdfs_password
+            )
+            
+            beeline_result = beeline_connector.test_connection()
+            
+            if beeline_result.get('status') == 'success':
+                add_log('success', f"✅ HiveServer2连接成功: {self.cluster.hive_host}:{self.cluster.hive_port}")
+                add_log('success', f"✅ 认证方式: {beeline_result.get('details', {}).get('connection_info', {}).get('auth_method', 'simple')}")
+            elif beeline_result.get('status') == 'failed':
+                add_log('warning', f"⚠️ HiveServer2连接失败: {beeline_result.get('message')}")
+                self._add_beeline_suggestions(results, beeline_result)
+            else:
+                add_log('info', f"ℹ️ HiveServer2连接状态未知: {beeline_result.get('message')}")
+                
+            # 规范化Beeline测试结果格式
+            if not beeline_result.get('message'):
+                if beeline_result.get('status') == 'success':
+                    beeline_result['message'] = f"HiveServer2连接成功，端口{self.cluster.hive_port}可访问"
+                elif beeline_result.get('status') == 'failed':
+                    beeline_result['message'] = f"HiveServer2连接失败，无法访问{self.cluster.hive_host}:{self.cluster.hive_port}"
+            
+            results['tests']['beeline'] = beeline_result
+            
+        except Exception as e:
+            error_msg = str(e)
+            add_log('error', f"❌ Beeline连接测试异常: {error_msg}")
+            results['tests']['beeline'] = {
+                'status': 'failed',
+                'message': f'Beeline连接测试异常: {error_msg}',
+                'details': {'error': error_msg}
+            }
+            self._add_beeline_suggestions(results, {'message': error_msg})
+        
+        # 4. 综合评估
         metastore_ok = results['tests'].get('metastore', {}).get('status') == 'success'
         hdfs_ok = results['tests'].get('hdfs', {}).get('status') == 'success'
+        beeline_ok = results['tests'].get('beeline', {}).get('status') == 'success'
         
-        if metastore_ok and hdfs_ok:
+        # 计算成功的连接数
+        successful_connections = sum([metastore_ok, hdfs_ok, beeline_ok])
+        
+        if successful_connections == 3:
             results['overall_status'] = 'success'
             mode = results['tests']['hdfs'].get('mode', 'unknown')
             if mode == 'real':
-                add_log('success', '🎉 所有连接测试通过！集群可以正常使用真实数据扫描')
+                add_log('success', '🎉 所有连接测试通过！集群功能完全可用 (MetaStore + HDFS + HiveServer2)')
             else:
-                add_log('success', '🎉 MetaStore连接正常！将使用Mock模式进行HDFS数据演示')
+                add_log('success', '🎉 MetaStore和HiveServer2连接正常！将使用Mock模式进行HDFS数据演示')
                 results['suggestions'].append('建议修复HDFS连接以获得真实的文件统计数据')
-        elif metastore_ok:
+        elif successful_connections == 2:
             results['overall_status'] = 'partial'
-            add_log('warning', '⚠️ MetaStore连接正常，但HDFS连接有问题。可以查看表结构但无法获取文件统计')
+            if metastore_ok and beeline_ok:
+                add_log('warning', '⚠️ MetaStore和HiveServer2连接正常，但HDFS连接有问题。可以执行SQL查询但无法获取完整文件统计')
+            elif metastore_ok and hdfs_ok:
+                add_log('warning', '⚠️ MetaStore和HDFS连接正常，但HiveServer2连接有问题。可以查看表结构和文件统计但无法执行SQL查询')
+            else:
+                add_log('warning', '⚠️ 部分连接正常，但MetaStore连接有问题。集群功能受限')
+        elif successful_connections == 1:
+            results['overall_status'] = 'limited'
+            if metastore_ok:
+                add_log('warning', '⚠️ 仅MetaStore连接正常。可以查看基本表信息，但HDFS和SQL功能不可用')
+            else:
+                add_log('warning', '⚠️ 仅单一连接正常，集群功能严重受限')
         else:
             results['overall_status'] = 'failed'
-            add_log('error', '❌ 关键连接失败，集群无法正常工作')
-            results['suggestions'].append('请先解决MetaStore连接问题，这是集群正常工作的前提')
+            add_log('error', '❌ 所有关键连接失败，集群无法正常工作')
+            results['suggestions'].append('请检查集群基础服务状态：MetaStore、HDFS和HiveServer2')
         
         add_log('info', f'连接测试完成，总体状态: {results["overall_status"]}')
         return results
@@ -490,3 +546,48 @@ class HybridTableScanner:
             
         # 总是提示Mock模式可用
         results['suggestions'].append('注意：即使HDFS连接失败，系统仍可使用Mock模式进行功能演示')
+    
+    def _add_beeline_suggestions(self, results: Dict, error_result: Dict):
+        """添加Beeline/HiveServer2连接问题的诊断建议"""
+        error_msg = error_result.get('message', '').lower()
+        
+        if 'connection refused' in error_msg or 'could not connect' in error_msg:
+            results['suggestions'].extend([
+                'HiveServer2连接被拒绝，请检查：',
+                '1. HiveServer2服务是否正在运行',
+                '2. 防火墙是否允许访问HiveServer2端口（通常是10000）',
+                '3. 主机地址和端口是否正确配置'
+            ])
+        elif 'timeout' in error_msg or 'timed out' in error_msg:
+            results['suggestions'].extend([
+                'HiveServer2连接超时，请检查：',
+                '1. 网络连接是否稳定',
+                '2. HiveServer2服务是否响应缓慢',
+                '3. 是否需要增加连接超时设置',
+                '4. 集群负载是否过高'
+            ])
+        elif 'authentication' in error_msg or 'unauthorized' in error_msg:
+            results['suggestions'].extend([
+                'HiveServer2认证失败，请检查：',
+                '1. 用户名和密码是否正确',
+                '2. Kerberos配置是否正确（如果启用）',
+                '3. 用户是否有Hive访问权限',
+                '4. LDAP/AD认证配置（如果使用）'
+            ])
+        elif 'unknown host' in error_msg or 'name resolution' in error_msg:
+            results['suggestions'].extend([
+                'HiveServer2主机名解析失败，请检查：',
+                '1. 主机名或IP地址是否正确',
+                '2. DNS解析是否正常',
+                '3. /etc/hosts文件配置'
+            ])
+        else:
+            results['suggestions'].extend([
+                'HiveServer2连接失败，建议检查：',
+                '1. HiveServer2服务状态和配置',
+                '2. JDBC连接字符串格式',
+                '3. 网络连通性和端口可用性',
+                '4. Hive服务依赖（如MetaStore、HDFS等）'
+            ])
+        
+        results['suggestions'].append('提示：HiveServer2是Hive SQL查询和Beeline客户端的核心服务')

@@ -8,6 +8,7 @@ from app.config.database import engine
 from app.models.merge_task import MergeTask
 from app.models.cluster import Cluster
 from app.engines.engine_factory import MergeEngineFactory
+from app.utils.table_lock_manager import TableLockManager
 
 logger = logging.getLogger(__name__)
 SessionLocal = sessionmaker(bind=engine)
@@ -35,10 +36,25 @@ def execute_merge_task(self, task_id: int):
         
         logger.info(f"Starting merge task {task_id}: {task.task_name}")
         
+        # 尝试获取表级别锁
+        lock_result = TableLockManager.acquire_table_lock(
+            db, cluster.id, task.database_name, task.table_name, task.id
+        )
+        
+        if not lock_result['success']:
+            logger.error(f"Failed to acquire table lock for task {task_id}: {lock_result['message']}")
+            task.status = 'failed'
+            task.error_message = f"Cannot acquire table lock: {lock_result['message']}"
+            task.completed_time = datetime.utcnow()
+            db.commit()
+            raise ValueError(f"Table lock acquisition failed: {lock_result['message']}")
+        
         # 更新任务状态和 Celery 任务ID
         task.status = 'running'
         task.celery_task_id = self.request.id
         task.started_time = datetime.utcnow()
+        task.current_phase = 'initializing'
+        task.progress = 5.0  # 获得锁并开始初始化
         db.commit()
         
         # 更新任务进度
@@ -51,14 +67,8 @@ def execute_merge_task(self, task_id: int):
             }
         )
         
-        # 获取合并引擎，根据任务的策略选择引擎
-        engine_type = None
-        if task.merge_strategy == 'safe_merge':
-            engine_type = 'safe_hive'
-        elif task.merge_strategy in ['concatenate', 'insert_overwrite']:
-            engine_type = 'hive'
-        
-        engine = MergeEngineFactory.get_engine(cluster, engine_type)
+        # 统一使用SafeHiveMergeEngine，支持所有合并策略
+        engine = MergeEngineFactory.get_engine(cluster)
         
         # 验证任务
         validation = engine.validate_task(task)
@@ -117,6 +127,25 @@ def execute_merge_task(self, task_id: int):
             raise merge_error
         
         if result['success']:
+            # 更新任务状态
+            task.status = 'success'
+            task.completed_time = datetime.utcnow()
+            task.progress = 100.0
+            task.current_phase = 'completed'
+            
+            # 更新执行结果信息
+            if 'files_before' in result:
+                task.files_before = result['files_before']
+            if 'files_after' in result:
+                task.files_after = result['files_after']
+            if 'size_saved' in result:
+                task.size_saved = result['size_saved']
+            
+            db.commit()
+            
+            # 释放表锁
+            TableLockManager.release_table_lock(db, task_id)
+            
             logger.info(f"Merge task {task_id} completed successfully: {result['message']}")
             return {
                 'status': 'completed',
@@ -137,7 +166,11 @@ def execute_merge_task(self, task_id: int):
                 task.status = 'failed'
                 task.error_message = str(e)
                 task.completed_time = datetime.utcnow()
+                task.current_phase = 'failed'
                 db.commit()
+                
+                # 释放表锁
+                TableLockManager.release_table_lock(db, task_id)
         except Exception as db_error:
             logger.error(f"Failed to update task status: {db_error}")
         
@@ -254,15 +287,25 @@ def batch_create_merge_tasks(cluster_id: int, small_file_threshold: int = 1000):
                     logger.info(f"Task already exists for table {table_metric.table_name}, skipping")
                     continue
                 
-                # 创建合并任务
-                merge_strategy = 'safe_merge'  # 默认使用安全合并策略
+                # 使用智能策略选择创建合并任务
+                smart_task_config = MergeEngineFactory.create_smart_merge_task(
+                    cluster=cluster,
+                    database_name=table_metric.database_name,
+                    table_name=table_metric.table_name,
+                    table_format=getattr(table_metric, 'storage_format', None),
+                    file_count=table_metric.total_files,
+                    table_size=table_metric.total_size,
+                    partition_count=table_metric.partition_count if table_metric.is_partitioned else 0
+                )
                 
                 new_task = MergeTask(
                     cluster_id=cluster_id,
-                    task_name=f"Auto merge for {table_metric.database_name}.{table_metric.table_name}",
+                    task_name=smart_task_config['task_name'],
                     table_name=table_metric.table_name,
                     database_name=table_metric.database_name,
-                    merge_strategy=merge_strategy,
+                    merge_strategy=smart_task_config['recommended_strategy'],
+                    strategy_reason=smart_task_config['strategy_reason'],
+                    auto_selected=True,
                     status='pending'
                 )
                 
@@ -273,7 +316,10 @@ def batch_create_merge_tasks(cluster_id: int, small_file_threshold: int = 1000):
                     'task_id': new_task.id,
                     'table': f"{table_metric.database_name}.{table_metric.table_name}",
                     'small_files': table_metric.small_files,
-                    'strategy': merge_strategy
+                    'total_files': table_metric.total_files,
+                    'strategy': smart_task_config['recommended_strategy'],
+                    'strategy_reason': smart_task_config['strategy_reason'],
+                    'validation': smart_task_config['validation']
                 })
                 
                 logger.info(f"Created merge task for {table_metric.database_name}.{table_metric.table_name} "
