@@ -143,31 +143,121 @@ class MySQLHiveMetastoreConnector(BaseMetastoreConnector):
     
     def test_connection(self) -> Dict[str, any]:
         """测试连接并返回基本信息"""
-        if not self.connect():
-            return {'status': 'error', 'message': 'Failed to connect'}
+        import time
+        
+        connect_start = time.time()
+        connect_success = False
+        error_details = None
         
         try:
-            databases = self.get_databases()
+            connect_success = self.connect()
+            connect_time = time.time() - connect_start
             
-            # 获取一些基本的 MetaStore 信息
+            if not connect_success:
+                return {
+                    'status': 'error', 
+                    'message': 'Failed to connect to MetaStore',
+                    'connect_time': round(connect_time, 2),
+                    'error_type': 'connection_failed'
+                }
+            
+        except Exception as conn_error:
+            connect_time = time.time() - connect_start
+            error_msg = str(conn_error)
+            
+            # 分析连接错误类型
+            if "Access denied" in error_msg:
+                error_type = "authentication_failed"
+                suggestion = "检查用户名和密码是否正确"
+            elif "Unknown database" in error_msg:
+                error_type = "database_not_found"
+                suggestion = "检查数据库名称是否正确"
+            elif "Can't connect" in error_msg or "Connection refused" in error_msg:
+                error_type = "connection_refused"
+                suggestion = "检查网络连通性和MySQL服务状态"
+            elif "timeout" in error_msg.lower():
+                error_type = "connection_timeout"
+                suggestion = "检查网络延迟或增加连接超时时间"
+            else:
+                error_type = "unknown_error"
+                suggestion = "请检查连接参数和网络配置"
+            
+            return {
+                'status': 'error',
+                'message': f'MetaStore连接失败: {error_msg}',
+                'connect_time': round(connect_time, 2),
+                'error_type': error_type,
+                'suggestion': suggestion,
+                'connection_url': f"mysql://{self.parsed_url.hostname}:{self.parsed_url.port or 3306}/{self.parsed_url.path.lstrip('/')}"
+            }
+        
+        try:
+            # 测试基本查询性能
+            query_start = time.time()
+            databases = self.get_databases()
+            database_query_time = time.time() - query_start
+            
+            # 获取 MetaStore 统计信息
+            stats_start = time.time()
             with self._connection.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as table_count FROM TBLS")
                 table_count = cursor.fetchone()['table_count']
                 
                 cursor.execute("SELECT COUNT(*) as db_count FROM DBS")
                 db_count = cursor.fetchone()['db_count']
+                
+                cursor.execute("SELECT COUNT(*) as partition_count FROM PARTITIONS")
+                partition_count = cursor.fetchone()['partition_count']
+                
+                # 获取MySQL版本信息
+                cursor.execute("SELECT VERSION() as version")
+                mysql_version = cursor.fetchone()['version']
+                
+            stats_query_time = time.time() - stats_start
+            total_time = time.time() - connect_start
             
             return {
                 'status': 'success',
+                'message': f'MetaStore连接成功，MySQL {mysql_version}',
+                'connect_time': round(connect_time, 2),
+                'database_query_time': round(database_query_time, 2),
+                'stats_query_time': round(stats_query_time, 2),
+                'total_test_time': round(total_time, 2),
                 'database_count': len(databases),
                 'total_databases': db_count,
                 'total_tables': table_count,
-                'sample_databases': databases[:5]  # 只返回前5个数据库名
+                'total_partitions': partition_count,
+                'sample_databases': databases[:5],  # 只返回前5个数据库名
+                'mysql_version': mysql_version,
+                'connection_url': f"mysql://{self.parsed_url.hostname}:{self.parsed_url.port or 3306}/{self.parsed_url.path.lstrip('/')}"
             }
+            
         except Exception as e:
-            return {'status': 'error', 'message': str(e)}
+            query_time = time.time() - connect_start
+            error_msg = str(e)
+            
+            # 分析查询错误类型
+            if "Table" in error_msg and "doesn't exist" in error_msg:
+                error_type = "schema_mismatch"
+                suggestion = "MetaStore数据库架构不匹配，请检查Hive版本兼容性"
+            elif "permission" in error_msg.lower() or "access" in error_msg.lower():
+                error_type = "permission_denied"
+                suggestion = "数据库用户缺少必要的查询权限"
+            else:
+                error_type = "query_failed"
+                suggestion = "MetaStore查询失败，请检查数据库状态"
+                
+            return {
+                'status': 'partial',
+                'message': f'连接成功但查询失败: {error_msg}',
+                'connect_time': round(connect_time, 2),
+                'total_test_time': round(query_time, 2),
+                'error_type': error_type,
+                'suggestion': suggestion
+            }
         finally:
-            self.disconnect()
+            if connect_success:
+                self.disconnect()
 
     def __enter__(self):
         """Context manager entry"""

@@ -200,61 +200,167 @@ class ScanTaskManager:
     
     def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: int):
         """执行实际的集群扫描"""
-        self.add_log(task.task_id, 'INFO', f'开始扫描集群: {cluster.name}', db=db)
+        scan_start_time = time.time()
+        self.add_log(task.task_id, 'INFO', f'🚀 开始扫描集群: {cluster.name}', db=db)
         self.update_task_progress(db, task.task_id, status='running')
         
         try:
+            # 步骤1: 测试连接
+            self.add_log(task.task_id, 'INFO', f'🔗 正在连接MetaStore: {cluster.hive_metastore_url}', db=db)
+            
             # 获取所有数据库
-            with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
-                databases = connector.get_databases()
+            databases = []
+            metastore_connect_start = time.time()
+            try:
+                with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
+                    databases = connector.get_databases()
+                metastore_connect_time = time.time() - metastore_connect_start
+                self.add_log(task.task_id, 'INFO', f'✅ MetaStore连接成功 (耗时: {metastore_connect_time:.2f}秒)', db=db)
+                self.add_log(task.task_id, 'INFO', f'📊 发现 {len(databases)} 个数据库: {", ".join(databases[:5])}{"..." if len(databases) > 5 else ""}', db=db)
+            except Exception as conn_error:
+                self.add_log(task.task_id, 'ERROR', f'❌ MetaStore连接失败: {str(conn_error)}', db=db)
+                self.add_log(task.task_id, 'INFO', f'💡 建议检查: 1) 网络连通性 2) 数据库服务状态 3) 用户权限', db=db)
+                raise conn_error
             
-            self.update_task_progress(db, task.task_id, total_items=len(databases))
-            self.add_log(task.task_id, 'INFO', f'找到 {len(databases)} 个数据库', db=db)
-            
+            # 步骤2: 初始化扫描器和HDFS连接
+            self.add_log(task.task_id, 'INFO', f'🔗 正在连接HDFS: {cluster.hdfs_namenode_url}', db=db)
             scanner = HybridTableScanner(cluster)
+            hdfs_connect_start = time.time()
+            
+            # 测试HDFS连接
+            scanner._initialize_hdfs_scanner()
+            hdfs_ok = False
+            try:
+                hdfs_ok = scanner.hdfs_scanner.connect() if scanner.hdfs_scanner else False
+                hdfs_connect_time = time.time() - hdfs_connect_start
+                if hdfs_ok:
+                    self.add_log(task.task_id, 'INFO', f'✅ HDFS连接成功 (耗时: {hdfs_connect_time:.2f}秒)', db=db)
+                    scanner.hdfs_scanner.disconnect()
+                else:
+                    self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败，启用Mock模式继续扫描', db=db)
+            except Exception as hdfs_error:
+                self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败: {str(hdfs_error)}', db=db)
+                self.add_log(task.task_id, 'INFO', f'🔄 启用Mock HDFS模式进行演示扫描', db=db)
+            
+            # 步骤3: 开始批量扫描
+            self.update_task_progress(db, task.task_id, total_items=len(databases))
+            estimated_total_time = len(databases) * 3  # 估算每个数据库3秒
+            self.add_log(task.task_id, 'INFO', f'⏱️ 预计总扫描时间: {estimated_total_time}秒，每数据库限制扫描{max_tables_per_db}张表', db=db)
+            
             total_tables_scanned = 0
             total_files_found = 0
             total_small_files = 0
+            successful_databases = 0
+            failed_databases = 0
             
             # 扫描每个数据库
             for i, database_name in enumerate(databases, 1):
+                db_scan_start = time.time()
                 self.update_task_progress(
                     db, task.task_id, 
                     completed_items=i-1,
                     current_item=f'扫描数据库: {database_name}'
                 )
-                self.add_log(task.task_id, 'INFO', f'开始扫描数据库: {database_name}', database_name=database_name, db=db)
+                self.add_log(task.task_id, 'INFO', f'📁 [{i}/{len(databases)}] 开始扫描数据库: {database_name}', database_name=database_name, db=db)
                 
                 try:
                     # 扫描数据库中的表
                     result = scanner.scan_database_tables(db, database_name, max_tables=max_tables_per_db)
+                    db_scan_time = time.time() - db_scan_start
                     
                     tables_scanned = result.get('tables_scanned', 0)
                     files_found = result.get('total_files', 0)
                     small_files = result.get('total_small_files', 0)
+                    successful_tables = result.get('successful_tables', 0)
+                    failed_tables = result.get('failed_tables', 0)
+                    partitioned_tables = result.get('partitioned_tables', 0)
+                    hdfs_mode = result.get('hdfs_mode', 'unknown')
+                    scan_errors = result.get('errors', [])
+                    metastore_time = result.get('metastore_query_time', 0)
+                    hdfs_connect_time = result.get('hdfs_connect_time', 0)
+                    original_table_count = result.get('original_table_count', 0)
+                    filtered_table_count = result.get('filtered_table_count', 0)
+                    limited_by_count = result.get('limited_by_count', 0)
+                    avg_table_scan_time = result.get('avg_table_scan_time', 0)
                     
                     total_tables_scanned += tables_scanned
                     total_files_found += files_found
                     total_small_files += small_files
+                    successful_databases += 1
                     
-                    self.add_log(
-                        task.task_id,
-                        'INFO',
-                        f'数据库 {database_name} 扫描完成: {tables_scanned}表, {files_found}文件, {small_files}小文件',
-                        database_name=database_name,
-                        db=db,
+                    # 记录详细的扫描过程信息
+                    self.add_log(task.task_id, 'INFO', f'  └─ MetaStore查询: {metastore_time:.2f}秒, 发现{original_table_count}张表', database_name=database_name, db=db)
+                    
+                    if limited_by_count > 0:
+                        self.add_log(task.task_id, 'INFO', f'  └─ 表数量限制: 跳过{limited_by_count}张表 (限制{max_tables_per_db}张/数据库)', database_name=database_name, db=db)
+                    
+                    if hdfs_mode != 'real':
+                        self.add_log(task.task_id, 'INFO', f'  └─ HDFS连接: {hdfs_connect_time:.2f}秒 ({hdfs_mode}模式)', database_name=database_name, db=db)
+                    
+                    # 计算小文件比例
+                    small_file_ratio = (small_files / files_found * 100) if files_found > 0 else 0
+                    
+                    # 生成详细的完成日志
+                    status_parts = []
+                    if successful_tables > 0:
+                        status_parts.append(f'{successful_tables}表成功')
+                    if failed_tables > 0:
+                        status_parts.append(f'{failed_tables}表失败')
+                    if partitioned_tables > 0:
+                        status_parts.append(f'{partitioned_tables}个分区表')
+                    
+                    log_message = f'✅ 数据库 {database_name} 扫描完成: {", ".join(status_parts)}, {files_found}文件, {small_files}小文件'
+                    if files_found > 0:
+                        log_message += f' ({small_file_ratio:.1f}%)'
+                    
+                    if hdfs_mode == 'mock':
+                        log_message += ' [Mock模式]'
+                    
+                    log_message += f' (耗时: {db_scan_time:.1f}秒, 平均{avg_table_scan_time:.2f}秒/表)'
+                    
+                    self.add_log(task.task_id, 'INFO', log_message, database_name=database_name, db=db)
+                    
+                    # 记录重要的警告和错误（过滤掉不重要的）
+                    important_errors = [e for e in scan_errors if any(keyword in e for keyword in ['失败', '错误', '过高', 'Error', 'Failed'])]
+                    for error in important_errors[:3]:  # 只显示前3个重要错误
+                        if '小文件比例过高' in error:
+                            self.add_log(task.task_id, 'WARN', f'  ⚠️ {error}', database_name=database_name, db=db)
+                        else:
+                            self.add_log(task.task_id, 'ERROR', f'  ❌ {error}', database_name=database_name, db=db)
+                    
+                    # 更新进度和剩余时间估算
+                    remaining_dbs = len(databases) - i
+                    avg_time_per_db = (time.time() - scan_start_time) / i
+                    estimated_remaining = remaining_dbs * avg_time_per_db
+                    
+                    self.update_task_progress(
+                        db, task.task_id,
+                        completed_items=i,
+                        estimated_remaining_seconds=int(estimated_remaining)
                     )
                     
                 except Exception as db_error:
+                    failed_databases += 1
+                    db_scan_time = time.time() - db_scan_start
                     self.add_log(
                         task.task_id,
                         'ERROR',
-                        f'数据库 {database_name} 扫描失败: {str(db_error)}',
+                        f'❌ 数据库 {database_name} 扫描失败: {str(db_error)} (耗时: {db_scan_time:.1f}秒)',
                         database_name=database_name,
                         db=db,
                     )
+                    # 提供具体的错误诊断建议
+                    if "permission" in str(db_error).lower():
+                        self.add_log(task.task_id, 'INFO', f'  💡 建议检查HDFS用户权限和访问策略', database_name=database_name, db=db)
+                    elif "connection" in str(db_error).lower():
+                        self.add_log(task.task_id, 'INFO', f'  💡 建议检查网络连通性和服务状态', database_name=database_name, db=db)
             
-            # 更新最终统计
+            # 最终统计和性能指标
+            total_scan_time = time.time() - scan_start_time
+            success_rate = (successful_databases / len(databases)) * 100 if databases else 0
+            avg_time_per_db = total_scan_time / len(databases) if databases else 0
+            avg_time_per_table = total_scan_time / total_tables_scanned if total_tables_scanned else 0
+            
             self.update_task_progress(
                 db, task.task_id,
                 completed_items=len(databases),
@@ -263,18 +369,40 @@ class ScanTaskManager:
                 total_small_files=total_small_files
             )
             
-            self.add_log(
-                task.task_id,
-                'INFO',
-                f'集群扫描完成! 总计: {total_tables_scanned}表, {total_files_found}文件, {total_small_files}小文件',
-                db=db,
-            )
+            # 生成详细的完成报告
+            overall_small_file_ratio = (total_small_files / total_files_found * 100) if total_files_found > 0 else 0
+            completion_message = f'🎉 集群扫描完成! 总计: {total_tables_scanned}表, {total_files_found}文件, {total_small_files}小文件 ({overall_small_file_ratio:.1f}%)'
+            self.add_log(task.task_id, 'INFO', completion_message, db=db)
+            
+            # 性能统计
+            self.add_log(task.task_id, 'INFO', f'📈 扫描统计: 耗时{total_scan_time:.1f}秒, 成功率{success_rate:.1f}%, 平均每表{avg_time_per_table:.2f}秒', db=db)
+            self.add_log(task.task_id, 'INFO', f'📊 处理效率: {successful_databases}个数据库成功, {failed_databases}个失败', db=db)
+            
+            # 根据结果给出建议
+            if overall_small_file_ratio > 70:
+                self.add_log(task.task_id, 'WARN', f'⚠️ 小文件比例过高({overall_small_file_ratio:.1f}%)，建议立即执行合并优化', db=db)
+            elif overall_small_file_ratio > 50:
+                self.add_log(task.task_id, 'INFO', f'💡 建议对小文件比例较高的表进行合并处理', db=db)
             
             self.complete_task(db, task.task_id, success=True)
             
         except Exception as e:
-            self.add_log(task.task_id, 'ERROR', f'集群扫描失败: {str(e)}', db=db)
-            self.complete_task(db, task.task_id, success=False, error_message=str(e))
+            total_scan_time = time.time() - scan_start_time
+            error_msg = str(e)
+            self.add_log(task.task_id, 'ERROR', f'💥 集群扫描失败: {error_msg} (运行时间: {total_scan_time:.1f}秒)', db=db)
+            
+            # 根据错误类型提供具体建议
+            if "Failed to connect to MetaStore" in error_msg:
+                self.add_log(task.task_id, 'INFO', f'🔧 MetaStore连接问题排查:', db=db)
+                self.add_log(task.task_id, 'INFO', f'  1. 检查网络连通性: ping {cluster.hive_metastore_url}', db=db)
+                self.add_log(task.task_id, 'INFO', f'  2. 验证数据库服务状态和端口开放', db=db)
+                self.add_log(task.task_id, 'INFO', f'  3. 确认用户名密码和数据库权限', db=db)
+            elif "timeout" in error_msg.lower():
+                self.add_log(task.task_id, 'INFO', f'⏱️ 连接超时问题可能原因:', db=db)
+                self.add_log(task.task_id, 'INFO', f'  1. 网络延迟过高或防火墙阻挡', db=db)
+                self.add_log(task.task_id, 'INFO', f'  2. 目标服务过载或响应缓慢', db=db)
+            
+            self.complete_task(db, task.task_id, success=False, error_message=error_msg)
 
 
 # 全局任务管理器实例
