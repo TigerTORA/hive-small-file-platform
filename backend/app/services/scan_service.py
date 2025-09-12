@@ -57,14 +57,15 @@ class ScanTaskManager:
             return self.task_logs.get(task_id, [])
     
     def add_log(
-        self, 
-        task_id: str, 
-        level: str, 
-        message: str, 
+        self,
+        task_id: str,
+        level: str,
+        message: str,
         database_name: Optional[str] = None,
-        table_name: Optional[str] = None
+        table_name: Optional[str] = None,
+        db: Optional[Session] = None,
     ):
-        """添加任务日志"""
+        """添加任务日志（内存 + 可选持久化）"""
         log_entry = ScanTaskLog(
             timestamp=datetime.utcnow(),
             level=level,
@@ -79,6 +80,26 @@ class ScanTaskManager:
                 # 只保留最近100条日志
                 if len(self.task_logs[task_id]) > 100:
                     self.task_logs[task_id] = self.task_logs[task_id][-100:]
+        
+        # 可选持久化到数据库
+        if db is not None:
+            try:
+                from app.models.scan_task import ScanTask as ScanTaskModel
+                from app.models.scan_task_log import ScanTaskLogDB
+                db_task = db.query(ScanTaskModel).filter(ScanTaskModel.task_id == task_id).first()
+                if db_task:
+                    db_row = ScanTaskLogDB(
+                        scan_task_id=db_task.id,
+                        level=level,
+                        message=message,
+                        database_name=database_name,
+                        table_name=table_name,
+                    )
+                    db.add(db_row)
+                    db.commit()
+            except Exception:
+                # 持久化失败不影响主流程
+                pass
     
     def update_task_progress(
         self, 
@@ -168,7 +189,7 @@ class ScanTaskManager:
             try:
                 self._execute_cluster_scan(db, task, cluster, max_tables_per_db)
             except Exception as e:
-                self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}')
+                self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db)
                 self.complete_task(db, task.task_id, success=False, error_message=str(e))
         
         thread = threading.Thread(target=run_scan)
@@ -179,7 +200,7 @@ class ScanTaskManager:
     
     def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: int):
         """执行实际的集群扫描"""
-        self.add_log(task.task_id, 'INFO', f'开始扫描集群: {cluster.name}')
+        self.add_log(task.task_id, 'INFO', f'开始扫描集群: {cluster.name}', db=db)
         self.update_task_progress(db, task.task_id, status='running')
         
         try:
@@ -188,7 +209,7 @@ class ScanTaskManager:
                 databases = connector.get_databases()
             
             self.update_task_progress(db, task.task_id, total_items=len(databases))
-            self.add_log(task.task_id, 'INFO', f'找到 {len(databases)} 个数据库')
+            self.add_log(task.task_id, 'INFO', f'找到 {len(databases)} 个数据库', db=db)
             
             scanner = HybridTableScanner(cluster)
             total_tables_scanned = 0
@@ -202,7 +223,7 @@ class ScanTaskManager:
                     completed_items=i-1,
                     current_item=f'扫描数据库: {database_name}'
                 )
-                self.add_log(task.task_id, 'INFO', f'开始扫描数据库: {database_name}', database_name=database_name)
+                self.add_log(task.task_id, 'INFO', f'开始扫描数据库: {database_name}', database_name=database_name, db=db)
                 
                 try:
                     # 扫描数据库中的表
@@ -217,16 +238,20 @@ class ScanTaskManager:
                     total_small_files += small_files
                     
                     self.add_log(
-                        task.task_id, 'INFO', 
+                        task.task_id,
+                        'INFO',
                         f'数据库 {database_name} 扫描完成: {tables_scanned}表, {files_found}文件, {small_files}小文件',
-                        database_name=database_name
+                        database_name=database_name,
+                        db=db,
                     )
                     
                 except Exception as db_error:
                     self.add_log(
-                        task.task_id, 'ERROR', 
+                        task.task_id,
+                        'ERROR',
                         f'数据库 {database_name} 扫描失败: {str(db_error)}',
-                        database_name=database_name
+                        database_name=database_name,
+                        db=db,
                     )
             
             # 更新最终统计
@@ -239,14 +264,16 @@ class ScanTaskManager:
             )
             
             self.add_log(
-                task.task_id, 'INFO', 
-                f'集群扫描完成! 总计: {total_tables_scanned}表, {total_files_found}文件, {total_small_files}小文件'
+                task.task_id,
+                'INFO',
+                f'集群扫描完成! 总计: {total_tables_scanned}表, {total_files_found}文件, {total_small_files}小文件',
+                db=db,
             )
             
             self.complete_task(db, task.task_id, success=True)
             
         except Exception as e:
-            self.add_log(task.task_id, 'ERROR', f'集群扫描失败: {str(e)}')
+            self.add_log(task.task_id, 'ERROR', f'集群扫描失败: {str(e)}', db=db)
             self.complete_task(db, task.task_id, success=False, error_message=str(e))
 
 

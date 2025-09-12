@@ -6,9 +6,27 @@
         测试中心
       </h1>
       <div class="header-actions">
+        <!-- 模式切换 -->
+        <div class="mode-switcher">
+          <el-tooltip content="切换测试数据模式" placement="bottom">
+            <el-switch
+              v-model="isRealMode"
+              @change="handleModeChange"
+              active-text="真实"
+              inactive-text="模拟"
+              active-color="#67c23a"
+              inactive-color="#409eff"
+              size="large"
+            />
+          </el-tooltip>
+          <span class="mode-label">{{ isRealMode ? '真实测试' : '模拟数据' }}</span>
+        </div>
+        
+        <el-divider direction="vertical" />
+        
         <el-button type="primary" @click="runAllTests" :loading="isRunning">
           <el-icon><VideoPlay /></el-icon>
-          执行所有测试
+          {{ isRealMode ? '执行真实测试' : '模拟执行测试' }}
         </el-button>
         <el-button @click="refreshData" :loading="isRefreshing">
           <el-icon><Refresh /></el-icon>
@@ -314,8 +332,8 @@ import {
   Warning, View, Picture
 } from '@element-plus/icons-vue'
 
-// API基础URL
-const API_BASE_URL = 'http://localhost:3001/api/test'
+// API基础URL - 修复404错误：使用3002端口 (更新于2025-09-11)
+const API_BASE_URL = 'http://localhost:3002/api/test'
 
 // 响应式数据
 const isRunning = ref(false)
@@ -329,6 +347,15 @@ const detailDialogVisible = ref(false)
 const screenshotDialogVisible = ref(false)
 const selectedTest = ref(null)
 const selectedScreenshots = ref([])
+
+// 新增：模式切换相关
+const isRealMode = ref(false)
+const testExecutionStatus = ref({
+  isRunning: false,
+  progress: 0,
+  currentTest: '',
+  startTime: null
+})
 
 // 测试概览数据
 const testOverview = reactive({
@@ -347,7 +374,12 @@ const testResults = ref([])
 // API调用方法
 const fetchData = async (url, options = {}) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    // 添加时间戳避免缓存
+    const timestamp = new Date().getTime()
+    const separator = url.includes('?') ? '&' : '?'
+    const fullUrl = `${API_BASE_URL}${url}${separator}_t=${timestamp}`
+    
+    const response = await fetch(fullUrl, {
       headers: {
         'Content-Type': 'application/json',
       },
@@ -447,6 +479,40 @@ const filteredTestResults = computed(() => {
   const end = start + pageSize.value
   return filtered.slice(start, end)
 })
+
+// 新增：模式切换方法
+const handleModeChange = async (value) => {
+  try {
+    const mode = value ? 'real' : 'mock'
+    await fetchData('/mode', {
+      method: 'POST',
+      body: JSON.stringify({ mode })
+    })
+    
+    ElMessage.success(`已切换到${value ? '真实测试' : '模拟数据'}模式`)
+    
+    // 刷新数据
+    await refreshData()
+  } catch (error) {
+    ElMessage.error('模式切换失败: ' + error.message)
+    // 恢复先前状态
+    isRealMode.value = !value
+  }
+}
+
+// 加载当前模式
+const loadCurrentMode = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/mode`)
+    const result = await response.json()
+    if (result.success) {
+      isRealMode.value = result.currentMode === 'real'
+      testExecutionStatus.value.isRunning = result.isRunning || false
+    }
+  } catch (error) {
+    console.warn('无法获取当前模式，使用默认设置')
+  }
+}
 
 // 方法
 const runAllTests = async () => {
@@ -585,6 +651,9 @@ const formatTime = (time) => {
 onMounted(async () => {
   isLoading.value = true
   try {
+    // 先加载当前模式
+    await loadCurrentMode()
+    // 然后加载数据
     await refreshData()
   } finally {
     isLoading.value = false
@@ -617,6 +686,24 @@ onMounted(async () => {
 .header-actions {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+.mode-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.mode-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+  min-width: 60px;
 }
 
 .overview-section {

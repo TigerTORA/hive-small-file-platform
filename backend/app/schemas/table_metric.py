@@ -5,7 +5,7 @@ from typing import Optional
 class TableMetricBase(BaseModel):
     database_name: str
     table_name: str
-    table_path: str
+    table_path: Optional[str] = None
     
     # Enhanced metadata fields
     table_type: Optional[str] = None
@@ -18,20 +18,20 @@ class TableMetricBase(BaseModel):
     partition_columns: Optional[str] = None
     
     # File metrics
-    total_files: int = 0
-    small_files: int = 0
-    total_size: int = 0
-    avg_file_size: float = 0.0
+    total_files: Optional[int] = 0
+    small_files: Optional[int] = 0
+    total_size: Optional[int] = 0
+    avg_file_size: Optional[float] = 0.0
     
     # Partition info
-    is_partitioned: bool = False
-    partition_count: int = 0
+    is_partitioned: Optional[bool] = False
+    partition_count: Optional[int] = 0
 
 class TableMetricResponse(TableMetricBase):
     id: int
     cluster_id: int
-    scan_time: datetime
-    scan_duration: float
+    scan_time: Optional[datetime] = None
+    scan_duration: Optional[float] = 0.0
     
     class Config:
         from_attributes = True

@@ -36,6 +36,14 @@ async def create_task(task: MergeTaskCreate, db: Session = Depends(get_db)):
     db.refresh(db_task)
     return db_task
 
+@router.get("/cluster/{cluster_id}", response_model=list[MergeTaskResponse])
+async def get_cluster_tasks(cluster_id: int, db: Session = Depends(get_db)):
+    """Get tasks for a specific cluster"""
+    tasks = db.query(MergeTask).filter(
+        MergeTask.cluster_id == cluster_id
+    ).order_by(MergeTask.created_time.desc()).all()
+    return tasks
+
 @router.get("/stats")
 async def get_task_stats(cluster_id: int = Query(None), db: Session = Depends(get_db)):
     """获取任务统计信息"""

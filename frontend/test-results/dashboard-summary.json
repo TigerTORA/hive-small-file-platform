@@ -1,0 +1,49 @@
+{
+  "overview": {
+    "totalTests": 92,
+    "totalPassed": 34,
+    "totalFailed": 26,
+    "totalSkipped": 32,
+    "totalUnknown": 0,
+    "successRate": 37
+  },
+  "categories": [
+    {
+      "id": "",
+      "name": "导航功能测试",
+      "testCount": 32,
+      "passedTests": 14,
+      "failedTests": 7,
+      "skippedTests": 11,
+      "successRate": 44
+    },
+    {
+      "id": "",
+      "name": "数据完整性验证",
+      "testCount": 18,
+      "passedTests": 5,
+      "failedTests": 7,
+      "skippedTests": 6,
+      "successRate": 28
+    },
+    {
+      "id": "api",
+      "name": "API连接状态验证",
+      "testCount": 26,
+      "passedTests": 8,
+      "failedTests": 8,
+      "skippedTests": 10,
+      "successRate": 31
+    },
+    {
+      "id": "",
+      "name": "用户界面元素检查",
+      "testCount": 16,
+      "passedTests": 7,
+      "failedTests": 4,
+      "skippedTests": 5,
+      "successRate": 44
+    }
+  ],
+  "lastCollected": "2025-09-12T00:36:02.333Z"
+}

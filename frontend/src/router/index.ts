@@ -50,12 +50,6 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('@/views/Settings.vue'),
       meta: { title: '系统设置' }
-    },
-    {
-      path: '/test-dashboard',
-      name: 'TestDashboard',
-      component: () => import('@/views/TestDashboard.vue'),
-      meta: { title: '测试中心' }
     }
   ]
 })

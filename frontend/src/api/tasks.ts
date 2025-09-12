@@ -36,9 +36,36 @@ export const tasksApi = {
     return api.get('/tasks/')
   },
 
+  // 获取集群任务列表
+  getByCluster(clusterId: number): Promise<MergeTask[]> {
+    return api.get(`/tasks/`, { params: { cluster_id: clusterId } })
+  },
+
   // 创建合并任务
   create(task: MergeTaskCreate): Promise<MergeTask> {
     return api.post('/tasks/', task)
+  },
+
+  // 智能创建合并任务（自动策略选择）
+  createSmart(params: {
+    cluster_id: number
+    database_name: string
+    table_name: string
+    partition_filter?: string
+  }): Promise<{
+    task: MergeTask
+    strategy_info: {
+      recommended_strategy: string
+      strategy_reason: string
+      validation: any
+    }
+  }> {
+    return api.post('/tasks/smart-create', params)
+  },
+
+  // 重试任务
+  retry(id: number): Promise<any> {
+    return api.post(`/tasks/${id}/retry`)
   },
 
   // 获取任务详情
@@ -84,7 +111,7 @@ export const tasksApi = {
 
   // 获取扫描进度
   getScanProgress(clusterId: number): Promise<any> {
-    return api.get(`/tables/scan-progress/${clusterId}`)
+    return api.get(`/tables/scan-progress/cluster/${clusterId}`)
   },
 
   // 获取任务预览

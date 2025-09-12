@@ -73,6 +73,7 @@ npm run type-check
 
 ### Testing the Platform
 
+#### Manual API Testing
 ```bash
 # Test API endpoints
 curl http://localhost:8000/health
@@ -84,6 +85,49 @@ curl http://localhost:8000/api/v1/tables/test-connection/1
 # Scan tables
 curl -X POST http://localhost:8000/api/v1/tables/scan-table/1/default/table_name
 ```
+
+#### Automated Testing Framework
+
+The project includes a comprehensive automated testing framework with 8 core testing rules covering all aspects of the platform. See [TESTING_RULES.md](./TESTING_RULES.md) for detailed documentation.
+
+**Quick Start:**
+```bash
+cd frontend
+
+# Run comprehensive test suite
+node test-comprehensive-suite.js
+
+# Run end-to-end user flow tests
+node test-end-to-end-user-flow.js
+
+# Validate testing rules compliance
+node test-rules-validator.js
+
+# Verify test enhancements
+node test-enhancement-summary.js
+```
+
+**Testing Environment Requirements:**
+- Frontend: http://localhost:3002
+- Backend: http://localhost:8000
+- Browser: Playwright-compatible (Chrome/Firefox/Safari)
+
+**8 Core Testing Rules:**
+1. **数据完整性验证** - Verify real data creation and retrieval
+2. **导航功能全面测试** - Test all page navigation functionality
+3. **API连接状态验证** - Ensure API endpoint availability
+4. **用户界面元素检查** - Verify UI component accessibility
+5. **交互功能深度测试** - Test user interaction completeness
+6. **表单验证全覆盖** - Comprehensive form validation testing
+7. **端到端用户流程** - Complete user scenario validation
+8. **质量标准和错误处理** - Quality standards and error handling
+
+**Success Metrics:**
+- Data Creation: ≥2 real clusters created
+- Navigation: 100% page navigation success
+- API Tests: ≥95% endpoint tests pass
+- UI Tests: 100% core elements accessible
+- Overall Quality: ≥90% test success rate
 
 ## Architecture Overview
 

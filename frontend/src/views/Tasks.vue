@@ -11,63 +11,69 @@
         </div>
       </template>
 
-      <el-table :data="tasks" stripe v-loading="loading">
-        <el-table-column prop="task_name" label="任务名称" width="200" />
-        <el-table-column prop="database_name" label="数据库" width="120" />
-        <el-table-column prop="table_name" label="表名" width="200" />
-        <el-table-column prop="merge_strategy" label="合并策略" width="120">
-          <template #default="{ row }">
-            <el-tag :type="row.merge_strategy === 'concatenate' ? 'success' : 'warning'" size="small">
-              {{ row.merge_strategy === 'concatenate' ? '文件合并' : '重写插入' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">
-              {{ getStatusText(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="files_before" label="处理前文件数" width="120" />
-        <el-table-column prop="files_after" label="处理后文件数" width="120" />
-        <el-table-column prop="created_time" label="创建时间" width="160">
-          <template #default="{ row }">
-            {{ formatTime(row.created_time) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="250">
-          <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'pending'"
-              type="success"
-              size="small"
-              @click="showPreview(row)"
-            >
-              预览
-            </el-button>
-            <el-button
-              v-if="row.status === 'pending'"
-              type="primary"
-              size="small"
-              @click="executeTask(row)"
-            >
-              执行
-            </el-button>
-            <el-button
-              v-if="row.status === 'running'"
-              type="warning"
-              size="small"
-              @click="cancelTask(row)"
-            >
-              取消
-            </el-button>
-            <el-button type="info" size="small" @click="viewLogs(row)">
-              日志
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <el-tabs v-model="activeTab" type="border-card">
+        <el-tab-pane label="合并任务" name="merge">
+          <el-table :data="tasks" stripe v-loading="loading">
+            <el-table-column prop="task_name" label="任务名称" width="200" />
+            <el-table-column prop="database_name" label="数据库" width="120" />
+            <el-table-column prop="table_name" label="表名" width="200" />
+            <el-table-column prop="merge_strategy" label="合并策略" width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.merge_strategy === 'concatenate' ? 'success' : 'warning'" size="small">
+                  {{ row.merge_strategy === 'concatenate' ? '文件合并' : '重写插入' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)" size="small">
+                  {{ getStatusText(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="files_before" label="处理前文件数" width="120" />
+            <el-table-column prop="files_after" label="处理后文件数" width="120" />
+            <el-table-column prop="created_time" label="创建时间" width="160">
+              <template #default="{ row }">
+                {{ formatTime(row.created_time) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="250">
+              <template #default="{ row }">
+                <el-button v-if="row.status === 'pending'" type="success" size="small" @click="showPreview(row)">预览</el-button>
+                <el-button v-if="row.status === 'pending'" type="primary" size="small" @click="executeTask(row)">执行</el-button>
+                <el-button v-if="row.status === 'running'" type="warning" size="small" @click="cancelTask(row)">取消</el-button>
+                <el-button type="info" size="small" @click="viewLogs(row)">日志</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="扫描任务" name="scan">
+          <el-table :data="scanTasks" stripe v-loading="loadingScan">
+            <el-table-column prop="task_id" label="任务ID" width="260" />
+            <el-table-column prop="task_name" label="任务名称" min-width="200" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="进度" width="180">
+              <template #default="{ row }">
+                <el-progress :percentage="row.progress_percentage || 0" :status="row.status === 'failed' ? 'exception' : undefined" />
+              </template>
+            </el-table-column>
+            <el-table-column prop="start_time" label="开始时间" width="160">
+              <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="180">
+              <template #default="{ row }">
+                <el-button size="small" @click="openScanLogs(row.task_id)">查看日志</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 创建任务对话框 -->
@@ -267,6 +273,7 @@
         </div>
       </template>
     </el-dialog>
+    <ScanProgressDialog v-model="showScanDialog" :task-id="selectedScanTaskId" />
   </div>
 </template>
 
@@ -275,19 +282,26 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tasksApi, type MergeTask, type MergeTaskCreate } from '@/api/tasks'
 import { clustersApi, type Cluster } from '@/api/clusters'
+import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
+import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
 import dayjs from 'dayjs'
 
 // 数据
+const activeTab = ref('merge')
 const tasks = ref<MergeTask[]>([])
+const scanTasks = ref<ScanTask[]>([])
 const clusters = ref<Cluster[]>([])
 const loading = ref(false)
+const loadingScan = ref(false)
 const showCreateDialog = ref(false)
 const showLogsDialog = ref(false)
 const showPreviewDialog = ref(false)
+const showScanDialog = ref(false)
 const taskLogs = ref<any[]>([])
 const previewData = ref<any>(null)
 const previewLoading = ref(false)
 const previewingTask = ref<MergeTask | null>(null)
+const selectedScanTaskId = ref<string | null>(null)
 
 // 分区相关数据
 const tableInfo = ref<any>(null)
@@ -323,6 +337,17 @@ const loadTasks = async () => {
     console.error('Failed to load tasks:', error)
   } finally {
     loading.value = false
+  }
+}
+
+const loadScanTasks = async () => {
+  loadingScan.value = true
+  try {
+    scanTasks.value = await scanTasksApi.list()
+  } catch (error) {
+    console.error('Failed to load scan tasks:', error)
+  } finally {
+    loadingScan.value = false
   }
 }
 
@@ -399,6 +424,11 @@ const viewLogs = async (task: MergeTask) => {
   } catch (error) {
     console.error('Failed to load task logs:', error)
   }
+}
+
+const openScanLogs = (taskId: string) => {
+  selectedScanTaskId.value = taskId
+  showScanDialog.value = true
 }
 
 const resetTaskForm = () => {
@@ -531,6 +561,7 @@ const loadPartitions = async () => {
 onMounted(() => {
   loadTasks()
   loadClusters()
+  loadScanTasks()
 })
 </script>
 

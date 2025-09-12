@@ -29,7 +29,7 @@
       <el-table :data="clusters" stripe v-loading="loading">
         <el-table-column prop="name" label="集群名称" />
         <el-table-column prop="hive_host" label="Hive 地址" />
-        <el-table-column prop="hdfs_namenode_url" label="HDFS 地址" width="200" />
+        <el-table-column prop="hdfs_namenode_url" label="HDFS/HttpFS 地址" width="220" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'danger'">
@@ -91,8 +91,14 @@
         <el-form-item label="MetaStore URL" prop="hive_metastore_url">
           <el-input v-model="clusterForm.hive_metastore_url" placeholder="postgresql://user:pass@host:5432/hive" />
         </el-form-item>
-        <el-form-item label="HDFS NameNode" prop="hdfs_namenode_url">
-          <el-input v-model="clusterForm.hdfs_namenode_url" placeholder="hdfs://namenode:9000" />
+        <el-form-item label="HDFS/HttpFS 地址" prop="hdfs_namenode_url">
+          <el-input v-model="clusterForm.hdfs_namenode_url" placeholder="http://httpfs:14000/webhdfs/v1" />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            <div style="margin-bottom: 2px;"><strong>支持的地址格式:</strong></div>
+            <div>• HttpFS (推荐): http://httpfs-host:14000/webhdfs/v1</div>
+            <div>• WebHDFS: http://namenode:9870/webhdfs/v1</div>
+            <div>• HDFS URI: hdfs://nameservice 或 hdfs://namenode:8020</div>
+          </div>
         </el-form-item>
         <el-form-item label="HDFS 用户">
           <el-input v-model="clusterForm.hdfs_user" placeholder="hdfs" />
@@ -181,7 +187,7 @@ const clusterRules = {
   name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
   hive_host: [{ required: true, message: '请输入 Hive 主机地址', trigger: 'blur' }],
   hive_metastore_url: [{ required: true, message: '请输入 MetaStore URL', trigger: 'blur' }],
-  hdfs_namenode_url: [{ required: true, message: '请输入 HDFS NameNode URL', trigger: 'blur' }]
+  hdfs_namenode_url: [{ required: true, message: '请输入 HDFS/HttpFS 地址', trigger: 'blur' }]
 }
 
 const clusterFormRef = ref()
@@ -306,7 +312,7 @@ const clusterTemplates = {
     hive_port: 10000,
     hive_database: 'default',
     hive_metastore_url: 'mysql://root:password@cdp-master:3306/hive',
-    hdfs_namenode_url: 'hdfs://nameservice1',
+    hdfs_namenode_url: 'http://cdp-master:14000/webhdfs/v1',
     hdfs_user: 'hdfs',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true
@@ -318,7 +324,7 @@ const clusterTemplates = {
     hive_port: 10000,
     hive_database: 'default',
     hive_metastore_url: 'postgresql://hive:password@cdh-master:5432/hive_metastore',
-    hdfs_namenode_url: 'hdfs://cdh-nameservice',
+    hdfs_namenode_url: 'http://cdh-master:14000/webhdfs/v1',
     hdfs_user: 'hdfs',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true
@@ -330,7 +336,7 @@ const clusterTemplates = {
     hive_port: 10000,
     hive_database: 'default',
     hive_metastore_url: 'mysql://hive:password@hdp-master:3306/hive',
-    hdfs_namenode_url: 'hdfs://hdp-cluster',
+    hdfs_namenode_url: 'http://hdp-master:14000/webhdfs/v1',
     hdfs_user: 'hdfs',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true

@@ -1,5 +1,9 @@
 # Hive/Impala 小文件治理平台
 
+![CI](https://github.com/your-username/hive-small-file-platform/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Status Report](https://img.shields.io/badge/Status-Project%20Report-blue)
+
 一个基于 Python 的 Hive/Impala 小文件监控和治理平台，支持多集群管理、自动扫描、智能合并和任务调度。
 
 ## 项目概述
@@ -139,6 +143,17 @@ celery -A app.scheduler.celery_app beat --loglevel=info
 
 - Web 界面: http://localhost:3000
 - API 文档: http://localhost:8000/docs
+
+## 项目健康报告与持续集成
+
+- 一键生成本地报告：`make status`，输出 `PROJECT_STATUS.md` 与 `project_status.json`
+- GitHub Actions CI：
+  - 后端：pytest + 覆盖率（生成并上传 coverage.xml）
+  - 前端：Vitest + 覆盖率（若可用则上传 coverage/）
+  - 汇总：生成并上传项目健康报告工件（PROJECT_STATUS.md / project_status.json）
+- 每周报告：`Weekly Status Report` 工作流会按周生成最新报告工件。
+
+提示：将徽章中的 `your-username/hive-small-file-platform` 替换为实际仓库路径即可显示状态。
 
 ## 配置说明
 

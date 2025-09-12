@@ -1,6 +1,6 @@
 # Makefile for Hive Small File Platform
 
-.PHONY: help install-dev format check test clean
+.PHONY: help install-dev format check test status clean
 
 help:
 	@echo "Available commands:"
@@ -8,6 +8,7 @@ help:
 	@echo "  format          Auto-format code with Black and isort"
 	@echo "  check           Run quality checks (Black, Flake8, isort, MyPy)"
 	@echo "  test            Run tests"
+	@echo "  status          Generate consolidated project status"
 	@echo "  clean           Clean up cache files"
 
 install-dev:
@@ -27,6 +28,11 @@ test:
 	cd backend && python -m pytest
 	@echo "Running frontend tests..."
 	cd frontend && npm test
+
+status:
+	@echo "Generating consolidated project status..."
+	python3 scripts/generate_project_status.py
+	@echo "\nSummary written to PROJECT_STATUS.md and project_status.json"
 
 clean:
 	@echo "Cleaning up cache files..."

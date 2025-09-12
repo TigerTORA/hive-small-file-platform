@@ -32,51 +32,87 @@
         <div class="component-tests" v-if="testResult.tests">
           <h4>组件连接状态</h4>
           <el-row :gutter="16">
-            <el-col :span="12" v-if="testResult.tests.metastore">
+            <el-col :span="8" v-if="testResult.tests.metastore">
               <el-card class="test-card">
                 <template #header>
                   <div class="card-header">
                     <el-icon><Coin /></el-icon>
                     <span>Hive MetaStore</span>
-                    <el-tag :type="getStatusType(testResult.tests.metastore.status)" size="small">
-                      {{ testResult.tests.metastore.status }}
+                    <el-tag :type="getStatusType(testResult.tests.metastore?.status)" size="small">
+                      {{ testResult.tests.metastore?.status || 'unknown' }}
                     </el-tag>
                   </div>
                 </template>
                 <div class="test-details">
-                  <p v-if="testResult.tests.metastore.mode">
-                    <strong>模式:</strong> {{ testResult.tests.metastore.mode }}
+                  <p v-if="testResult.tests.metastore?.mode">
+                    <strong>模式:</strong> {{ testResult.tests.metastore?.mode }}
                   </p>
-                  <p v-if="testResult.tests.metastore.message">
-                    <strong>消息:</strong> {{ testResult.tests.metastore.message }}
+                  <p v-if="testResult.tests.metastore?.message">
+                    <strong>消息:</strong> {{ testResult.tests.metastore?.message }}
                   </p>
-                  <p v-if="testResult.tests.metastore.duration">
-                    <strong>耗时:</strong> {{ testResult.tests.metastore.duration }}ms
+                  <p v-if="testResult.tests.metastore?.duration">
+                    <strong>耗时:</strong> {{ testResult.tests.metastore?.duration }}ms
                   </p>
                 </div>
               </el-card>
             </el-col>
-            <el-col :span="12" v-if="testResult.tests.hdfs">
+            <el-col :span="8" v-if="testResult.tests.hdfs">
               <el-card class="test-card">
                 <template #header>
                   <div class="card-header">
                     <el-icon><FolderOpened /></el-icon>
                     <span>HDFS</span>
-                    <el-tag :type="getStatusType(testResult.tests.hdfs.status)" size="small">
-                      {{ testResult.tests.hdfs.status }}
+                    <el-tag :type="getStatusType(testResult.tests.hdfs?.status)" size="small">
+                      {{ testResult.tests.hdfs?.status }}
                     </el-tag>
                   </div>
                 </template>
                 <div class="test-details">
-                  <p v-if="testResult.tests.hdfs.mode">
-                    <strong>模式:</strong> {{ testResult.tests.hdfs.mode }}
+                  <p v-if="testResult.tests.hdfs?.mode">
+                    <strong>模式:</strong> {{ testResult.tests.hdfs?.mode }}
                   </p>
-                  <p v-if="testResult.tests.hdfs.message">
-                    <strong>消息:</strong> {{ testResult.tests.hdfs.message }}
+                  <p v-if="testResult.tests.hdfs?.message">
+                    <strong>消息:</strong> {{ testResult.tests.hdfs?.message }}
                   </p>
-                  <p v-if="testResult.tests.hdfs.duration">
-                    <strong>耗时:</strong> {{ testResult.tests.hdfs.duration }}ms
+                  <p v-if="testResult.tests.hdfs?.duration">
+                    <strong>耗时:</strong> {{ testResult.tests.hdfs?.duration }}ms
                   </p>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :span="8" v-if="testResult.tests.beeline">
+              <el-card class="test-card">
+                <template #header>
+                  <div class="card-header">
+                    <el-icon><Connection /></el-icon>
+                    <span>Beeline/JDBC</span>
+                    <el-tag :type="getStatusType(testResult.tests.beeline?.status)" size="small">
+                      {{ testResult.tests.beeline?.status }}
+                    </el-tag>
+                  </div>
+                </template>
+                <div class="test-details">
+                  <p v-if="testResult.tests.beeline.connection_type">
+                    <strong>连接类型:</strong> {{ testResult.tests.beeline.connection_type }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.driver">
+                    <strong>驱动:</strong> {{ testResult.tests.beeline.driver }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.message">
+                    <strong>消息:</strong> {{ testResult.tests.beeline.message }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.details && testResult.tests.beeline.details.connection_info && testResult.tests.beeline.details.connection_info.response_time_ms">
+                    <strong>响应时间:</strong> {{ testResult.tests.beeline.details.connection_info.response_time_ms }}ms
+                  </p>
+                  <!-- 显示建议 -->
+                  <div v-if="testResult.tests.beeline.details && testResult.tests.beeline.details.suggestions" class="suggestions-inline">
+                    <p><strong>建议:</strong></p>
+                    <ul class="suggestion-list">
+                      <li v-for="suggestion in testResult.tests.beeline.details.suggestions.slice(0, 2)" :key="suggestion">
+                        {{ suggestion }}
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </el-card>
             </el-col>
@@ -146,7 +182,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElDialog, ElTag, ElIcon, ElRow, ElCol, ElCard, ElAlert, ElButton } from 'element-plus'
-import { Loading, Coin, FolderOpened } from '@element-plus/icons-vue'
+import { Loading, Coin, FolderOpened, Connection } from '@element-plus/icons-vue'
 
 interface TestResult {
   overall_status: string
@@ -163,6 +199,22 @@ interface TestResult {
       mode?: string
       message?: string
       duration?: number
+    }
+    beeline?: {
+      status: string
+      connection_type?: string
+      driver?: string
+      message?: string
+      details?: {
+        port_connectivity?: any
+        jdbc_test?: any
+        connection_info?: {
+          response_time_ms?: number
+          auth_method?: string
+          jdbc_url?: string
+        }
+        suggestions?: string[]
+      }
     }
   }
   logs?: Array<{
@@ -384,5 +436,23 @@ const formatTime = (timestamp: string) => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.suggestions-inline {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.suggestion-list {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.suggestion-list li {
+  margin: 2px 0;
+  line-height: 1.4;
 }
 </style>

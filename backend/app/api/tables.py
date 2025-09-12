@@ -762,7 +762,7 @@ async def get_scan_task_progress(
         logs=logs
     )
 
-@router.get("/scan-progress/{cluster_id}")
+@router.get("/scan-progress/cluster/{cluster_id}")
 async def get_scan_progress(
     cluster_id: int,
     db: Session = Depends(get_db)

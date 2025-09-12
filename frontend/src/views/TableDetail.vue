@@ -109,7 +109,7 @@
               </div>
             </el-col>
             <el-col :span="6">
-              <el-statistic title="总大小" :value="formatSize(tableMetric.total_size)" />
+              <el-statistic title="总大小" :value="formatFileSize(tableMetric.total_size)" />
             </el-col>
           </el-row>
         </div>
@@ -248,6 +248,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { tablesApi, type TableMetric } from '@/api/tables'
 import { tasksApi, type MergeTaskCreate } from '@/api/tasks'
+import { formatFileSize } from '@/utils/formatFileSize'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -338,18 +339,6 @@ const createMergeTask = async () => {
   }
 }
 
-const formatSize = (bytes: number): string => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unitIndex = 0
-  
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-  
-  return `${size.toFixed(1)} ${units[unitIndex]}`
-}
 
 const formatTime = (time: string): string => {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')

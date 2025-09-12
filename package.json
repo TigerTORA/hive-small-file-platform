@@ -29,7 +29,17 @@
     "type": "git",
     "url": "git+https://github.com/your-username/hive-small-file-platform.git"
   },
-  "keywords": ["hive", "small-files", "management", "platform", "testing", "dashboard"],
+  "keywords": [
+    "hive",
+    "small-files",
+    "management",
+    "platform",
+    "testing",
+    "dashboard"
+  ],
   "author": "Hive Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
 }
