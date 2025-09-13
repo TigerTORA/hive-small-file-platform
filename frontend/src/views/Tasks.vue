@@ -24,15 +24,50 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="100">
+            <el-table-column prop="status" label="状态" width="120">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
-                  {{ getStatusText(row.status) }}
-                </el-tag>
+                <div class="status-column">
+                  <el-tag :type="getStatusType(row.status)" size="small">
+                    {{ getStatusText(row.status) }}
+                  </el-tag>
+                  <div v-if="row.status === 'running'" class="execution-phase">
+                    <span class="phase-text">{{ getExecutionPhase(row) }}</span>
+                  </div>
+                </div>
               </template>
             </el-table-column>
-            <el-table-column prop="files_before" label="处理前文件数" width="120" />
-            <el-table-column prop="files_after" label="处理后文件数" width="120" />
+            <el-table-column label="执行进度" width="180" v-if="hasRunningTasks">
+              <template #default="{ row }">
+                <div v-if="row.status === 'running'" class="progress-column">
+                  <el-progress 
+                    :percentage="getTaskProgress(row)" 
+                    :status="row.status === 'failed' ? 'exception' : undefined"
+                    :stroke-width="6"
+                  />
+                  <div class="progress-details">
+                    <span class="progress-text">{{ getProgressText(row) }}</span>
+                  </div>
+                </div>
+                <div v-else-if="row.status === 'success'" class="completed-info">
+                  <el-icon color="#67c23a"><CircleCheckFilled /></el-icon>
+                  <span>已完成</span>
+                </div>
+                <div v-else-if="row.status === 'failed'" class="failed-info">
+                  <el-icon color="#f56c6c"><CircleCloseFilled /></el-icon>
+                  <span>执行失败</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="处理前文件数" width="140">
+              <template #default="{ row }">
+                {{ displayFiles(row.files_before) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="处理后文件数" width="140">
+              <template #default="{ row }">
+                {{ displayFiles(row.files_after) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="created_time" label="创建时间" width="160">
               <template #default="{ row }">
                 {{ formatTime(row.created_time) }}
@@ -278,7 +313,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tasksApi, type MergeTask, type MergeTaskCreate } from '@/api/tasks'
 import { clustersApi, type Cluster } from '@/api/clusters'
@@ -470,6 +505,12 @@ const formatTime = (time: string): string => {
   return dayjs(time).format('MM-DD HH:mm:ss')
 }
 
+// 显示文件数：统计失败或为空时显示 NaN
+const displayFiles = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return 'NaN'
+  return value
+}
+
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0'
   const k = 1024
@@ -558,10 +599,144 @@ const loadPartitions = async () => {
   }
 }
 
+// 任务进度监控相关
+const pollingInterval = ref<NodeJS.Timeout | null>(null)
+
+// 获取任务执行阶段
+const getExecutionPhase = (row: MergeTask): string => {
+  if (row.status !== 'running') return ''
+  
+  // 基于任务的详细信息判断当前执行阶段
+  if (row.execution_phase) {
+    const phaseMap: Record<string, string> = {
+      'initialization': '初始化中',
+      'connection_test': '连接测试',
+      'pre_validation': '预验证',
+      'file_analysis': '文件分析',
+      'temp_table_creation': '创建临时表',
+      'data_validation': '数据验证',
+      'atomic_swap': '原子切换',
+      'post_validation': '后验证',
+      'cleanup': '清理中',
+      'completion': '完成中'
+    }
+    return phaseMap[row.execution_phase] || row.execution_phase
+  }
+  
+  // 默认基于状态返回阶段
+  return '执行中'
+}
+
+// 获取任务进度百分比
+const getTaskProgress = (row: MergeTask): number => {
+  if (row.status === 'success') return 100
+  if (row.status === 'failed') return 0
+  
+  // 基于执行阶段计算进度
+  if (row.execution_phase) {
+    const progressMap: Record<string, number> = {
+      'initialization': 5,
+      'connection_test': 10,
+      'pre_validation': 15,
+      'file_analysis': 25,
+      'temp_table_creation': 45,
+      'data_validation': 65,
+      'atomic_swap': 80,
+      'post_validation': 90,
+      'cleanup': 95,
+      'completion': 98
+    }
+    return progressMap[row.execution_phase] || 50
+  }
+  
+  // 如果有具体进度信息，使用具体值
+  if (row.progress_percentage !== undefined && row.progress_percentage !== null) {
+    return row.progress_percentage
+  }
+  
+  return 50 // 默认进度
+}
+
+// 获取进度文本
+const getProgressText = (row: MergeTask): string => {
+  if (row.status !== 'running') return ''
+  
+  const phase = getExecutionPhase(row)
+  const progress = getTaskProgress(row)
+  
+  // 如果有估计剩余时间，显示剩余时间
+  if (row.estimated_remaining_time) {
+    return `${phase} - ${progress}% (预计剩余 ${formatDuration(row.estimated_remaining_time)})`
+  }
+  
+  // 如果有处理的文件数信息
+  if (row.processed_files_count && row.total_files_count) {
+    return `${phase} - ${row.processed_files_count}/${row.total_files_count} 文件`
+  }
+  
+  return `${phase} - ${progress}%`
+}
+
+// 检查是否有运行中的任务
+const hasRunningTasks = computed(() => {
+  return tasks.value.some(task => task.status === 'running')
+})
+
+// 格式化持续时间
+const formatDuration = (seconds: number): string => {
+  if (seconds < 60) return `${Math.round(seconds)}秒`
+  if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`
+  return `${Math.round(seconds / 3600)}小时`
+}
+
+// 启动任务状态轮询
+const startPolling = () => {
+  if (pollingInterval.value) return
+  
+  pollingInterval.value = setInterval(() => {
+    // 只有在有运行中任务时才轮询
+    if (hasRunningTasks.value) {
+      loadTasks()
+    } else {
+      stopPolling() // 没有运行中的任务时停止轮询
+    }
+  }, 3000) // 每3秒轮询一次
+}
+
+// 停止任务状态轮询
+const stopPolling = () => {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value)
+    pollingInterval.value = null
+  }
+}
+
+// 监听任务状态变化，自动启动/停止轮询
+watch(
+  () => hasRunningTasks.value,
+  (hasRunning) => {
+    if (hasRunning) {
+      startPolling()
+    } else {
+      stopPolling()
+    }
+  }
+)
+
 onMounted(() => {
   loadTasks()
   loadClusters()
   loadScanTasks()
+  
+  // 如果有运行中的任务，启动轮询
+  if (hasRunningTasks.value) {
+    startPolling()
+  }
+})
+
+// 组件卸载时清理轮询
+onBeforeUnmount(() => {
+  stopPolling()
 })
 </script>
 
@@ -640,5 +815,66 @@ onMounted(() => {
   color: #2c3e50;
   border-bottom: 1px solid #e4e7ed;
   padding-bottom: 8px;
+}
+
+/* 任务执行进度样式 */
+.status-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.execution-phase {
+  margin-top: 4px;
+}
+
+.phase-text {
+  font-size: 11px;
+  color: #909399;
+  font-style: italic;
+}
+
+.progress-column {
+  width: 100%;
+}
+
+.progress-details {
+  margin-top: 4px;
+  text-align: center;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #606266;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  display: inline-block;
+}
+
+.completed-info,
+.failed-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.completed-info {
+  color: #67c23a;
+}
+
+.failed-info {
+  color: #f56c6c;
+}
+
+/* 响应式调整 */
+@media (max-width: 1200px) {
+  .progress-text {
+    max-width: 120px;
+  }
 }
 </style>

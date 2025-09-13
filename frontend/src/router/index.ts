@@ -21,12 +21,6 @@ const router = createRouter({
       props: true
     },
     {
-      path: '/dashboard',
-      name: 'Dashboard',
-      component: () => import('@/views/Dashboard.vue'),
-      meta: { title: '监控仪表板' }
-    },
-    {
       path: '/tables',
       name: 'Tables',
       component: () => import('@/views/Tables.vue'),

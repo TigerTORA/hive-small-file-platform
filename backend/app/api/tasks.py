@@ -6,6 +6,7 @@ from app.models.cluster import Cluster
 from app.schemas.merge_task import MergeTaskCreate, MergeTaskResponse
 from datetime import datetime
 import uuid
+from app.config.settings import settings
 
 router = APIRouter()
 
@@ -97,24 +98,53 @@ async def execute_task(task_id: int, db: Session = Depends(get_db)):
     if task.status in ["running", "success"]:
         raise HTTPException(status_code=400, detail=f"Task is already {task.status}")
     
-    # 导入Celery任务
-    from app.scheduler.merge_tasks import execute_merge_task
-    
-    # 启动真实的后台任务
-    result = execute_merge_task.delay(task_id)
-    
-    # 更新任务状态和Celery任务ID
-    task.status = "running"
-    task.started_time = datetime.utcnow()
-    task.celery_task_id = result.id
-    db.commit()
-    
-    return {
-        "message": "Task execution started", 
-        "task_id": task_id,
-        "celery_task_id": task.celery_task_id,
-        "status": task.status
-    }
+    # 执行合并任务（支持演示模式与真实执行）
+    try:
+        # 获取集群信息
+        cluster = db.query(Cluster).filter(Cluster.id == task.cluster_id).first()
+        if not cluster:
+            raise HTTPException(status_code=404, detail="Cluster not found")
+        
+        # 更新任务状态为运行中
+        task.status = "running"
+        task.started_time = datetime.utcnow()
+        task.execution_phase = "initialization"
+        task.progress_percentage = 5.0
+        task.current_operation = "初始化合并任务"
+        db.commit()
+        
+        # 引擎选择：DEMO_MODE 使用 DemoMergeEngine，本地即可验证全流程；否则走真实引擎
+        if settings.DEMO_MODE:
+            from app.engines.demo_merge_engine import DemoMergeEngine
+            engine = DemoMergeEngine(cluster)
+        else:
+            # 使用引擎工厂，默认返回 SafeHiveMergeEngine（基于 HiveServer2/pyhive，兼容 LDAP）
+            from app.engines.engine_factory import MergeEngineFactory
+            engine = MergeEngineFactory.get_engine(cluster)
+        
+        # 执行合并
+        result = engine.execute_merge(task, db)
+        
+        return {
+            "message": "Task execution completed", 
+            "task_id": task_id,
+            "status": task.status,
+            "result": result
+        }
+    except Exception as e:
+        # 任务失败时更新状态
+        task.status = "failed"
+        task.error_message = str(e)
+        task.execution_phase = "error"
+        task.current_operation = f"执行失败: {str(e)}"
+        db.commit()
+        
+        return {
+            "message": f"Task execution failed: {str(e)}", 
+            "task_id": task_id,
+            "status": "failed",
+            "error": str(e)
+        }
 
 @router.post("/{task_id}/cancel")
 async def cancel_task(task_id: int, db: Session = Depends(get_db)):
@@ -153,7 +183,16 @@ async def get_task_logs(task_id: int, db: Session = Depends(get_db)):
             "log_level": log.log_level,
             "message": log.message,
             "details": log.details,
-            "timestamp": log.timestamp
+            "timestamp": log.timestamp,
+            "phase": log.phase,
+            "duration_ms": log.duration_ms,
+            "sql_statement": log.sql_statement,
+            "affected_rows": log.affected_rows,
+            "files_before": log.files_before,
+            "files_after": log.files_after,
+            "hdfs_stats": log.hdfs_stats,
+            "yarn_application_id": log.yarn_application_id,
+            "progress_percentage": log.progress_percentage
         }
         for log in logs
     ]
@@ -201,4 +240,3 @@ async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
             status_code=500, 
             detail=f"Failed to generate preview: {str(e)}"
         )
-

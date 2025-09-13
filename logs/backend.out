@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/luohu/new_project/hive-small-file-platform/backend/app/main.py", line 6, in <module>
+    from app.api import clusters, tables, tasks, errors, dashboard
+  File "/Users/luohu/new_project/hive-small-file-platform/backend/app/api/tables.py", line 148
+    from typing import Optional
+    ^^^^
+SyntaxError: invalid syntax

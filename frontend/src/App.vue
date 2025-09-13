@@ -37,10 +37,6 @@
             text-color="#bfcbd9"
             active-text-color="#409eff"
           >
-            <el-menu-item index="/dashboard">
-              <el-icon><Monitor /></el-icon>
-              <span>监控仪表板</span>
-            </el-menu-item>
             
             <el-menu-item index="/clusters">
               <el-icon><Connection /></el-icon>
@@ -84,7 +80,6 @@ import {
   User, 
   CaretBottom, 
   DataBoard, 
-  Monitor, 
   Connection, 
   Grid, 
   List, 

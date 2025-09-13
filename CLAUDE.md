@@ -16,8 +16,10 @@ cd backend
 # Install dependencies
 pip install -r requirements.txt
 
-# Start development server
-uvicorn app.main:app --reload --port 8000
+# Start development server (port configured in .env)
+python -m app.main
+# OR
+uvicorn app.main:app --reload
 
 # Start Celery worker (for task processing)
 celery -A app.scheduler.celery_app worker --loglevel=info
@@ -108,8 +110,8 @@ node test-enhancement-summary.js
 ```
 
 **Testing Environment Requirements:**
-- Frontend: http://localhost:3002
-- Backend: http://localhost:8000
+- Frontend: http://localhost:3000 (configured in .env)
+- Backend: http://localhost:8000 (configured in .env)
 - Browser: Playwright-compatible (Chrome/Firefox/Safari)
 
 **8 Core Testing Rules:**

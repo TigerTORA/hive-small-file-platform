@@ -140,6 +140,84 @@ class MySQLHiveMetastoreConnector(BaseMetastoreConnector):
         except Exception as e:
             logger.error(f"Failed to get partitions for table {database_name}.{table_name}: {e}")
             return []
+
+    def get_table_partitions_count(self, database_name: str, table_name: str) -> int:
+        """获取表分区总数（用于分页）"""
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COUNT(1) AS cnt
+                    FROM PARTITIONS p
+                    JOIN TBLS t ON p.TBL_ID = t.TBL_ID
+                    JOIN DBS d ON t.DB_ID = d.DB_ID
+                    WHERE d.NAME = %s AND t.TBL_NAME = %s
+                    """,
+                    (database_name, table_name),
+                )
+                row = cursor.fetchone()
+                return int(row.get('cnt', 0)) if row else 0
+        except Exception as e:
+            logger.error(f"Failed to count partitions for {database_name}.{table_name}: {e}")
+            return 0
+
+    def get_table_partitions_paged(self, database_name: str, table_name: str, offset: int, limit: int) -> List[Dict]:
+        """分页获取表分区信息（避免一次性全量查询）"""
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 
+                        p.PART_NAME,
+                        s.LOCATION as partition_path
+                    FROM PARTITIONS p
+                    JOIN SDS s ON p.SD_ID = s.SD_ID
+                    JOIN TBLS t ON p.TBL_ID = t.TBL_ID
+                    JOIN DBS d ON t.DB_ID = d.DB_ID
+                    WHERE d.NAME = %s AND t.TBL_NAME = %s
+                    ORDER BY p.PART_NAME
+                    LIMIT %s OFFSET %s
+                    """,
+                    (database_name, table_name, int(limit), int(offset)),
+                )
+                results = cursor.fetchall()
+                parts: List[Dict] = []
+                for row in results:
+                    parts.append({
+                        'partition_name': row['PART_NAME'],
+                        'partition_path': row['partition_path']
+                    })
+                return parts
+        except Exception as e:
+            logger.error(f"Failed to get paged partitions for {database_name}.{table_name}: {e}")
+            return []
+
+    def get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
+        """获取单表的 LOCATION（更高效，避免全量枚举）"""
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT s.LOCATION as table_path
+                    FROM TBLS t
+                    JOIN DBS d ON t.DB_ID = d.DB_ID
+                    JOIN SDS s ON t.SD_ID = s.SD_ID
+                    WHERE d.NAME = %s AND t.TBL_NAME = %s
+                    LIMIT 1
+                    """,
+                    (database_name, table_name),
+                )
+                row = cursor.fetchone()
+                return row['table_path'] if row and row.get('table_path') else None
+        except Exception as e:
+            logger.error(f"Failed to get table location for {database_name}.{table_name}: {e}")
+            return None
     
     def test_connection(self) -> Dict[str, any]:
         """测试连接并返回基本信息"""

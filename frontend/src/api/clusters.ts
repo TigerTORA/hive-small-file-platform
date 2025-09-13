@@ -10,6 +10,10 @@ export interface Cluster {
   hive_metastore_url: string
   hdfs_namenode_url: string
   hdfs_user: string
+  auth_type: string
+  hive_username?: string
+  hive_password?: string
+  yarn_resource_manager_url?: string
   small_file_threshold: number
   scan_enabled: boolean
   status: string
@@ -26,6 +30,10 @@ export interface ClusterCreate {
   hive_metastore_url: string
   hdfs_namenode_url: string
   hdfs_user?: string
+  auth_type?: string
+  hive_username?: string
+  hive_password?: string
+  yarn_resource_manager_url?: string
   small_file_threshold?: number
   scan_enabled?: boolean
 }

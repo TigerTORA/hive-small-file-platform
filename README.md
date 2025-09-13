@@ -268,6 +268,37 @@ SMALL_FILE_THRESHOLD=134217728
 - `POST /api/v1/tasks/{id}/execute` - 执行任务
 - `GET /api/v1/tasks/{id}/logs` - 获取任务日志
 
+### 扫描接口（严格模式默认启用）
+- `POST /api/v1/tables/scan`
+  - 用途：统一扫描入口（支持单库或单表）
+  - 请求体：`{ cluster_id, database_name?, table_name? }`
+  - 查询参数：
+    - `strict_real`（默认 `true`）：严格实连模式，MetaStore 或 HDFS 任一实连失败即终止，不降级 Mock。
+  - 行为：当提供 `database_name` 且不提供 `table_name` 时扫描该库；同时提供两者时扫描单表。
+
+- `POST /api/v1/tables/scan/{cluster_id}`
+  - 用途：发起集群级批量扫描（带进度追踪）
+  - 查询参数：
+    - `max_tables_per_db`（默认空）：每库最大扫描表数；为空表示不限制。
+    - `strict_real`（默认 `true`）：严格实连模式。
+  - 进度查询：
+    - `GET /api/v1/tables/scan-progress/{task_id}`（实时）
+    - `GET /api/v1/tables/scan-progress/cluster/{cluster_id}`（概览）
+
+- `POST /api/v1/tables/scan-real/{cluster_id}/{database_name}`
+  - 用途：对指定数据库执行严格实连扫描
+  - 查询参数：
+    - `max_tables`（默认 `0`）：`0` 或负值表示不限制；>0 则限制数量。
+    - `strict_real`（默认 `true`）
+
+- `GET /api/v1/tables/partition-metrics`
+  - 用途：查询分区表的分区级小文件统计
+  - 查询参数：
+    - `cluster_id`、`database_name`、`table_name`
+    - `page`（默认 `1`），`page_size`（默认 `50`，最大 `200`）
+    - `concurrency`（默认 `5`，1–20）：并发扫描分区数
+  - 说明：为提升性能，服务端对分区目录扫描采用线程池并发；返回按请求页排序。
+
 ## 监控告警
 
 ### 系统监控指标

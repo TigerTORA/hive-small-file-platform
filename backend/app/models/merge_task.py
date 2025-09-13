@@ -28,6 +28,15 @@ class MergeTask(Base):
     progress = Column(Float, default=0.0)  # 0.0 - 100.0
     current_phase = Column(String(100), nullable=True)  # e.g., "preparing", "merging", "validating"
     
+    # 详细进度跟踪字段
+    execution_phase = Column(String(50), nullable=True)  # 当前执行阶段
+    progress_percentage = Column(Float, default=0.0)  # 执行进度百分比
+    estimated_remaining_time = Column(Integer, nullable=True)  # 预计剩余时间（秒）
+    processed_files_count = Column(Integer, nullable=True)  # 已处理文件数
+    total_files_count = Column(Integer, nullable=True)  # 总文件数
+    yarn_application_id = Column(String(100), nullable=True)  # YARN任务ID
+    current_operation = Column(String(500), nullable=True)  # 当前操作描述
+    
     # Resource locking
     table_lock_acquired = Column(Boolean, default=False)
     lock_holder = Column(String(100), nullable=True)  # task ID or process ID that holds the lock

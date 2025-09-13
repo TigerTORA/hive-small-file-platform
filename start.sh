@@ -1,60 +1,87 @@
 #!/bin/bash
 
-echo "🚀 启动 Hive 小文件治理平台"
-echo "================================"
+# Hive Small File Platform 统一启动脚本
+# 用于确保端口配置正确且进程不冲突
 
-# 检查 Docker 是否安装
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker 未安装，请先安装 Docker"
+echo "🚀 Hive Small File Platform 启动脚本"
+echo "=================================="
+
+# 检查端口占用
+check_port() {
+    local port=$1
+    local service=$2
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
+        echo "⚠️  端口 $port 已被占用 ($service)"
+        echo "正在尝试停止占用进程..."
+        lsof -ti :$port | xargs kill -9 2>/dev/null || true
+        sleep 2
+    fi
+}
+
+# 停止现有进程
+echo "🔄 停止现有进程..."
+pkill -f "uvicorn.*app.main:app" 2>/dev/null || true
+pkill -f "python.*app.main" 2>/dev/null || true
+pkill -f "vite.*frontend" 2>/dev/null || true
+sleep 3
+
+# 检查并清理端口占用
+check_port 8000 "后端服务"
+check_port 3000 "前端服务"
+
+# 启动后端
+echo "🔧 启动后端服务 (端口: 8000)..."
+cd backend
+python -m app.main &
+BACKEND_PID=$!
+echo "后端进程 PID: $BACKEND_PID"
+
+# 等待后端启动
+echo "⏳ 等待后端服务启动..."
+sleep 5
+
+# 检查后端健康状态
+if curl -s http://localhost:8000/health > /dev/null; then
+    echo "✅ 后端服务启动成功"
+    # 显示后端配置信息
+    echo "📊 后端配置信息:"
+    curl -s http://localhost:8000/health | python3 -m json.tool
+else
+    echo "❌ 后端服务启动失败"
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose 未安装，请先安装 Docker Compose"
-    exit 1
-fi
+# 启动前端
+echo "🎨 启动前端服务 (端口: 3000)..."
+cd ../frontend
+npm run dev &
+FRONTEND_PID=$!
+echo "前端进程 PID: $FRONTEND_PID"
 
-# 停止可能运行的旧服务
-echo "🛑 停止旧服务..."
-docker-compose down
+# 等待前端启动
+echo "⏳ 等待前端服务启动..."
+sleep 8
 
-# 启动基础服务（数据库和缓存）
-echo "📦 启动数据库和 Redis..."
-docker run -d --name hive-platform-postgres \
-    -e POSTGRES_DB=hive_small_file_db \
-    -e POSTGRES_USER=postgres \
-    -e POSTGRES_PASSWORD=postgres \
-    -p 5432:5432 \
-    postgres:14 2>/dev/null || echo "PostgreSQL 已在运行"
-
-docker run -d --name hive-platform-redis \
-    -p 6379:6379 \
-    redis:6-alpine 2>/dev/null || echo "Redis 已在运行"
-
-# 等待数据库启动
-echo "⏳ 等待数据库启动..."
-sleep 10
-
-# 检查端口
-echo "🔍 检查端口占用..."
-if lsof -i :8000 >/dev/null 2>&1; then
-    echo "⚠️  端口 8000 被占用，请先停止占用进程"
-    lsof -i :8000
-fi
-
-if lsof -i :3000 >/dev/null 2>&1; then
-    echo "⚠️  端口 3000 被占用，请先停止占用进程"
-    lsof -i :3000
+# 检查前端健康状态
+if curl -s http://localhost:3000 > /dev/null; then
+    echo "✅ 前端服务启动成功"
+else
+    echo "⚠️  前端服务可能还在启动中..."
 fi
 
 echo ""
-echo "✅ 基础服务启动完成！"
+echo "🎉 启动完成!"
+echo "=================================="
+echo "📍 后端服务: http://localhost:8000"
+echo "📍 前端服务: http://localhost:3000"
+echo "📖 API文档: http://localhost:8000/docs"
 echo ""
-echo "📝 下一步手动启动应用："
-echo "   1. 后端：cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000"
-echo "   2. 前端：cd frontend && npm install && npm run dev"
+echo "💡 端口配置说明:"
+echo "   - 后端固定端口: 8000 (配置在 backend/.env)"
+echo "   - 前端固定端口: 3000 (配置在 frontend/.env)"
+echo "   - 日志中的动态端口(如50xxx)是客户端端口，非服务端口"
 echo ""
-echo "🌐 访问地址："
-echo "   - 前端界面: http://localhost:3000"
-echo "   - API 文档: http://localhost:8000/docs"
-echo ""
+echo "⚡ 使用 Ctrl+C 停止服务"
+
+# 等待用户中断
+wait

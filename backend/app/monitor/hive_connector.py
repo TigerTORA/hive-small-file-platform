@@ -133,6 +133,29 @@ class HiveMetastoreConnector(BaseMetastoreConnector):
         except Exception as e:
             logger.error(f"Failed to get partitions for table {database_name}.{table_name}: {e}")
             return []
+
+    def get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
+        """获取单表的 LOCATION（PostgreSQL MetaStore）"""
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT s.LOCATION as table_path
+                    FROM TBLS t
+                    JOIN DBS d ON t.DB_ID = d.DB_ID
+                    JOIN SDS s ON t.SD_ID = s.SD_ID
+                    WHERE d.NAME = %s AND t.TBL_NAME = %s
+                    LIMIT 1
+                    """,
+                    (database_name, table_name),
+                )
+                row = cursor.fetchone()
+                return row['table_path'] if row and row.get('table_path') else None
+        except Exception as e:
+            logger.error(f"Failed to get table location for {database_name}.{table_name}: {e}")
+            return None
     
     def test_connection(self) -> Dict[str, any]:
         """测试连接并返回基本信息"""

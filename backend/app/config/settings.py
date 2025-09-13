@@ -2,6 +2,11 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
+    # Server Configuration
+    SERVER_HOST: str = "localhost"
+    SERVER_PORT: int = 8000
+    RELOAD: bool = True
+    
     # Database
     DATABASE_URL: str = "sqlite:///./hive_small_file_db.db"
     
@@ -30,6 +35,9 @@ class Settings(BaseSettings):
 
     # Schema management (dev convenience only)
     AUTO_CREATE_SCHEMA: bool = True
+
+    # Demo mode: use simulated merge engine to validate flow without real Hive/HDFS
+    DEMO_MODE: bool = False
     
     class Config:
         env_file = ".env"

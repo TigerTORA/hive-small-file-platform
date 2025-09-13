@@ -232,6 +232,52 @@
         <el-form-item label="HDFS 用户">
           <el-input v-model="clusterForm.hdfs_user" placeholder="hdfs" />
         </el-form-item>
+        
+        <!-- Hive 认证配置 -->
+        <el-divider content-position="left">
+          <span style="color: #606266; font-weight: 500;">Hive 认证配置</span>
+        </el-divider>
+        
+        <el-form-item label="认证类型">
+          <el-select v-model="clusterForm.auth_type" placeholder="选择认证类型" @change="onAuthTypeChange">
+            <el-option label="无认证 (NONE)" value="NONE" />
+            <el-option label="LDAP 认证" value="LDAP" />
+          </el-select>
+        </el-form-item>
+        
+        <template v-if="clusterForm.auth_type === 'LDAP'">
+          <el-form-item label="Hive 用户名" prop="hive_username">
+            <el-input v-model="clusterForm.hive_username" placeholder="LDAP 用户名" />
+          </el-form-item>
+          <el-form-item label="Hive 密码" prop="hive_password">
+            <el-input 
+              v-model="clusterForm.hive_password" 
+              type="password" 
+              placeholder="LDAP 密码"
+              show-password
+            />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+              密码将被安全加密存储
+            </div>
+          </el-form-item>
+        </template>
+        
+        <!-- YARN 监控配置 -->
+        <el-divider content-position="left">
+          <span style="color: #606266; font-weight: 500;">YARN 监控配置</span>
+        </el-divider>
+        
+        <el-form-item label="Resource Manager">
+          <el-input 
+            v-model="clusterForm.yarn_resource_manager_url" 
+            placeholder="http://rm1:8088,http://rm2:8088" 
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            <div>支持 HA 配置，多个地址用逗号分隔</div>
+            <div>示例: http://192.168.0.106:8088,http://192.168.0.107:8088</div>
+          </div>
+        </el-form-item>
+        
         <el-form-item label="小文件阈值">
           <el-input-number v-model="clusterForm.small_file_threshold" :min="1024" :step="1024*1024" />
           <span style="margin-left: 8px; color: #909399;">字节 (默认: 128MB)</span>
@@ -319,6 +365,10 @@ const clusterForm = ref<ClusterCreate>({
   hive_metastore_url: '',
   hdfs_namenode_url: '',
   hdfs_user: 'hdfs',
+  auth_type: 'NONE',
+  hive_username: '',
+  hive_password: '',
+  yarn_resource_manager_url: '',
   small_file_threshold: 128 * 1024 * 1024,
   scan_enabled: true
 })
@@ -327,7 +377,35 @@ const clusterRules = {
   name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
   hive_host: [{ required: true, message: '请输入 Hive 主机地址', trigger: 'blur' }],
   hive_metastore_url: [{ required: true, message: '请输入 MetaStore URL', trigger: 'blur' }],
-  hdfs_namenode_url: [{ required: true, message: '请输入 HDFS/HttpFS 地址', trigger: 'blur' }]
+  hdfs_namenode_url: [{ required: true, message: '请输入 HDFS/HttpFS 地址', trigger: 'blur' }],
+  hive_username: [
+    { 
+      required: true, 
+      message: '请输入 Hive 用户名', 
+      trigger: 'blur',
+      validator: (rule: any, value: any, callback: any) => {
+        if (clusterForm.value.auth_type === 'LDAP' && !value) {
+          callback(new Error('使用 LDAP 认证时，用户名不能为空'))
+        } else {
+          callback()
+        }
+      }
+    }
+  ],
+  hive_password: [
+    { 
+      required: true, 
+      message: '请输入 Hive 密码', 
+      trigger: 'blur',
+      validator: (rule: any, value: any, callback: any) => {
+        if (clusterForm.value.auth_type === 'LDAP' && !value) {
+          callback(new Error('使用 LDAP 认证时，密码不能为空'))
+        } else {
+          callback()
+        }
+      }
+    }
+  ]
 }
 
 const clusterFormRef = ref()
@@ -392,6 +470,17 @@ const getClusterStat = (clusterId: number, type: string) => {
 
 const filterClusters = () => {
   // 过滤逻辑在计算属性中处理
+}
+
+const onAuthTypeChange = (authType: string) => {
+  if (authType === 'NONE') {
+    // 清空LDAP认证相关字段
+    clusterForm.value.hive_username = ''
+    clusterForm.value.hive_password = ''
+  }
+  
+  // 触发表单验证
+  clusterFormRef.value?.clearValidate(['hive_username', 'hive_password'])
 }
 
 const enterCluster = (clusterId: number) => {
@@ -587,6 +676,10 @@ const resetForm = () => {
     hive_metastore_url: '',
     hdfs_namenode_url: '',
     hdfs_user: 'hdfs',
+    auth_type: 'NONE',
+    hive_username: '',
+    hive_password: '',
+    yarn_resource_manager_url: '',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true
   }

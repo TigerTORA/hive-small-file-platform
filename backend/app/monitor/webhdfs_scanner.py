@@ -6,6 +6,7 @@ from urllib.parse import urljoin, urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
+from app.utils.webhdfs_client import WebHDFSClient
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ class WebHDFSScanner:
             if webhdfs_port == 14000:
                 self.is_httpfs = True
             self.webhdfs_base_url = f"http://{namenode_url}:{webhdfs_port}/webhdfs/v1"
+
+        # 统一客户端（带路径归一与多端口回退）
+        self._client = WebHDFSClient(self.webhdfs_base_url, user=self.user)
         
         # 设置认证方式
         if KERBEROS_AVAILABLE:
@@ -82,15 +86,13 @@ class WebHDFSScanner:
     def connect(self) -> bool:
         """测试WebHDFS连接"""
         try:
-            # 测试根目录访问
-            response = self._get_request("/", "LISTSTATUS")
-            if response.status_code == 200:
-                self._connected = True
-                logger.info(f"Connected to WebHDFS: {self.webhdfs_base_url}")
-                return True
+            ok, msg = self._client.test_connection()
+            self._connected = ok
+            if ok:
+                logger.info(f"Connected to WebHDFS via {self.webhdfs_base_url}")
             else:
-                logger.error(f"WebHDFS connection failed: HTTP {response.status_code}")
-                return False
+                logger.error(f"WebHDFS connection failed: {msg}")
+            return ok
         except Exception as e:
             logger.error(f"Failed to connect to WebHDFS: {e}")
             return False
@@ -98,7 +100,14 @@ class WebHDFSScanner:
     def disconnect(self):
         """关闭连接"""
         self._connected = False
-        self.session.close()
+        try:
+            self.session.close()
+        except Exception:
+            pass
+        try:
+            self._client.close()
+        except Exception:
+            pass
         logger.info("Disconnected from WebHDFS")
     
     def _normalize_path(self, path: str) -> str:
@@ -198,46 +207,16 @@ class WebHDFSScanner:
         }
         
         try:
-            # 先转换HDFS URI为HTTP路径用于调试
-            normalized_path = self._normalize_path(path)
-            logger.info(f"扫描路径: {path} -> {normalized_path}")
-            
-            # 检查路径是否存在
-            response = self._get_request(path, "GETFILESTATUS")
-            logger.info(f"路径状态检查: HTTP {response.status_code}")
-            
-            if response.status_code != 200:
-                error_msg = response.text[:500] if response.text else "No error details"
-                stats['error'] = f"Path does not exist or inaccessible: {path} (HTTP {response.status_code})"
-                logger.warning(f"路径不存在或无法访问: {path}, HTTP {response.status_code}")
-                logger.warning(f"HTTP响应内容: {error_msg}")
-                return stats
-            
-            # 递归遍历目录获取所有文件
-            file_sizes = []
-            for file_info in self._walk_directory(path):
-                if file_info['type'] == 'FILE':
-                    size = file_info['length']
-                    file_sizes.append(size)
-                    
-                    # 统计小文件
-                    if size < small_file_threshold:
-                        stats['small_files'] += 1
-                    
-                    # 文件大小分布统计
-                    size_range = self._get_size_range(size)
-                    stats['file_size_distribution'][size_range] = \
-                        stats['file_size_distribution'].get(size_range, 0) + 1
-            
-            # 计算统计信息
-            stats['total_files'] = len(file_sizes)
-            stats['total_size'] = sum(file_sizes)
-            stats['avg_file_size'] = stats['total_size'] / stats['total_files'] if file_sizes else 0.0
-            stats['scan_duration'] = time.time() - start_time
-            
-            logger.info(f"Scanned {path}: {stats['total_files']} files, "
-                       f"{stats['small_files']} small files, "
-                       f"{stats['total_size'] / (1024**3):.2f} GB total")
+            # 使用统一客户端做快速统计（优先 GETCONTENTSUMMARY，失败回退递归）
+            res = self._client.get_table_hdfs_stats(path, small_file_threshold)
+            if res.get('success'):
+                stats['total_files'] = int(res.get('total_files') or 0)
+                stats['small_files'] = int(res.get('small_files_count') or 0)
+                stats['total_size'] = int(res.get('total_size') or 0)
+                stats['avg_file_size'] = float(res.get('average_file_size') or 0.0)
+            else:
+                stats['error'] = res.get('error')
+                logger.warning(f"WebHDFS stats failed for {path}: {stats['error']}")
             
         except Exception as e:
             logger.error(f"Failed to scan directory {path}: {e}")

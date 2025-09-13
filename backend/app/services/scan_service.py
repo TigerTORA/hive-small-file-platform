@@ -112,7 +112,8 @@ class ScanTaskManager:
         error_message: str = None,
         total_tables_scanned: int = None,
         total_files_found: int = None,
-        total_small_files: int = None
+        total_small_files: int = None,
+        estimated_remaining_seconds: int = None,
     ):
         """更新任务进度"""
         with self._lock:
@@ -144,6 +145,33 @@ class ScanTaskManager:
                     if not key.startswith('_') and value is not None:
                         setattr(db_task, key, value)
                 db.commit()
+
+    def safe_update_progress(self, db: Session, task_id: str, **kwargs):
+        """安全更新进度：
+        - 仅透传已支持字段
+        - 忽略未知字段并记录 WARN 日志
+        - 任意异常将被捕获并记录，不中断主流程
+        """
+        allowed = {
+            'completed_items', 'current_item', 'total_items', 'status', 'error_message',
+            'total_tables_scanned', 'total_files_found', 'total_small_files',
+            'estimated_remaining_seconds'
+        }
+        passed = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+        ignored = [k for k in kwargs.keys() if k not in allowed]
+        if ignored:
+            try:
+                self.add_log(task_id, 'WARN', f'safe_update_progress 忽略未知字段: {ignored}', db=db)
+            except Exception:
+                pass
+        try:
+            return self.update_task_progress(db, task_id, **passed)
+        except Exception as e:
+            try:
+                self.add_log(task_id, 'WARN', f'safe_update_progress 更新失败: {e}', db=db)
+            except Exception:
+                pass
+            return None
     
     def complete_task(self, db: Session, task_id: str, success: bool = True, error_message: str = None):
         """完成任务"""
@@ -169,7 +197,8 @@ class ScanTaskManager:
                     db_task.error_message = error_message
                 db.commit()
     
-    def scan_cluster_with_progress(self, db: Session, cluster_id: int, max_tables_per_db: int = 20) -> str:
+    from typing import Optional
+    def scan_cluster_with_progress(self, db: Session, cluster_id: int, max_tables_per_db: Optional[int] = None, strict_real: bool = False) -> str:
         """执行集群扫描（带进度追踪）"""
         # 获取集群信息
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -187,7 +216,7 @@ class ScanTaskManager:
         # 在后台线程中执行扫描
         def run_scan():
             try:
-                self._execute_cluster_scan(db, task, cluster, max_tables_per_db)
+                self._execute_cluster_scan(db, task, cluster, max_tables_per_db, strict_real)
             except Exception as e:
                 self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db)
                 self.complete_task(db, task.task_id, success=False, error_message=str(e))
@@ -198,11 +227,11 @@ class ScanTaskManager:
         
         return task.task_id
     
-    def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: int):
+    def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: Optional[int], strict_real: bool):
         """执行实际的集群扫描"""
         scan_start_time = time.time()
         self.add_log(task.task_id, 'INFO', f'🚀 开始扫描集群: {cluster.name}', db=db)
-        self.update_task_progress(db, task.task_id, status='running')
+        self.safe_update_progress(db, task.task_id, status='running')
         
         try:
             # 步骤1: 测试连接
@@ -237,13 +266,17 @@ class ScanTaskManager:
                     self.add_log(task.task_id, 'INFO', f'✅ HDFS连接成功 (耗时: {hdfs_connect_time:.2f}秒)', db=db)
                     scanner.hdfs_scanner.disconnect()
                 else:
+                    if strict_real:
+                        raise Exception('HDFS连接失败（严格模式），中止扫描')
                     self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败，启用Mock模式继续扫描', db=db)
             except Exception as hdfs_error:
+                if strict_real:
+                    raise
                 self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败: {str(hdfs_error)}', db=db)
                 self.add_log(task.task_id, 'INFO', f'🔄 启用Mock HDFS模式进行演示扫描', db=db)
             
             # 步骤3: 开始批量扫描
-            self.update_task_progress(db, task.task_id, total_items=len(databases))
+            self.safe_update_progress(db, task.task_id, total_items=len(databases))
             estimated_total_time = len(databases) * 3  # 估算每个数据库3秒
             self.add_log(task.task_id, 'INFO', f'⏱️ 预计总扫描时间: {estimated_total_time}秒，每数据库限制扫描{max_tables_per_db}张表', db=db)
             
@@ -256,7 +289,7 @@ class ScanTaskManager:
             # 扫描每个数据库
             for i, database_name in enumerate(databases, 1):
                 db_scan_start = time.time()
-                self.update_task_progress(
+                self.safe_update_progress(
                     db, task.task_id, 
                     completed_items=i-1,
                     current_item=f'扫描数据库: {database_name}'
@@ -265,7 +298,7 @@ class ScanTaskManager:
                 
                 try:
                     # 扫描数据库中的表
-                    result = scanner.scan_database_tables(db, database_name, max_tables=max_tables_per_db)
+                    result = scanner.scan_database_tables(db, database_name, max_tables=max_tables_per_db, strict_real=strict_real)
                     db_scan_time = time.time() - db_scan_start
                     
                     tables_scanned = result.get('tables_scanned', 0)
@@ -286,7 +319,6 @@ class ScanTaskManager:
                     total_tables_scanned += tables_scanned
                     total_files_found += files_found
                     total_small_files += small_files
-                    successful_databases += 1
                     
                     # 记录详细的扫描过程信息
                     self.add_log(task.task_id, 'INFO', f'  └─ MetaStore查询: {metastore_time:.2f}秒, 发现{original_table_count}张表', database_name=database_name, db=db)
@@ -333,11 +365,13 @@ class ScanTaskManager:
                     avg_time_per_db = (time.time() - scan_start_time) / i
                     estimated_remaining = remaining_dbs * avg_time_per_db
                     
-                    self.update_task_progress(
+                    self.safe_update_progress(
                         db, task.task_id,
                         completed_items=i,
                         estimated_remaining_seconds=int(estimated_remaining)
                     )
+                    # 确认该数据库扫描成功
+                    successful_databases += 1
                     
                 except Exception as db_error:
                     failed_databases += 1
@@ -361,7 +395,7 @@ class ScanTaskManager:
             avg_time_per_db = total_scan_time / len(databases) if databases else 0
             avg_time_per_table = total_scan_time / total_tables_scanned if total_tables_scanned else 0
             
-            self.update_task_progress(
+            self.safe_update_progress(
                 db, task.task_id,
                 completed_items=len(databases),
                 total_tables_scanned=total_tables_scanned,

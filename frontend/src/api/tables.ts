@@ -51,6 +51,27 @@ export const tablesApi = {
     return api.get('/tables/metrics', { params })
   },
 
+  // 获取分区指标（分区表）
+  getPartitionMetrics(
+    clusterId: number,
+    databaseName: string,
+    tableName: string,
+    page = 1,
+    pageSize = 50,
+    concurrency = 5
+  ): Promise<{ items: any[], total: number, page: number, page_size: number }>{
+    return api.get('/tables/partition-metrics', {
+      params: { 
+        cluster_id: clusterId, 
+        database_name: databaseName, 
+        table_name: tableName, 
+        page, 
+        page_size: pageSize,
+        concurrency
+      }
+    })
+  },
+
   // 获取表的小文件指标 (不分页)
   getMetrics(clusterId: number, databaseName?: string): Promise<TableMetric[]> {
     const params: any = { cluster_id: clusterId }

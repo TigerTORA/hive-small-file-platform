@@ -77,7 +77,7 @@
           {{ row.last_scan_time ? formatTime(row.last_scan_time) : '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
           <el-button
             size="small"
@@ -92,15 +92,6 @@
             :disabled="scanning"
           >
             扫描
-          </el-button>
-          <el-button
-            size="small"
-            type="success"
-            @click="createMergeTask(row)"
-            :disabled="row.small_file_count === 0"
-          >
-            <el-icon><MagicStick /></el-icon>
-            智能合并
           </el-button>
         </template>
       </el-table-column>
@@ -124,9 +115,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, MagicStick } from '@element-plus/icons-vue'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import { tablesApi } from '@/api/tables'
-import { tasksApi } from '@/api/tasks'
 import dayjs from 'dayjs'
 
 interface Props {
@@ -260,67 +250,6 @@ const viewTableDetail = (table: any) => {
   })
 }
 
-const createMergeTask = async (table: any) => {
-  try {
-    // 显示智能策略推荐信息
-    const content = `
-      <div style="margin: 10px 0;">
-        <p><strong>表信息：</strong></p>
-        <ul style="margin: 5px 0; padding-left: 20px;">
-          <li>表名：${table.database_name}.${table.table_name}</li>
-          <li>文件数：${table.file_count}</li>
-          <li>小文件数：${table.small_file_count}</li>
-          <li>总大小：${formatSize(table.total_size)}</li>
-        </ul>
-        <p style="margin-top: 15px; color: #409eff;">
-          <i class="el-icon-magic-stick"></i> 
-          系统将自动选择最佳合并策略
-        </p>
-      </div>
-    `
-    
-    await ElMessageBox.confirm(
-      content,
-      '智能合并任务',
-      {
-        confirmButtonText: '创建智能任务',
-        cancelButtonText: '取消',
-        type: 'info',
-        dangerouslyUseHTMLString: true
-      }
-    )
-    
-    // 创建智能合并任务
-    scanning.value = true
-    
-    const result = await tasksApi.createSmart({
-      cluster_id: props.clusterId,
-      database_name: table.database_name,
-      table_name: table.table_name
-    })
-    
-    // 显示策略选择结果
-    const strategyInfo = result.strategy_info
-    ElMessage({
-      type: 'success',
-      duration: 5000,
-      message: `智能任务创建成功！\n推荐策略：${strategyInfo.recommended_strategy}\n原因：${strategyInfo.strategy_reason}`,
-      showClose: true
-    })
-    
-    // 可选：切换到任务管理标签页
-    // 这里可以触发父组件的标签页切换
-    
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      console.error('Failed to create smart merge task:', error)
-      const errorMsg = error.response?.data?.detail || error.message || '创建智能任务失败'
-      ElMessage.error(errorMsg)
-    }
-  } finally {
-    scanning.value = false
-  }
-}
 
 const handleSizeChange = (size: number) => {
   pageSize.value = size

@@ -1,7 +1,8 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const baseURL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8899/api/v1'
+// 本地开发与容器统一：默认使用相对路径 /api/v1，由 Vite 代理（开发）或反代（生产/容器）转发到后端
+const baseURL = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1'
 const api = axios.create({ baseURL, timeout: 30000 })
 
 // 请求拦截器

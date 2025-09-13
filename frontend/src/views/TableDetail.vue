@@ -130,6 +130,89 @@
           </el-row>
         </div>
 
+        <!-- 分区小文件详情 -->
+        <div class="info-section" v-if="tableMetric.is_partitioned">
+          <div class="partitions-header">
+            <h3>分区小文件详情</h3>
+            <div class="header-actions">
+              <el-button size="small" @click="refreshPartitionMetrics" :loading="partitionLoading">
+                <el-icon><Refresh /></el-icon>
+                刷新分区统计
+              </el-button>
+              <div class="concurrency-control">
+                <span class="label">并发度</span>
+                <el-input-number
+                  v-model="partitionConcurrency"
+                  :min="1"
+                  :max="20"
+                  :step="1"
+                  size="small"
+                  @change="loadPartitionMetrics"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div v-if="partitionLoading" class="loading-container">
+            <el-skeleton :rows="5" animated />
+          </div>
+
+          <template v-else>
+            <el-alert 
+              v-if="partitionError"
+              :title="partitionError"
+              type="error"
+              :closable="false"
+              style="margin-bottom: 12px;"
+            />
+
+            <div class="partitions-summary">
+              <span>共 {{ partitionTotal }} 个分区</span>
+            </div>
+
+            <el-table :data="partitionItems" stripe border size="small">
+              <el-table-column prop="partition_spec" label="分区" min-width="220" />
+              <el-table-column prop="partition_path" label="路径" min-width="300" show-overflow-tooltip />
+              <el-table-column prop="file_count" label="文件数" width="100" />
+              <el-table-column prop="small_file_count" label="小文件数" width="110">
+                <template #default="scope">
+                  <span :style="{ color: scope.row.small_file_count > 0 ? '#F56C6C' : '#67C23A' }">
+                    {{ scope.row.small_file_count }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="小文件占比" width="120">
+                <template #default="scope">
+                  <el-progress 
+                    :percentage="calcPartitionSmallRatio(scope.row)"
+                    :color="getProgressColor(calcPartitionSmallRatio(scope.row))"
+                    :show-text="true"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="平均文件大小" width="140">
+                <template #default="scope">{{ formatFileSize(scope.row.avg_file_size || 0) }}</template>
+              </el-table-column>
+              <el-table-column label="总大小" width="140">
+                <template #default="scope">{{ formatFileSize(scope.row.total_size || 0) }}</template>
+              </el-table-column>
+            </el-table>
+
+            <div class="partitions-actions">
+              <el-pagination
+                background
+                layout="prev, pager, next, sizes, total"
+                :total="partitionTotal"
+                :current-page="partitionPage"
+                :page-size="partitionPageSize"
+                :page-sizes="[50, 100, 200]"
+                @size-change="handlePartitionSizeChange"
+                @current-change="handlePartitionPageChange"
+              />
+            </div>
+          </template>
+        </div>
+
         <!-- 优化建议 -->
         <div class="info-section">
           <h3>智能优化建议</h3>
@@ -263,6 +346,15 @@ const creating = ref(false)
 const showMergeDialog = ref(false)
 const tableMetric = ref<TableMetric | null>(null)
 
+// 分区小文件统计
+const partitionLoading = ref(false)
+const partitionError = ref('')
+const partitionItems = ref<any[]>([])
+const partitionTotal = ref(0)
+const partitionPage = ref(1)
+const partitionPageSize = ref(50)
+const partitionConcurrency = ref(5)
+
 const mergeForm = ref<MergeTaskCreate>({
   cluster_id: 0,
   task_name: '',
@@ -317,6 +409,51 @@ const refreshTableInfo = async () => {
     console.error('Failed to trigger scan:', error)
     ElMessage.error('触发扫描失败')
   }
+}
+
+const loadPartitionMetrics = async () => {
+  if (!tableMetric.value?.is_partitioned) return
+  partitionLoading.value = true
+  partitionError.value = ''
+  try {
+    const { items, total } = await tablesApi.getPartitionMetrics(
+      clusterId.value,
+      database.value,
+      tableName.value,
+      partitionPage.value,
+      partitionPageSize.value,
+      partitionConcurrency.value
+    )
+    partitionItems.value = items || []
+    partitionTotal.value = total || 0
+  } catch (e: any) {
+    console.error('Failed to load partition metrics:', e)
+    partitionError.value = e?.message || '加载分区统计失败'
+  } finally {
+    partitionLoading.value = false
+  }
+}
+
+const refreshPartitionMetrics = async () => {
+  await loadPartitionMetrics()
+}
+
+const handlePartitionSizeChange = async (size: number) => {
+  partitionPageSize.value = size
+  partitionPage.value = 1
+  await loadPartitionMetrics()
+}
+
+const handlePartitionPageChange = async (page: number) => {
+  partitionPage.value = page
+  await loadPartitionMetrics()
+}
+
+const calcPartitionSmallRatio = (row: any): number => {
+  const files = Number(row?.file_count || 0)
+  const small = Number(row?.small_file_count || 0)
+  if (!files) return 0
+  return Math.round((small / files) * 100)
 }
 
 const createMergeTask = async () => {
@@ -474,6 +611,8 @@ const getPartitionAdvice = (): string | null => {
 
 onMounted(() => {
   loadTableInfo()
+  // 延迟加载分区详情，避免与表信息并发冲突
+  setTimeout(() => loadPartitionMetrics(), 0)
 })
 </script>
 
@@ -578,4 +717,32 @@ onMounted(() => {
   margin-bottom: 6px;
   color: #606266;
 }
+
+.partitions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.partitions-summary {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #606266;
+}
+
+.partitions-actions {
+  margin-top: 10px;
+  text-align: center;
+}
 </style>
+.concurrency-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.concurrency-control .label {
+  color: #606266;
+  font-size: 12px;
+}

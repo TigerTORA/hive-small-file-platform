@@ -8,8 +8,14 @@ from pyhive import hive
 from app.engines.base_engine import BaseMergeEngine
 from app.models.merge_task import MergeTask
 from app.models.cluster import Cluster
-from app.monitor.hdfs_scanner import HDFSScanner
 from app.monitor.hive_connector import HiveMetastoreConnector
+from app.utils.webhdfs_client import WebHDFSClient
+from app.config.database import SessionLocal
+from app.models.table_metric import TableMetric
+from app.services.path_resolver import PathResolver
+from app.utils.yarn_monitor import YarnResourceManagerMonitor
+from app.utils.encryption import decrypt_cluster_password
+from app.utils.merge_logger import MergeTaskLogger, MergePhase, MergeLogLevel
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +28,33 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     
     def __init__(self, cluster: Cluster):
         super().__init__(cluster)
-        self.hdfs_scanner = HDFSScanner(cluster.hdfs_namenode_url, cluster.hdfs_user)
+        # 使用 WebHDFSClient 进行文件统计，移除对 HDFSScanner 的依赖
+        self.hdfs_scanner = None
         self.metastore_connector = HiveMetastoreConnector(cluster.hive_metastore_url)
         self.progress_callback: Optional[Callable[[str, str], None]] = None
+        
+        # 初始化WebHDFS客户端用于精确的文件统计
+        self.webhdfs_client = WebHDFSClient(
+            namenode_url=cluster.hdfs_namenode_url,
+            user=cluster.hdfs_user or "hdfs"
+        )
+        
+        # 初始化YARN监控器（如果配置了YARN RM URL）
+        self.yarn_monitor = None
+        if cluster.yarn_resource_manager_url:
+            yarn_urls = [url.strip() for url in cluster.yarn_resource_manager_url.split(',')]
+            self.yarn_monitor = YarnResourceManagerMonitor(yarn_urls)
+        
+        # 解密LDAP密码
+        self.hive_password = None
+        if cluster.hive_password:
+            # 解密失败时回退到明文，以兼容直接存放明文密码的环境
+            try:
+                self.hive_password = decrypt_cluster_password(cluster)
+            except Exception:
+                self.hive_password = None
+            if not self.hive_password:
+                self.hive_password = cluster.hive_password
     
     def set_progress_callback(self, callback: Callable[[str, str], None]):
         """设置进度回调函数"""
@@ -35,6 +65,37 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         if self.progress_callback:
             self.progress_callback(phase, message)
         logger.info(f"[{phase}] {message}")
+    
+    def _update_task_progress(self, task: MergeTask, db_session: Session, 
+                             execution_phase: str = None, 
+                             progress_percentage: float = None,
+                             estimated_remaining_time: int = None,
+                             processed_files_count: int = None,
+                             total_files_count: int = None,
+                             yarn_application_id: str = None,
+                             current_operation: str = None):
+        """更新任务的详细进度信息到数据库"""
+        try:
+            if execution_phase is not None:
+                task.execution_phase = execution_phase
+            if progress_percentage is not None:
+                task.progress_percentage = progress_percentage
+            if estimated_remaining_time is not None:
+                task.estimated_remaining_time = estimated_remaining_time
+            if processed_files_count is not None:
+                task.processed_files_count = processed_files_count
+            if total_files_count is not None:
+                task.total_files_count = total_files_count
+            if yarn_application_id is not None:
+                task.yarn_application_id = yarn_application_id
+            if current_operation is not None:
+                task.current_operation = current_operation
+            
+            db_session.commit()
+            logger.debug(f"Updated task {task.id} progress: {execution_phase} - {progress_percentage}%")
+        except Exception as e:
+            logger.error(f"Failed to update task progress: {e}")
+            db_session.rollback()
     
     def validate_task(self, task: MergeTask) -> Dict[str, Any]:
         """验证合并任务是否可执行"""
@@ -84,8 +145,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         return result
     
     def execute_merge(self, task: MergeTask, db_session: Session) -> Dict[str, Any]:
-        """执行安全文件合并"""
+        """执行安全文件合并（带详尽日志记录）"""
         start_time = time.time()
+        
+        # 初始化详尽日志记录器
+        merge_logger = MergeTaskLogger(task, db_session)
+        
         result = {
             'success': False,
             'files_before': 0,
@@ -95,7 +160,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             'message': '',
             'sql_executed': [],
             'temp_table_created': '',
-            'backup_table_created': ''
+            'backup_table_created': '',
+            'log_summary': {},
+            'detailed_logs': []
         }
         
         temp_table_name = self._generate_temp_table_name(task.table_name)
@@ -104,55 +171,203 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         try:
             # 更新任务状态为运行中
             self.update_task_status(task, 'running', db_session=db_session)
-            self.log_task_event(task, 'INFO', f'Starting safe merge with temp table strategy', db_session=db_session)
+            merge_logger.start_phase(MergePhase.INITIALIZATION, "初始化安全合并任务", {
+                "temp_table_name": temp_table_name,
+                "backup_table_name": backup_table_name,
+                "merge_strategy": "safe_hive_engine"
+            })
+            
+            # 更新进度：初始化阶段
+            self._update_task_progress(
+                task, db_session, 
+                execution_phase="initialization",
+                progress_percentage=5.0,
+                current_operation="初始化安全合并任务"
+            )
             self._report_progress('initializing', 'Starting safe merge with temporary table strategy')
             
             # 建立连接
+            merge_logger.start_phase(MergePhase.CONNECTION_TEST, "建立Hive、HDFS、YARN连接")
             self._report_progress('connecting', 'Establishing connections to Hive and HDFS')
+            
             if not self._test_connections():
+                merge_logger.end_phase(MergePhase.CONNECTION_TEST, "连接测试失败", success=False, details={
+                    "hive_host": self.cluster.hive_host,
+                    "hdfs_namenode": self.cluster.hdfs_namenode_url,
+                    "yarn_rm": self.cluster.yarn_resource_manager_url
+                })
                 raise Exception('Failed to connect to Hive or HDFS')
             
+            merge_logger.end_phase(MergePhase.CONNECTION_TEST, "所有连接测试成功", success=True)
+            
+            # 更新进度：连接测试完成
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="connection_test",
+                progress_percentage=10.0,
+                current_operation="连接测试完成"
+            )
+            
             # 获取合并前的文件统计
+            merge_logger.start_phase(MergePhase.FILE_ANALYSIS, "分析当前文件结构")
             self._report_progress('analyzing', 'Analyzing current file structure')
-            files_before = self._get_file_count(task.database_name, task.table_name, task.partition_filter)
+            
+            # 更新进度：文件分析阶段
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="file_analysis", 
+                progress_percentage=15.0,
+                current_operation="分析当前文件结构"
+            )
+            
+            files_before = self._get_file_count_with_logging(task.database_name, task.table_name, 
+                                                           task.partition_filter, merge_logger)
             result['files_before'] = files_before
-            self.log_task_event(task, 'INFO', f'Files before merge: {files_before}', db_session=db_session)
+            
+            merge_logger.log_file_statistics(
+                MergePhase.FILE_ANALYSIS, 
+                f"{task.database_name}.{task.table_name}",
+                files_before=files_before
+            )
+            merge_logger.end_phase(MergePhase.FILE_ANALYSIS, f"文件分析完成，当前{files_before if files_before is not None else '未知'}个文件")
+            
+            # 更新进度：文件分析完成，包含文件数信息
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="file_analysis",
+                progress_percentage=25.0,
+                total_files_count=files_before,
+                current_operation=f"文件分析完成，发现{files_before if files_before is not None else '未知'}个文件"
+            )
             
             # 第一步：创建临时表
+            merge_logger.start_phase(MergePhase.TEMP_TABLE_CREATION, f"创建临时表: {temp_table_name}")
             self._report_progress('creating_temp_table', f'Creating temporary table: {temp_table_name}')
-            self.log_task_event(task, 'INFO', f'Creating temporary table: {temp_table_name}', db_session=db_session)
-            create_temp_sql = self._create_temp_table(task, temp_table_name)
+            
+            # 更新进度：创建临时表阶段
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="temp_table_creation",
+                progress_percentage=35.0,
+                current_operation=f"创建临时表: {temp_table_name}"
+            )
+            
+            create_temp_sql = self._create_temp_table_with_logging(task, temp_table_name, merge_logger)
             result['sql_executed'].extend(create_temp_sql)
             result['temp_table_created'] = temp_table_name
             
+            merge_logger.end_phase(MergePhase.TEMP_TABLE_CREATION, f"临时表创建完成: {temp_table_name}")
+            
+            # 更新进度：临时表创建完成
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="temp_table_creation", 
+                progress_percentage=45.0,
+                current_operation=f"临时表创建完成: {temp_table_name}"
+            )
+            
             # 第二步：验证临时表数据
+            merge_logger.start_phase(MergePhase.DATA_VALIDATION, "验证临时表数据完整性")
             self._report_progress('validating', 'Validating temporary table data integrity')
-            self.log_task_event(task, 'INFO', 'Validating temporary table data', db_session=db_session)
+            
+            # 更新进度：数据验证阶段
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="data_validation",
+                progress_percentage=55.0,
+                current_operation="验证临时表数据完整性"
+            )
+            
             validation_result = self._validate_temp_table_data(task, temp_table_name)
+            
+            merge_logger.log_data_validation(
+                MergePhase.DATA_VALIDATION, "行数一致性检查",
+                validation_result['original_count'], validation_result['temp_count'],
+                validation_result['valid'], details=validation_result
+            )
+            
             if not validation_result['valid']:
+                merge_logger.end_phase(MergePhase.DATA_VALIDATION, "数据验证失败", success=False)
                 raise Exception(f'Temporary table validation failed: {validation_result["message"]}')
+            
+            merge_logger.end_phase(MergePhase.DATA_VALIDATION, "数据验证通过")
             
             # 获取合并后的文件统计（从临时表）
             files_after = self._get_temp_table_file_count(task.database_name, temp_table_name, task.partition_filter)
             result['files_after'] = files_after
-            self.log_task_event(task, 'INFO', f'Files after merge: {files_after}', db_session=db_session)
+            
+            merge_logger.log_file_statistics(
+                MergePhase.DATA_VALIDATION, temp_table_name,
+                files_after=files_after
+            )
             
             # 第三步：原子切换表（关键步骤）
+            merge_logger.start_phase(MergePhase.ATOMIC_SWAP, "执行原子表切换")
             self._report_progress('atomic_swap', 'Performing atomic table swap')
-            self.log_task_event(task, 'INFO', 'Starting atomic table swap', db_session=db_session)
-            swap_sql = self._atomic_table_swap(task, temp_table_name, backup_table_name)
+            
+            # 更新进度：原子切换阶段
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="atomic_swap",
+                progress_percentage=75.0,
+                processed_files_count=files_after,
+                current_operation="执行原子表切换"
+            )
+            
+            swap_sql = self._atomic_table_swap_with_logging(task, temp_table_name, backup_table_name, merge_logger)
             result['sql_executed'].extend(swap_sql)
             result['backup_table_created'] = backup_table_name
             
+            merge_logger.end_phase(MergePhase.ATOMIC_SWAP, "原子表切换完成")
+            
+            # 更新进度：原子切换完成
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="atomic_swap",
+                progress_percentage=85.0,
+                current_operation="原子表切换完成"
+            )
+            
+            # 切换完成后，重新统计一次目标表文件数，确保展示准确
+            try:
+                files_after_actual = self._get_file_count_with_logging(
+                    task.database_name, task.table_name, task.partition_filter, merge_logger
+                )
+                if isinstance(files_after_actual, int):
+                    files_after = files_after_actual
+                    result['files_after'] = files_after
+            except Exception as _:
+                pass
+
             # 计算节省的空间（简化估算）
-            if files_before > files_after:
+            if isinstance(files_before, int) and isinstance(files_after, int) and files_before > files_after:
                 result['size_saved'] = (files_before - files_after) * 64 * 1024 * 1024  # 假设每个文件平均64MB
             
             result['success'] = True
             result['duration'] = time.time() - start_time
-            result['message'] = f'Safe merge completed successfully. Files reduced from {files_before} to {files_after}'
+            result['message'] = (
+                f"Safe merge completed successfully. Files reduced from "
+                f"{files_before if files_before is not None else 'NaN'} to {files_after if files_after is not None else 'NaN'}"
+            )
+            result['log_summary'] = merge_logger.get_log_summary()
             
-            self._report_progress('completed', f'Safe merge completed successfully. Files: {files_before} → {files_after}')
+            merge_logger.log_task_completion(True, int(result['duration'] * 1000), {
+                "files_before": files_before,
+                "files_after": files_after,
+                "files_reduced": files_before - files_after,
+                "size_saved": result['size_saved']
+            })
+            
+            self._report_progress('completed', f"Safe merge completed successfully. Files: {files_before if files_before is not None else 'NaN'} → {files_after if files_after is not None else 'NaN'}")
+            
+            # 更新进度：任务完成
+            self._update_task_progress(
+                task, db_session,
+                execution_phase="completion",
+                progress_percentage=100.0,
+                processed_files_count=files_after,
+                current_operation=f"合并完成：{files_before if files_before is not None else 'NaN'} → {files_after if files_after is not None else 'NaN'} 文件"
+            )
             
             # 更新任务状态为成功
             self.update_task_status(
@@ -285,43 +500,79 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             return 600  # 默认10分钟
     
     def _test_connections(self) -> bool:
-        """测试连接"""
+        """测试连接：Hive 成功即可放行，HDFS 失败仅告警"""
+        # 1) HDFS/HttpFS（不作为阻塞条件）
         try:
-            # 测试 HDFS 连接
-            if not self.hdfs_scanner.connect():
-                return False
-            
-            # 测试 Hive 连接
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=self.cluster.hive_database or 'default'
-            )
-            cursor = conn.cursor()
-            cursor.execute('SELECT 1')
-            cursor.close()
-            conn.close()
-            
+            ok, msg = self.webhdfs_client.test_connection()
+            if not ok:
+                logger.warning(f"WebHDFS test failed: {msg} (non-blocking)")
+        except Exception as e:
+            logger.warning(f"WebHDFS test exception: {e} (non-blocking)")
+
+        # 2) Hive（必须成功）
+        try:
+            hive_conn_params = {
+                'host': self.cluster.hive_host,
+                'port': self.cluster.hive_port,
+                'database': self.cluster.hive_database or 'default'
+            }
+            if (self.cluster.auth_type or '').upper() == "LDAP" and self.cluster.hive_username:
+                hive_conn_params['username'] = self.cluster.hive_username
+                if self.hive_password:
+                    hive_conn_params['password'] = self.hive_password
+                hive_conn_params['auth'] = 'LDAP'
+                logger.info(f"Using LDAP authentication for user: {self.cluster.hive_username}")
+
+            conn = hive.Connection(**hive_conn_params)
+            cursor = conn.cursor(); cursor.execute('SELECT 1'); cursor.fetchall()
+            cursor.close(); conn.close()
+            logger.info("Hive connection test passed")
             return True
         except Exception as e:
-            logger.error(f"Connection test failed: {e}")
+            logger.error(f"Hive connection test failed: {e}")
             return False
     
+    def _get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
+        """获取表的HDFS位置（优先MetaStore，其次HS2，最后默认路径）"""
+        try:
+            return PathResolver.get_table_location(self.cluster, database_name, table_name)
+        except Exception as e:
+            logger.error(f"Failed to resolve table location: {e}")
+            return None
+
+    def _create_hive_connection(self, database_name: str = None):
+        """创建Hive连接（支持LDAP认证）"""
+        hive_conn_params = {
+            'host': self.cluster.hive_host,
+            'port': self.cluster.hive_port,
+            'database': database_name or self.cluster.hive_database or 'default'
+        }
+        
+        # 如果配置了LDAP认证
+        if self.cluster.auth_type == "LDAP" and self.cluster.hive_username:
+            hive_conn_params['username'] = self.cluster.hive_username
+            if self.hive_password:
+                hive_conn_params['password'] = self.hive_password
+            hive_conn_params['auth'] = 'LDAP'
+            logger.debug(f"Creating LDAP connection for user: {self.cluster.hive_username}")
+        
+        return hive.Connection(**hive_conn_params)
+
     def _cleanup_connections(self):
         """清理连接"""
         try:
-            self.hdfs_scanner.disconnect()
+            if self.hdfs_scanner:
+                self.hdfs_scanner.disconnect()
+            self.webhdfs_client.close()
+            if self.yarn_monitor:
+                self.yarn_monitor.close()
         except Exception as e:
             logger.warning(f"Failed to cleanup connections: {e}")
     
     def _table_exists(self, database_name: str, table_name: str) -> bool:
         """检查表是否存在"""
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=database_name
-            )
+            conn = self._create_hive_connection(database_name)
             cursor = conn.cursor()
             cursor.execute(f'SHOW TABLES LIKE "{table_name}"')
             result = cursor.fetchone()
@@ -334,11 +585,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     def _is_partitioned_table(self, database_name: str, table_name: str) -> bool:
         """检查表是否为分区表"""
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=database_name
-            )
+            conn = self._create_hive_connection(database_name)
             cursor = conn.cursor()
             cursor.execute(f'DESCRIBE FORMATTED {table_name}')
             
@@ -360,11 +607,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     def _get_table_partitions(self, database_name: str, table_name: str) -> List[str]:
         """获取表的分区列表"""
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=database_name
-            )
+            conn = self._create_hive_connection(database_name)
             cursor = conn.cursor()
             cursor.execute(f'SHOW PARTITIONS {table_name}')
             partitions = [row[0] for row in cursor.fetchall()]
@@ -404,11 +647,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         sql_statements = []
         
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=task.database_name
-            )
+            conn = self._create_hive_connection(task.database_name)
             cursor = conn.cursor()
             
             # 设置 Hive 合并参数
@@ -467,11 +706,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         }
         
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=task.database_name
-            )
+            conn = self._create_hive_connection(task.database_name)
             cursor = conn.cursor()
             
             # 检查原表行数
@@ -510,11 +745,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         sql_statements = []
         
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=task.database_name
-            )
+            conn = self._create_hive_connection(task.database_name)
             cursor = conn.cursor()
             
             # 第一步：将原表重命名为备份表
@@ -543,11 +774,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         sql_statements = []
         
         try:
-            conn = hive.Connection(
-                host=self.cluster.hive_host,
-                port=self.cluster.hive_port,
-                database=task.database_name
-            )
+            conn = self._create_hive_connection(task.database_name)
             cursor = conn.cursor()
             
             # 检查备份表是否存在，如果存在则恢复
@@ -578,46 +805,262 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         
         return sql_statements
     
-    def _get_file_count(self, database_name: str, table_name: str, partition_filter: Optional[str] = None) -> int:
-        """获取表的文件数量"""
+    def _get_file_count(self, database_name: str, table_name: str, partition_filter: Optional[str] = None) -> Optional[int]:
+        """获取表的文件数量（使用WebHDFS精确统计）"""
         try:
-            # 构建表路径
-            table_path = self._build_table_path(database_name, table_name)
+            # 获取表的HDFS路径
+            table_location = self._get_table_location(database_name, table_name)
+            if not table_location:
+                logger.error(f"Could not get table location for {database_name}.{table_name}")
+                return None
             
-            if partition_filter:
-                # 如果有分区过滤器，需要构建具体的分区路径
-                # 这里简化处理，实际应该解析 partition_filter 构建正确的路径
-                pass
+            logger.info(f"Getting file count for table {database_name}.{table_name} at location: {table_location}")
             
-            # 使用 HDFS 扫描器获取文件数量
-            stats = self.hdfs_scanner.scan_directory(table_path, self.cluster.small_file_threshold or 134217728)
-            return stats.get('total_files', 0)
+            # 使用WebHDFS客户端获取准确的文件统计
+            stats = self.webhdfs_client.get_table_hdfs_stats(
+                table_location, 
+                self.cluster.small_file_threshold or 134217728
+            )
+            
+            if stats.get('success', False):
+                total_files = stats.get('total_files', 0)
+                logger.info(f"WebHDFS stats for {database_name}.{table_name}: {total_files} files, "
+                           f"{stats.get('small_files_count', 0)} small files")
+                return total_files
+            else:
+                logger.error(f"WebHDFS stats failed: {stats.get('error', 'Unknown error')}")
+                return None
             
         except Exception as e:
-            logger.error(f"Failed to get file count: {e}")
-            # 如果HDFS扫描失败，使用备用方法（基于HDFS命令或表统计信息）
+            logger.error(f"Failed to get file count using WebHDFS: {e}")
+            # 如果WebHDFS失败，使用备用方法
             return self._get_file_count_fallback(database_name, table_name, partition_filter)
     
-    def _get_temp_table_file_count(self, database_name: str, temp_table_name: str, partition_filter: Optional[str] = None) -> int:
-        """获取临时表的文件数量"""
+    def _get_temp_table_file_count(self, database_name: str, temp_table_name: str, partition_filter: Optional[str] = None) -> Optional[int]:
+        """获取临时表的文件数量（使用WebHDFS精确统计）"""
         try:
-            # 临时表的路径通常在warehouse目录下
-            temp_table_path = self._build_table_path(database_name, temp_table_name)
+            # 获取临时表的HDFS路径
+            table_location = self._get_table_location(database_name, temp_table_name)
+            if not table_location:
+                logger.error(f"Could not get temp table location for {database_name}.{temp_table_name}")
+                return None
             
-            # 使用 HDFS 扫描器获取文件数量
-            stats = self.hdfs_scanner.scan_directory(temp_table_path, self.cluster.small_file_threshold or 134217728)
-            return stats.get('total_files', 0)
+            logger.info(f"Getting file count for temp table {database_name}.{temp_table_name} at location: {table_location}")
+            
+            # 使用WebHDFS客户端获取准确的文件统计
+            stats = self.webhdfs_client.get_table_hdfs_stats(
+                table_location, 
+                self.cluster.small_file_threshold or 134217728
+            )
+            
+            if stats.get('success', False):
+                total_files = stats.get('total_files', 0)
+                logger.info(f"WebHDFS stats for temp table {database_name}.{temp_table_name}: {total_files} files")
+                return total_files
+            else:
+                logger.error(f"WebHDFS stats failed for temp table: {stats.get('error', 'Unknown error')}")
+                return None
             
         except Exception as e:
             logger.error(f"Failed to get temp table file count: {e}")
-            return 0
+            return None
     
-    def _get_file_count_fallback(self, database_name: str, table_name: str, partition_filter: Optional[str] = None) -> int:
+    def _get_file_count_fallback(self, database_name: str, table_name: str, partition_filter: Optional[str] = None) -> Optional[int]:
         """获取文件数量的备用方法"""
         try:
             # 简单估算：基于表大小和平均文件大小
             # 在实际环境中可以通过其他方式获取更准确的文件数量
-            return 100  # 默认估算值
+            return None  # 统计失败不再估算，交由前端显示 NaN
         except Exception as e:
             logger.error(f"Fallback file count method failed: {e}")
             return 0
+    
+    def _get_file_count_with_logging(self, database_name: str, table_name: str, 
+                                   partition_filter: Optional[str], merge_logger) -> int:
+        """带日志记录的文件数量获取"""
+        try:
+            table_location = self._get_table_location(database_name, table_name)
+            if not table_location:
+                merge_logger.log(
+                    MergePhase.FILE_ANALYSIS, MergeLogLevel.ERROR,
+                    f"无法获取表{database_name}.{table_name}的HDFS位置",
+                    details={"database": database_name, "table": table_name}
+                )
+                return 0
+            
+            merge_logger.log_hdfs_operation(
+                "get_table_stats", table_location, MergePhase.FILE_ANALYSIS
+            )
+            
+            stats = self.webhdfs_client.get_table_hdfs_stats(
+                table_location, self.cluster.small_file_threshold or 134217728
+            )
+            
+            if stats.get('success', False):
+                file_count = stats.get('total_files', 0)
+                merge_logger.log_hdfs_operation(
+                    "get_table_stats", table_location, MergePhase.FILE_ANALYSIS,
+                    stats=stats, success=True
+                )
+                return file_count
+            else:
+                merge_logger.log_hdfs_operation(
+                    "get_table_stats", table_location, MergePhase.FILE_ANALYSIS,
+                    success=False, error_message=stats.get('error', 'Unknown error')
+                )
+                # 兜底：使用最近一次扫描指标
+                try:
+                    db = SessionLocal()
+                    metric = (
+                        db.query(TableMetric)
+                        .filter(
+                            TableMetric.cluster_id == self.cluster.id,
+                            TableMetric.database_name == database_name,
+                            TableMetric.table_name == table_name,
+                        )
+                        .order_by(TableMetric.scan_time.desc())
+                        .first()
+                    )
+                    if metric and metric.total_files is not None:
+                        merge_logger.log(
+                            MergePhase.FILE_ANALYSIS, MergeLogLevel.INFO,
+                            "使用最近一次扫描指标兜底文件数",
+                            details={"total_files": metric.total_files}
+                        )
+                        return int(metric.total_files)
+                except Exception:
+                    pass
+                return 0
+                
+        except Exception as e:
+            merge_logger.log(
+                MergePhase.FILE_ANALYSIS, MergeLogLevel.ERROR,
+                f"获取文件数量失败: {str(e)}",
+                details={"error": str(e), "table": f"{database_name}.{table_name}"}
+            )
+            return self._get_file_count_fallback(database_name, table_name, partition_filter)
+    
+    def _create_temp_table_with_logging(self, task: MergeTask, temp_table_name: str, merge_logger) -> List[str]:
+        """带详细日志记录的临时表创建"""
+        sql_statements = []
+        
+        try:
+            conn = self._create_hive_connection(task.database_name)
+            cursor = conn.cursor()
+            
+            # 设置 Hive 合并参数
+            merge_settings = [
+                "SET hive.merge.mapfiles=true",
+                "SET hive.merge.mapredfiles=true", 
+                "SET hive.merge.size.per.task=268435456",  # 256MB
+                "SET hive.exec.dynamic.partition=true",
+                "SET hive.exec.dynamic.partition.mode=nonstrict",
+                # 关键：禁止 Tez 自动并行，配合单 reducer 强制减少输出文件数
+                "SET hive.tez.auto.reducer.parallelism=false",
+                "SET mapred.reduce.tasks=1"  # 减少输出文件数
+            ]
+            
+            for setting in merge_settings:
+                merge_logger.log_sql_execution(setting, MergePhase.TEMP_TABLE_CREATION, success=True)
+                cursor.execute(setting)
+                sql_statements.append(setting)
+            
+            # 删除可能存在的临时表
+            drop_temp_sql = f"DROP TABLE IF EXISTS {temp_table_name}"
+            merge_logger.log_sql_execution(drop_temp_sql, MergePhase.TEMP_TABLE_CREATION)
+            cursor.execute(drop_temp_sql)
+            sql_statements.append(drop_temp_sql)
+            
+            # 创建临时表并执行合并
+            if task.partition_filter:
+                create_sql = f"""
+                CREATE TABLE {temp_table_name} 
+                AS SELECT * FROM {task.table_name} 
+                WHERE {task.partition_filter}
+                DISTRIBUTE BY 1
+                """
+            else:
+                create_sql = f"""
+                CREATE TABLE {temp_table_name} 
+                AS SELECT * FROM {task.table_name}
+                DISTRIBUTE BY 1
+                """
+            
+            merge_logger.log_sql_execution(create_sql, MergePhase.TEMP_TABLE_CREATION)
+            cursor.execute(create_sql)
+            sql_statements.append(create_sql)
+            
+            cursor.close()
+            conn.close()
+            
+            merge_logger.log(
+                MergePhase.TEMP_TABLE_CREATION, MergeLogLevel.INFO,
+                f"临时表{temp_table_name}创建成功",
+                details={"temp_table": temp_table_name, "sql_count": len(sql_statements)}
+            )
+            
+        except Exception as e:
+            merge_logger.log_sql_execution(
+                create_sql if 'create_sql' in locals() else "CREATE TABLE ...", 
+                MergePhase.TEMP_TABLE_CREATION,
+                success=False, error_message=str(e)
+            )
+            raise
+        
+        return sql_statements
+    
+    def _atomic_table_swap_with_logging(self, task: MergeTask, temp_table_name: str, 
+                                      backup_table_name: str, merge_logger) -> List[str]:
+        """带详细日志记录的原子表切换"""
+        sql_statements = []
+        
+        try:
+            conn = self._create_hive_connection(task.database_name)
+            cursor = conn.cursor()
+            
+            # 第一步：将原表重命名为备份表
+            rename_to_backup_sql = f"ALTER TABLE {task.table_name} RENAME TO {backup_table_name}"
+            merge_logger.log_sql_execution(rename_to_backup_sql, MergePhase.ATOMIC_SWAP)
+            cursor.execute(rename_to_backup_sql)
+            sql_statements.append(rename_to_backup_sql)
+            
+            merge_logger.log(
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO,
+                f"原表重命名为备份表: {task.table_name} -> {backup_table_name}",
+                details={"original_table": task.table_name, "backup_table": backup_table_name}
+            )
+            
+            # 第二步：将临时表重命名为原表名
+            rename_temp_to_original_sql = f"ALTER TABLE {temp_table_name} RENAME TO {task.table_name}"
+            merge_logger.log_sql_execution(rename_temp_to_original_sql, MergePhase.ATOMIC_SWAP)
+            cursor.execute(rename_temp_to_original_sql)
+            sql_statements.append(rename_temp_to_original_sql)
+            
+            merge_logger.log(
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO,
+                f"临时表重命名为原表: {temp_table_name} -> {task.table_name}",
+                details={"temp_table": temp_table_name, "original_table": task.table_name}
+            )
+            
+            cursor.close()
+            conn.close()
+            
+            merge_logger.log(
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO,
+                "原子表切换成功完成",
+                details={
+                    "swap_operations": 2,
+                    "backup_created": backup_table_name,
+                    "active_table": task.table_name
+                }
+            )
+            
+        except Exception as e:
+            merge_logger.log(
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.ERROR,
+                f"原子表切换失败: {str(e)}",
+                details={"error": str(e), "failed_operation": "table_rename"}
+            )
+            raise
+        
+        return sql_statements

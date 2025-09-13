@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Dict, Any, List
 import asyncio
 import time
@@ -11,6 +12,7 @@ from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.services.scan_service import scan_task_manager
 from app.schemas.scan_task import ScanTaskResponse, ScanTaskProgress
+from app.utils.webhdfs_client import WebHDFSClient
 
 router = APIRouter()
 
@@ -20,12 +22,28 @@ async def get_table_metrics(
     database_name: str = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Get table metrics for a cluster"""
-    query = db.query(TableMetric).filter(TableMetric.cluster_id == cluster_id)
+    """Get latest table metrics per table (deduplicated by database_name + table_name)."""
+    base = db.query(
+        TableMetric.database_name,
+        TableMetric.table_name,
+        func.max(TableMetric.id).label("max_id"),
+    ).filter(TableMetric.cluster_id == cluster_id)
+
     if database_name:
-        query = query.filter(TableMetric.database_name == database_name)
-    
-    metrics = query.order_by(TableMetric.scan_time.desc()).all()
+        base = base.filter(TableMetric.database_name == database_name)
+
+    base = base.group_by(TableMetric.database_name, TableMetric.table_name)
+    latest_ids = [row.max_id for row in base.all()]
+
+    if not latest_ids:
+        return []
+
+    metrics = (
+        db.query(TableMetric)
+        .filter(TableMetric.id.in_(latest_ids))
+        .order_by(TableMetric.database_name.asc(), TableMetric.table_name.asc())
+        .all()
+    )
     return metrics
 
 @router.get("/small-files", response_model=dict)
@@ -82,6 +100,7 @@ async def get_tables(cluster_id: int, database_name: str, db: Session = Depends(
 @router.post("/scan")
 async def scan_tables(
     scan_request: ScanRequest,
+    strict_real: bool = Query(True, description="严格实连模式（失败不降级Mock）"),
     db: Session = Depends(get_db)
 ):
     """Unified scan endpoint for tables - can scan single table or database"""
@@ -100,7 +119,7 @@ async def scan_tables(
                 if not table_info:
                     raise HTTPException(status_code=404, detail="Table not found")
             
-            table_result = scanner.scan_table(db, scan_request.database_name, table_info)
+            table_result = scanner.scan_table(db, scan_request.database_name, table_info, strict_real=strict_real)
             return {
                 "cluster_id": scan_request.cluster_id,
                 "database_name": scan_request.database_name,
@@ -111,7 +130,8 @@ async def scan_tables(
         
         elif scan_request.database_name:
             # Scan database
-            result = scanner.scan_database_tables(db, scan_request.database_name)
+            # 不限制每库表数，严格模式可选
+            result = scanner.scan_database_tables(db, scan_request.database_name, max_tables=None, strict_real=strict_real)
             return {
                 "cluster_id": scan_request.cluster_id,
                 "database_name": scan_request.database_name,
@@ -125,9 +145,11 @@ async def scan_tables(
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
 @router.post("/scan/{cluster_id}")
+from typing import Optional
 async def scan_all_cluster_databases_with_progress(
     cluster_id: int,
-    max_tables_per_db: int = Query(10, description="Maximum number of tables to scan per database"),
+    max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数（空表示不限制）"),
+    strict_real: bool = Query(True, description="严格实连模式（失败不降级Mock）"),
     db: Session = Depends(get_db)
 ):
     """启动带进度追踪的集群扫描任务"""
@@ -137,7 +159,7 @@ async def scan_all_cluster_databases_with_progress(
     
     try:
         # 启动进度追踪的扫描任务
-        task_id = scan_task_manager.scan_cluster_with_progress(db, cluster_id, max_tables_per_db)
+        task_id = scan_task_manager.scan_cluster_with_progress(db, cluster_id, max_tables_per_db, strict_real)
         
         return {
             "cluster_id": cluster_id,
@@ -163,7 +185,8 @@ async def scan_database_tables(
     
     try:
         scanner = HybridTableScanner(cluster)
-        result = scanner.scan_database_tables(db, database_name, table_filter, max_tables=10)
+        # 显式 Mock 路径，仍旧保持原有限制以利快速返回
+        result = scanner.scan_database_tables(db, database_name, table_filter, max_tables=10, strict_real=False)
         return {
             "cluster_id": cluster_id,
             "database_name": database_name,
@@ -178,7 +201,8 @@ async def scan_database_tables_real(
     cluster_id: int, 
     database_name: str,
     table_filter: str = Query(None),
-    max_tables: int = Query(10, description="Maximum number of tables to scan"),
+    max_tables: int = Query(0, description="0或负值表示不限制"),
+    strict_real: bool = Query(True, description="严格实连模式（默认开启）"),
     db: Session = Depends(get_db)
 ):
     """Scan tables using real MetaStore and intelligent HDFS connection"""
@@ -188,7 +212,8 @@ async def scan_database_tables_real(
     
     try:
         scanner = HybridTableScanner(cluster)
-        result = scanner.scan_database_tables(db, database_name, table_filter, max_tables)
+        limit = None if max_tables <= 0 else max_tables
+        result = scanner.scan_database_tables(db, database_name, table_filter, limit, strict_real=strict_real)
         return {
             "cluster_id": cluster_id,
             "database_name": database_name,
@@ -197,6 +222,95 @@ async def scan_database_tables_real(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Real scan failed: {str(e)}")
+
+
+@router.get("/partition-metrics")
+async def get_partition_metrics(
+    cluster_id: int = Query(...),
+    database_name: str = Query(...),
+    table_name: str = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    concurrency: int = Query(5, ge=1, le=20, description="并发扫描分区数"),
+    db: Session = Depends(get_db),
+):
+    """Return per-partition small file stats for a partitioned table.
+
+    Uses MetaStore to fetch partition locations and WebHDFS client to compute stats.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        # Fetch partition list from MetaStore (paged)
+        with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
+            total = connector.get_table_partitions_count(database_name, table_name)
+            if total == 0:
+                return {"items": [], "total": 0, "page": page, "page_size": page_size}
+            offset = (page - 1) * page_size
+            partitions = connector.get_table_partitions_paged(database_name, table_name, offset, page_size)
+
+        # 并发扫描每个分区路径（为避免 requests.Session 线程安全问题，线程内各自创建 client）
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def scan_one(idx: int, part_name: str, part_path: str):
+            try:
+                local_client = WebHDFSClient(cluster.hdfs_namenode_url, user=cluster.hdfs_user or 'hdfs')
+                try:
+                    stats = local_client.scan_directory_stats(
+                        part_path,
+                        small_file_threshold=cluster.small_file_threshold or 134217728,
+                    )
+                    item = {
+                        "partition_spec": part_name,
+                        "partition_path": part_path,
+                        "file_count": int(getattr(stats, 'total_files', 0) or 0),
+                        "small_file_count": int(getattr(stats, 'small_files_count', 0) or 0),
+                        "total_size": int(getattr(stats, 'total_size', 0) or 0),
+                        "avg_file_size": float(getattr(stats, 'average_file_size', 0) or 0.0),
+                    }
+                finally:
+                    try:
+                        local_client.close()
+                    except Exception:
+                        pass
+                return idx, item
+            except Exception as e:
+                # 出错时返回占位数据，避免整页失败
+                return idx, {
+                    "partition_spec": part_name,
+                    "partition_path": part_path,
+                    "file_count": 0,
+                    "small_file_count": 0,
+                    "total_size": 0,
+                    "avg_file_size": 0.0,
+                    "error": str(e),
+                }
+
+        futures = []
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            for idx, p in enumerate(partitions):
+                part_name = p.get('partition_name') or p.get('PART_NAME')
+                part_path = p.get('partition_path') or p.get('partition_path')
+                if not part_path:
+                    continue
+                futures.append(executor.submit(scan_one, idx, part_name, part_path))
+
+            results: list[tuple[int, dict]] = []
+            for fut in as_completed(futures):
+                results.append(fut.result())
+
+        # 按原顺序还原
+        results.sort(key=lambda x: x[0])
+        items = [item for _, item in results]
+
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get partition metrics: {str(e)}")
 
 @router.post("/scan-table/{cluster_id}/{database_name}/{table_name}")
 async def scan_single_table(

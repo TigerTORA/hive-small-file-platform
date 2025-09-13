@@ -26,5 +26,14 @@ class MergeTaskResponse(MergeTaskBase):
     started_time: Optional[datetime]
     completed_time: Optional[datetime]
     
+    # 详细进度跟踪字段
+    execution_phase: Optional[str] = None
+    progress_percentage: Optional[float] = None
+    estimated_remaining_time: Optional[int] = None
+    processed_files_count: Optional[int] = None
+    total_files_count: Optional[int] = None
+    yarn_application_id: Optional[str] = None
+    current_operation: Optional[str] = None
+    
     class Config:
         from_attributes = True

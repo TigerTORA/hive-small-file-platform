@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.config.database import Base
@@ -10,9 +10,28 @@ class TaskLog(Base):
     task_id = Column(Integer, ForeignKey("merge_tasks.id"), nullable=False, index=True)
     
     # Log content
-    log_level = Column(String(20), nullable=False, index=True)  # INFO, WARNING, ERROR, DEBUG
+    log_level = Column(String(20), nullable=False, index=True)  # INFO, WARNING, ERROR, DEBUG, CRITICAL
     message = Column(Text, nullable=False)
-    details = Column(Text, nullable=True)  # JSON or additional details
+    details = Column(JSON, nullable=True)  # JSON structured details
+    
+    # Execution phase and timing
+    phase = Column(String(50), nullable=True, index=True)  # initialization, connection_test, file_analysis, etc.
+    duration_ms = Column(Integer, nullable=True)  # Duration in milliseconds
+    
+    # SQL execution details
+    sql_statement = Column(Text, nullable=True)  # Full SQL statement
+    affected_rows = Column(Integer, nullable=True)  # Number of affected rows
+    
+    # File operation details
+    files_before = Column(Integer, nullable=True)  # Files before operation
+    files_after = Column(Integer, nullable=True)  # Files after operation
+    hdfs_stats = Column(JSON, nullable=True)  # HDFS statistics JSON
+    
+    # YARN monitoring
+    yarn_application_id = Column(String(100), nullable=True)  # YARN application ID
+    
+    # Progress tracking
+    progress_percentage = Column(Float, nullable=True)  # Progress percentage
     
     # Timestamp
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

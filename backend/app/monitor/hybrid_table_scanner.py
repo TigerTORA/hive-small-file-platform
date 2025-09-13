@@ -75,7 +75,8 @@ class HybridTableScanner:
         db: Any,
         database_name: str,
         table_filter: Optional[str] = None,
-        max_tables: int = 10,
+        max_tables: Optional[int] = None,
+        strict_real: bool = False,
     ) -> Dict[str, Any]:
         start = time.time()
         errors: List[str] = []
@@ -135,6 +136,8 @@ class HybridTableScanner:
                 if hdfs_ok:
                     hdfs_mode = "real"
                 else:
+                    if strict_real:
+                        raise Exception("HDFS连接失败，严格模式已开启，终止扫描")
                     hdfs_mode = "mock"
                     # 如果真实HDFS连接失败，尝试使用Mock模式
                     from app.monitor.mock_hdfs_scanner import MockHDFSScanner
@@ -143,12 +146,17 @@ class HybridTableScanner:
                     hdfs_ok = True
             else:
                 # 如果没有HDFS扫描器，直接使用Mock模式
+                if strict_real:
+                    raise Exception("未初始化HDFS扫描器，严格模式已开启，终止扫描")
                 from app.monitor.mock_hdfs_scanner import MockHDFSScanner
                 self.hdfs_scanner = MockHDFSScanner()
                 hdfs_ok = True
                 hdfs_mode = "mock"
         except Exception as e:
             hdfs_connect_time = time.time() - hdfs_connect_start
+            if strict_real:
+                # 严格模式直接抛出错误
+                raise
             errors.append(f"HDFS连接错误: {e}")
             # 降级到Mock模式
             try:
@@ -217,6 +225,7 @@ class HybridTableScanner:
                         errors.append(f"表{table_name}文件扫描失败: {scan_error}")
 
                 # persist metric
+                from datetime import datetime
                 tm = TableMetric(
                     cluster_id=self.cluster.id,
                     database_name=metrics['database_name'],
@@ -235,6 +244,7 @@ class HybridTableScanner:
                     avg_file_size=avg_size,
                     is_partitioned=1 if metrics['is_partitioned'] else 0,
                     partition_count=metrics['partition_count'],
+                    scan_time=datetime.utcnow(),
                 )
                 db.add(tm)
                 db.commit()
@@ -286,7 +296,7 @@ class HybridTableScanner:
             "errors": errors,
         }
 
-    def scan_table(self, db: Any, database_name: str, table_info: Dict[str, Any]) -> Dict[str, Any]:
+    def scan_table(self, db: Any, database_name: str, table_info: Dict[str, Any], strict_real: bool = False) -> Dict[str, Any]:
         start = time.time()
         self._initialize_hdfs_scanner()
         hdfs_ok = False
@@ -294,6 +304,8 @@ class HybridTableScanner:
             hdfs_ok = self.hdfs_scanner.connect() if self.hdfs_scanner else False
         except Exception:
             pass
+        if strict_real and not hdfs_ok:
+            raise Exception("HDFS连接失败，严格模式已开启，终止扫描")
         files = small = total_size = 0
         avg_size = 0.0
         try:

@@ -10,11 +10,11 @@ from app.config.settings import settings
 from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog, ScanTask, ScanTaskLogDB
 
 # Initialize Sentry
-if settings.SENTRY_DSN:
+if settings.SENTRY_DSN and settings.SENTRY_DSN.startswith('http'):
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         integrations=[
-            FastApiIntegration(auto_enabling_integrations=True),
+            FastApiIntegration(),
             SqlalchemyIntegration(),
         ],
         environment=settings.SENTRY_ENVIRONMENT,
@@ -51,4 +51,26 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "server_config": {
+            "host": settings.SERVER_HOST,
+            "port": settings.SERVER_PORT,
+            "environment": settings.SENTRY_ENVIRONMENT
+        }
+    }
+
+# Uvicorn server启动配置
+if __name__ == "__main__":
+    import uvicorn
+    print(f"🚀 启动 Hive Small File Platform 后端服务")
+    print(f"📍 服务地址: http://{settings.SERVER_HOST}:{settings.SERVER_PORT}")
+    print(f"🔄 热重载: {'开启' if settings.RELOAD else '关闭'}")
+    print(f"🌍 环境: {settings.SENTRY_ENVIRONMENT}")
+    print(f"💾 数据库: {settings.DATABASE_URL}")
+    uvicorn.run(
+        "app.main:app",
+        host=settings.SERVER_HOST,
+        port=settings.SERVER_PORT,
+        reload=settings.RELOAD
+    )
