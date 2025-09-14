@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict, Any, Optional, List, Callable
 from datetime import datetime
 import time
@@ -118,6 +119,13 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 result['message'] = f'Table {task.database_name}.{task.table_name} does not exist'
                 return result
             
+            # 存储/格式检查：禁止对不受支持的表进行合并（如 Hudi/Iceberg/Delta/ACID）
+            fmt = self._get_table_format_info(task.database_name, task.table_name)
+            if self._is_unsupported_table_type(fmt):
+                result['valid'] = False
+                result['message'] = self._unsupported_reason(fmt)
+                return result
+
             # 检查是否为分区表
             is_partitioned = self._is_partitioned_table(task.database_name, task.table_name)
             
@@ -167,6 +175,132 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         
         temp_table_name = self._generate_temp_table_name(task.table_name)
         backup_table_name = self._generate_backup_table_name(task.table_name)
+
+        # 运行期再次进行严格的表类型校验，避免误操作
+        fmt = self._get_table_format_info(task.database_name, task.table_name)
+        if self._is_unsupported_table_type(fmt):
+            msg = self._unsupported_reason(fmt)
+            self._report_progress('failed', msg)
+            self.update_task_status(task, 'failed', error_message=msg, db_session=db_session)
+            return {
+                'success': False,
+                'files_before': 0,
+                'files_after': 0,
+                'size_saved': 0,
+                'duration': time.time() - start_time,
+                'message': msg,
+                'sql_executed': [],
+                'temp_table_created': '',
+                'backup_table_created': '',
+                'log_summary': {},
+                'detailed_logs': []
+            }
+
+        # 如果指定了分区过滤器，优先按分区级别执行合并（不进行整表原子切换）
+        if task.partition_filter:
+            try:
+                # 连接测试
+                if not self._test_connections():
+                    raise Exception('Failed to connect to Hive or HDFS')
+
+                # 预统计：分区文件数
+                part_path = self._resolve_partition_path(task.database_name, task.table_name, task.partition_filter)
+                files_before = None
+                files_after = None
+                if part_path:
+                    try:
+                        stats_before = self.webhdfs_client.scan_directory_stats(part_path, self.cluster.small_file_threshold or 134217728)
+                        files_before = int(getattr(stats_before, 'total_files', 0) or 0)
+                    except Exception:
+                        files_before = None
+
+                spec = self._partition_filter_to_spec(task.partition_filter)
+                if not spec:
+                    raise Exception(f'Unsupported partition_filter: {task.partition_filter}')
+
+                # 路径一：CONCATENATE（原地合并）
+                if (task.merge_strategy or 'concatenate') == 'concatenate':
+                    merge_logger.start_phase(MergePhase.TEMP_TABLE_CREATION, "分区级合并（CONCATENATE）")
+                    conn = self._create_hive_connection(task.database_name)
+                    cursor = conn.cursor()
+                    sql = f"ALTER TABLE {task.table_name} PARTITION ({spec}) CONCATENATE"
+                    merge_logger.log_sql_execution(sql, MergePhase.TEMP_TABLE_CREATION)
+                    cursor.execute(sql)
+                    cursor.close(); conn.close()
+                    merge_logger.end_phase(MergePhase.TEMP_TABLE_CREATION, "分区 CONCATENATE 完成")
+                else:
+                    # 路径二：INSERT OVERWRITE 单分区（重写分区数据，控制 reducer 数减少文件数）
+                    merge_logger.start_phase(MergePhase.TEMP_TABLE_CREATION, "分区级合并（INSERT OVERWRITE）")
+                    nonpart_cols, part_cols = self._get_table_columns(task.database_name, task.table_name)
+                    if not nonpart_cols:
+                        raise Exception('Failed to get table columns')
+                    conn = self._create_hive_connection(task.database_name)
+                    cursor = conn.cursor()
+                    settings = [
+                        "SET hive.merge.mapfiles=true",
+                        "SET hive.merge.mapredfiles=true",
+                        "SET hive.exec.dynamic.partition.mode=nonstrict",
+                        "SET hive.tez.auto.reducer.parallelism=false",
+                        "SET mapred.reduce.tasks=1"
+                    ]
+                    for st in settings:
+                        merge_logger.log_sql_execution(st, MergePhase.TEMP_TABLE_CREATION, success=True)
+                        cursor.execute(st)
+                    # 静态分区覆盖：分区列不出现在 SELECT 列表
+                    cols_expr = ', '.join([f"`{c}`" for c in nonpart_cols])
+                    insert_sql = (
+                        f"INSERT OVERWRITE TABLE {task.table_name} PARTITION ({spec}) "
+                        f"SELECT {cols_expr} FROM {task.table_name} WHERE {task.partition_filter} DISTRIBUTE BY 1"
+                    )
+                    merge_logger.log_sql_execution(insert_sql, MergePhase.TEMP_TABLE_CREATION)
+                    cursor.execute(insert_sql)
+                    cursor.close(); conn.close()
+                    merge_logger.end_phase(MergePhase.TEMP_TABLE_CREATION, "分区 INSERT OVERWRITE 完成")
+
+                # 统计合并后文件数
+                if part_path:
+                    try:
+                        stats_after = self.webhdfs_client.scan_directory_stats(part_path, self.cluster.small_file_threshold or 134217728)
+                        files_after = int(getattr(stats_after, 'total_files', 0) or 0)
+                    except Exception:
+                        files_after = None
+
+                # 汇总结果
+                result['success'] = True
+                result['duration'] = time.time() - start_time
+                result['message'] = (
+                    f"Partition-level merge completed via "
+                    f"{(task.merge_strategy or 'concatenate').upper()} for ({spec})"
+                )
+                result['files_before'] = files_before
+                result['files_after'] = files_after
+                result['size_saved'] = 0
+
+                # 更新任务状态
+                self._update_task_progress(
+                    task, db_session,
+                    execution_phase="completion",
+                    progress_percentage=100.0,
+                    processed_files_count=files_after if files_after is not None else 0,
+                    current_operation=f"分区合并完成: PARTITION ({spec})"
+                )
+                self.update_task_status(
+                    task, 'success',
+                    files_before=files_before if isinstance(files_before, int) else None,
+                    files_after=files_after if isinstance(files_after, int) else None,
+                    size_saved=0,
+                    db_session=db_session
+                )
+                self.log_task_event(task, 'INFO', result['message'], db_session=db_session)
+                return result
+            except Exception as e:
+                # 若分区级失败，直接失败（不做整表替代）
+                result['message'] = f'Partition-level merge failed: {e}'
+                result['duration'] = time.time() - start_time
+                self._report_progress('failed', result['message'])
+                self.update_task_status(task, 'failed', error_message=str(e), db_session=db_session)
+                self.log_task_event(task, 'ERROR', result['message'], db_session=db_session)
+                return result
         
         try:
             # 更新任务状态为运行中
@@ -617,6 +751,167 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         except Exception as e:
             logger.error(f"Failed to get table partitions: {e}")
             return []
+
+    def _get_table_format_info(self, database_name: str, table_name: str) -> Dict[str, Any]:
+        """获取表的格式/属性信息，用于安全校验。
+        返回：{'input_format': str, 'serde_lib': str, 'storage_handler': str, 'tblproperties': {k:v}}
+        """
+        info: Dict[str, Any] = {
+            'input_format': '',
+            'serde_lib': '',
+            'storage_handler': '',
+            'tblproperties': {}
+        }
+        try:
+            conn = self._create_hive_connection(database_name)
+            cursor = conn.cursor()
+            # 读取格式信息
+            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
+            rows = cursor.fetchall()
+            for row in rows:
+                if not row or len(row) < 2:
+                    continue
+                k = str(row[0]).strip()
+                v = str(row[1]).strip() if row[1] is not None else ''
+                if 'InputFormat' in k:
+                    info['input_format'] = v
+                elif 'SerDe Library' in k:
+                    info['serde_lib'] = v
+                elif 'Storage Handler' in k:
+                    info['storage_handler'] = v
+            # 读取表属性
+            try:
+                cursor.execute(f"SHOW TBLPROPERTIES {table_name}")
+                props = cursor.fetchall()
+                for pr in props:
+                    # 常见返回为 (key, value)
+                    if len(pr) >= 2:
+                        info['tblproperties'][str(pr[0]).strip()] = str(pr[1]).strip()
+            except Exception:
+                pass
+            cursor.close(); conn.close()
+        except Exception:
+            pass
+        return info
+
+    def _is_unsupported_table_type(self, fmt: Dict[str, Any]) -> bool:
+        """识别不受支持的表类型（Hudi/Iceberg/Delta/ACID等）"""
+        input_fmt = str(fmt.get('input_format', '')).lower()
+        serde_lib = str(fmt.get('serde_lib', '')).lower()
+        storage_handler = str(fmt.get('storage_handler', '')).lower()
+        props = {str(k).lower(): str(v).lower() for k, v in fmt.get('tblproperties', {}).items()}
+
+        # Hudi 检测：handler/serde/input 或 hoodie.* 属性
+        if ('hudi' in input_fmt or 'hudi' in serde_lib or 'hudi' in storage_handler or
+            any(k.startswith('hoodie.') for k in props.keys())):
+            return True
+        # Iceberg 检测
+        if 'iceberg' in input_fmt or 'iceberg' in storage_handler or 'iceberg' in serde_lib:
+            return True
+        # Delta 检测
+        if 'delta' in input_fmt or 'delta' in storage_handler or 'delta' in serde_lib:
+            return True
+        # ACID 事务表：必须 transactional=true 或 storage handler 含 acid
+        if props.get('transactional') == 'true' or 'acid' in storage_handler:
+            return True
+        return False
+
+    def _unsupported_reason(self, fmt: Dict[str, Any]) -> str:
+        input_fmt = str(fmt.get('input_format', '')).lower()
+        serde_lib = str(fmt.get('serde_lib', '')).lower()
+        storage_handler = str(fmt.get('storage_handler', '')).lower()
+        props = {str(k).lower(): str(v).lower() for k, v in fmt.get('tblproperties', {}).items()}
+
+        if ('hudi' in input_fmt or 'hudi' in serde_lib or 'hudi' in storage_handler or
+            any(k.startswith('hoodie.') for k in props.keys())):
+            return '目标表为 Hudi 表，当前合并引擎不支持对 Hudi 表执行合并，请使用 Hudi 自带的压缩/合并机制（如 compaction/cluster）'
+        if 'iceberg' in input_fmt or 'iceberg' in storage_handler or 'iceberg' in serde_lib:
+            return '目标表为 Iceberg 表，当前合并引擎不支持该表的合并操作'
+        if 'delta' in input_fmt or 'delta' in storage_handler or 'delta' in serde_lib:
+            return '目标表为 Delta 表，当前合并引擎不支持该表的合并操作'
+        if props.get('transactional') == 'true' or 'acid' in storage_handler:
+            return '目标表为 ACID/事务表，当前合并引擎不支持该表的合并操作'
+        return '目标表类型不受支持，已阻止合并操作'
+
+    def _get_table_columns(self, database_name: str, table_name: str) -> (List[str], List[str]):
+        """获取表的字段列表（非分区列、分区列）"""
+        try:
+            conn = self._create_hive_connection(database_name)
+            cursor = conn.cursor()
+            cursor.execute(f'DESCRIBE FORMATTED {table_name}')
+            rows = cursor.fetchall()
+            cursor.close(); conn.close()
+            nonpart: List[str] = []
+            parts: List[str] = []
+            in_part = False
+            for row in rows:
+                if not row or len(row) < 1:
+                    continue
+                first = str(row[0]).strip()
+                if not first:
+                    continue
+                if first.startswith('#'):
+                    if 'Partition Information' in first:
+                        in_part = True
+                    continue
+                if first.lower() == 'col_name' or first.lower().startswith('name'):
+                    continue
+                # 过滤非字段行（如详细信息）
+                if ':' in first:
+                    # 进入详细信息部分
+                    break
+                if in_part:
+                    parts.append(first)
+                else:
+                    nonpart.append(first)
+            # 去掉可能的空白/无效项
+            nonpart = [c for c in nonpart if c and c != 'col_name']
+            parts = [c for c in parts if c and c != 'col_name']
+            return nonpart, parts
+        except Exception:
+            return [], []
+
+    def _partition_filter_to_spec(self, partition_filter: str) -> Optional[str]:
+        """将 WHERE 风格的分区过滤转换为 PARTITION 规范，例如:
+        "dt='2024-01-01' AND region='cn'" -> "dt='2024-01-01', region='cn'"
+        仅支持等值 AND 组合。
+        """
+        if not partition_filter:
+            return None
+        # 标准化 AND 分隔为逗号（不区分大小写）
+        normalized = re.sub(r"\s+and\s+", ",", partition_filter.strip(), flags=re.IGNORECASE)
+        parts = [p.strip() for p in normalized.split(',') if p.strip()]
+        specs = []
+        for p in parts:
+            if '=' not in p:
+                return None
+            k, v = p.split('=', 1)
+            k = k.strip()
+            v = v.strip()
+            # 如果值没有引号且不是纯数字，补充单引号
+            if not (v.startswith("'") or v.startswith('"')):
+                if re.fullmatch(r"[0-9]+", v):
+                    pass
+                else:
+                    v = f"'{v}'"
+            specs.append(f"{k}={v}")
+        return ', '.join(specs) if specs else None
+
+    def _resolve_partition_path(self, database_name: str, table_name: str, partition_filter: str) -> Optional[str]:
+        """根据分区过滤器解析分区在 HDFS 的路径（在表根路径下拼接spec）。"""
+        try:
+            root = self._get_table_location(database_name, table_name)
+            if not root:
+                return None
+            # 规范化为路径: key=value/key2=value2
+            normalized = re.sub(r"\s+and\s+", '/', partition_filter.strip(), flags=re.IGNORECASE)
+            normalized = normalized.replace(',', '/').replace(' ', '')
+            normalized = normalized.replace("'", '').replace('"', '')
+            if not normalized:
+                return None
+            return root.rstrip('/') + '/' + normalized
+        except Exception:
+            return None
     
     def _validate_partition_filter(self, database_name: str, table_name: str, partition_filter: str) -> bool:
         """验证分区过滤器"""

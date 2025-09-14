@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from app.scheduler.celery_app import celery_app
 from app.config.database import engine
 from app.models.cluster import Cluster
-from app.monitor.table_scanner import TableScanner
+from app.monitor.hybrid_table_scanner import HybridTableScanner
+from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 
 logger = logging.getLogger(__name__)
 SessionLocal = sessionmaker(bind=engine)
@@ -98,22 +99,62 @@ def scan_single_cluster(self, cluster_id: int, database_filter: Optional[str] = 
             meta={'status': 'initializing', 'cluster': cluster.name}
         )
         
-        # 创建表扫描器
-        scanner = TableScanner(cluster)
-        
-        # 执行扫描
-        result = scanner.scan_cluster(db, database_filter)
-        
-        logger.info(f"Scan completed for cluster {cluster.name}: "
-                   f"{result['tables_scanned']} tables, "
-                   f"{result['total_files']} files, "
-                   f"{result['total_small_files']} small files")
-        
+        # 统一到 HybridTableScanner
+        scanner = HybridTableScanner(cluster)
+
+        total_tables = 0
+        total_files = 0
+        total_small_files = 0
+        errors: list[str] = []
+        per_db: list[dict] = []
+
+        # 列出数据库（可选过滤）
+        databases: list[str] = []
+        try:
+            with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as meta:
+                databases = meta.get_databases()
+        except Exception as e:
+            raise ValueError(f"Failed to enumerate databases from MetaStore: {e}")
+
+        if database_filter:
+            databases = [d for d in databases if database_filter in d]
+
+        for db_name in databases:
+            try:
+                db_res = scanner.scan_database_tables(db, db_name, table_filter=None, max_tables=None, strict_real=True)
+                total_tables += int(db_res.get('tables_scanned', 0))
+                total_files += int(db_res.get('total_files', 0))
+                total_small_files += int(db_res.get('total_small_files', 0))
+                per_db.append({
+                    'database': db_name,
+                    'tables_scanned': int(db_res.get('tables_scanned', 0)),
+                    'total_files': int(db_res.get('total_files', 0)),
+                    'total_small_files': int(db_res.get('total_small_files', 0)),
+                    'duration': db_res.get('scan_duration')
+                })
+            except Exception as e:
+                errors.append(f"{db_name}: {e}")
+                per_db.append({
+                    'database': db_name,
+                    'error': str(e)
+                })
+
+        logger.info(
+            f"Hybrid scan completed for cluster {cluster.name}: {total_tables} tables, {total_files} files, {total_small_files} small files"
+        )
+
         return {
             'status': 'completed',
             'cluster_id': cluster_id,
             'cluster_name': cluster.name,
-            'scan_result': result
+            'scan_result': {
+                'databases_scanned': len(databases),
+                'tables_scanned': total_tables,
+                'total_files': total_files,
+                'total_small_files': total_small_files,
+                'per_database': per_db,
+                'errors': errors,
+            }
         }
         
     except Exception as e:
@@ -147,29 +188,30 @@ def scan_single_table(self, cluster_id: int, database_name: str, table_name: str
         
         logger.info(f"Starting scan for table {database_name}.{table_name} in cluster {cluster.name}")
         
-        # 创建表扫描器
-        scanner = TableScanner(cluster)
-        
-        # 扫描单个表
-        result = scanner.scan_single_table(db, database_name, table_name)
-        
-        if result:
-            logger.info(f"Table scan completed: {result['total_files']} files, {result['small_files']} small files")
+        # 统一到 HybridTableScanner：通过数据库扫描接口限制为单表，便于持久化指标
+        scanner = HybridTableScanner(cluster)
+        db_result = scanner.scan_database_tables(
+            db, database_name, table_filter=table_name, max_tables=1, strict_real=True
+        )
+
+        if int(db_result.get('tables_scanned', 0)) > 0:
+            logger.info(
+                f"Table scan completed: {db_result.get('total_files', 0)} files, {db_result.get('total_small_files', 0)} small files"
+            )
             return {
                 'status': 'completed',
                 'cluster_id': cluster_id,
                 'database_name': database_name,
                 'table_name': table_name,
-                'scan_result': result
+                'scan_result': db_result
             }
-        else:
-            return {
-                'status': 'failed',
-                'cluster_id': cluster_id,
-                'database_name': database_name,
-                'table_name': table_name,
-                'error': 'Scan returned no results'
-            }
+        return {
+            'status': 'failed',
+            'cluster_id': cluster_id,
+            'database_name': database_name,
+            'table_name': table_name,
+            'error': 'Scan returned no results'
+        }
         
     except Exception as e:
         logger.error(f"Failed to scan table {database_name}.{table_name}: {e}")

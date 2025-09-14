@@ -13,9 +13,17 @@
                 :value="cluster.id"
               />
             </el-select>
+            <el-select v-model="selectedDatabase" placeholder="选择数据库" style="width: 220px; margin-right: 10px;" :disabled="!databases.length">
+              <el-option
+                v-for="db in databases"
+                :key="db"
+                :label="db"
+                :value="db"
+              />
+            </el-select>
             <el-button type="primary" @click="triggerScan">
               <el-icon><Refresh /></el-icon>
-              扫描表
+              扫描
             </el-button>
           </div>
         </div>
@@ -63,6 +71,11 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="分区数" width="90" sortable :sort-by="partitionCountSortKey">
+          <template #default="{ row }">
+            {{ row.is_partitioned ? (row.partition_count ?? 0) : -1 }}
+          </template>
+        </el-table-column>
         <el-table-column prop="scan_time" label="扫描时间" width="160">
           <template #default="{ row }">
             {{ formatTime(row.scan_time) }}
@@ -91,6 +104,8 @@ import dayjs from 'dayjs'
 const clusters = ref<Cluster[]>([])
 const tableMetrics = ref<TableMetric[]>([])
 const selectedCluster = ref<number | null>(null)
+const databases = ref<string[]>([])
+const selectedDatabase = ref<string | ''>('')
 const loading = ref(false)
 
 // 方法
@@ -110,7 +125,7 @@ const loadTableMetrics = async () => {
   
   loading.value = true
   try {
-    tableMetrics.value = await tablesApi.getMetrics(selectedCluster.value)
+    tableMetrics.value = await tablesApi.getMetrics(selectedCluster.value, selectedDatabase.value || undefined)
   } catch (error) {
     console.error('Failed to load table metrics:', error)
   } finally {
@@ -118,15 +133,27 @@ const loadTableMetrics = async () => {
   }
 }
 
-const triggerScan = async () => {
-  if (!selectedCluster.value) {
-    ElMessage.warning('请先选择集群')
-    return
+const loadDatabases = async () => {
+  if (!selectedCluster.value) return
+  try {
+    const list = await tablesApi.getDatabases(selectedCluster.value)
+    // API 返回 { databases: string[] }
+    databases.value = Array.isArray((list as any).databases) ? (list as any).databases : (list as any)
+    if (databases.value.length && !selectedDatabase.value) {
+      selectedDatabase.value = databases.value[0]
+    }
+  } catch (error) {
+    console.error('Failed to load databases:', error)
   }
+}
+
+const triggerScan = async () => {
+  if (!selectedCluster.value) { ElMessage.warning('请先选择集群'); return }
+  if (!selectedDatabase.value) { ElMessage.warning('请先选择数据库'); return }
   
   try {
-    await tablesApi.triggerScan(selectedCluster.value)
-    ElMessage.success('扫描任务已启动')
+    await tablesApi.triggerScan(selectedCluster.value, selectedDatabase.value)
+    ElMessage.success(`已启动扫描：${selectedDatabase.value}`)
     // 延迟刷新数据
     setTimeout(() => {
       loadTableMetrics()
@@ -158,6 +185,11 @@ const formatTime = (time: string): string => {
   return dayjs(time).format('MM-DD HH:mm')
 }
 
+// 排序：分区数（非分区为 -1）
+const partitionCountSortKey = (row: TableMetric): number => {
+  return row.is_partitioned ? (row.partition_count ?? 0) : -1
+}
+
 const getProgressColor = (percentage: number): string => {
   if (percentage > 80) return '#f56c6c'
   if (percentage > 50) return '#e6a23c'
@@ -167,6 +199,15 @@ const getProgressColor = (percentage: number): string => {
 
 // 监听集群变化
 watch(selectedCluster, () => {
+  if (selectedCluster.value) {
+    selectedDatabase.value = ''
+    databases.value = []
+    loadDatabases().then(() => loadTableMetrics())
+  }
+})
+
+// 监听数据库变化
+watch(selectedDatabase, () => {
   if (selectedCluster.value) {
     loadTableMetrics()
   }

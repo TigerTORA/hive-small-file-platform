@@ -123,3 +123,24 @@ class MockHDFSScanner:
             'directories': random.randint(0, 20),
             'last_modified': time.time()
         }
+
+    def scan_directory(self, path: str, small_file_threshold: int = 128*1024*1024) -> Dict:
+        """模拟目录的小文件统计，兼容真实扫描器接口"""
+        if not self._connected:
+            raise ConnectionError("Not connected to HDFS")
+        # 生成稳定、合理的模拟数据
+        total_files = random.randint(50, 2000)
+        # 小文件在 20%-80% 之间
+        small_files = random.randint(int(total_files * 0.2), int(total_files * 0.8))
+        # 总大小 1GB 到 200GB
+        total_size = random.randint(1024*1024*1024, 200*1024*1024*1024)
+        avg_file_size = total_size / max(total_files, 1)
+        return {
+            'path': path,
+            'total_files': total_files,
+            'small_files': small_files,
+            'total_size': total_size,
+            'avg_file_size': avg_file_size,
+            'scan_time': time.time(),
+            'scan_duration': random.uniform(0.05, 0.2)
+        }

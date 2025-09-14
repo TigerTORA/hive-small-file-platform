@@ -309,7 +309,8 @@ class WebHDFSClient:
             logger.error(f"Error scanning directory stats for {path}: {str(e)}")
             return stats
     
-    def get_table_hdfs_stats(self, table_location: str, small_file_threshold: int = 128 * 1024 * 1024) -> Dict:
+    def get_table_hdfs_stats(self, table_location: str, small_file_threshold: int = 128 * 1024 * 1024,
+                             estimate_on_summary: bool = True) -> Dict:
         """
         获取Hive表的HDFS统计信息
         
@@ -352,14 +353,53 @@ class WebHDFSClient:
                 total_files = summary.get('fileCount', 0)
                 total_size = summary.get('length', 0)
                 avg = int(total_size // total_files) if total_files else 0
+                # 默认直接返回摘要，但为了避免小文件数长时间为0/1，
+                # 在文件数量不大或平均文件大小低于阈值时进行浅层采样估算小文件数量
+                estimated_small = 0
+                if estimate_on_summary and total_files > 0:
+                    # 触发估算条件：文件数较少或平均大小明显小于阈值
+                    if total_files <= 5000 or (avg and avg < small_file_threshold):
+                        try:
+                            max_samples = 2000  # 采样上限，避免深度递归导致开销过大
+                            sampled = 0
+                            small_sampled = 0
+
+                            # 遍历顶层目录；如遇到子目录，仅深入一层采样
+                            top_items = self.list_directory(table_location)
+                            for it in top_items:
+                                if sampled >= max_samples:
+                                    break
+                                if it.is_directory:
+                                    sub = self.list_directory(it.path)
+                                    for subit in sub:
+                                        if subit.is_directory:
+                                            continue
+                                        sampled += 1
+                                        if subit.size <= small_file_threshold:
+                                            small_sampled += 1
+                                        if sampled >= max_samples:
+                                            break
+                                else:
+                                    sampled += 1
+                                    if it.size <= small_file_threshold:
+                                        small_sampled += 1
+                            if sampled > 0:
+                                ratio = small_sampled / sampled
+                                estimated_small = int(total_files * ratio)
+                        except Exception as est_err:
+                            logger.warning(f"Small-file estimation skipped due to error: {est_err}")
+
+                # 如果没有估算结果，则保持0（未知）；否则使用估算值
+                small_files_count = estimated_small if estimated_small > 0 else 0
+
                 return {
                     "success": True,
                     "table_location": table_location,
                     "total_files": total_files,
                     "total_size": total_size,
-                    "small_files_count": 0,  # 无法直接得出，保守为0
+                    "small_files_count": small_files_count,
                     "small_files_size": 0,
-                    "large_files_count": total_files,
+                    "large_files_count": max(total_files - small_files_count, 0),
                     "large_files_size": total_size,
                     "average_file_size": avg,
                     "directory_count": summary.get('directoryCount', 0),
