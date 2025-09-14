@@ -328,7 +328,6 @@
       :error="testError"
       @retest="handleRetest"
     />
-  </div>
     <!-- 扫描进度对话框 -->
     <ScanProgressDialog
       v-model="showProgress"
