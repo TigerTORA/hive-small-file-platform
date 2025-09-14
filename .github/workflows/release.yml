@@ -51,6 +51,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Build frontend assets outside Docker to avoid heavy downloads in buildx
+      - name: Setup Node for frontend build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend dist
+        working-directory: frontend
+        env:
+          CI: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          PUPPETEER_SKIP_DOWNLOAD: '1'
+          HUSKY: '0'
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
