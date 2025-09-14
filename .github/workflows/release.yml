@@ -71,7 +71,7 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_API }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_API }}:${{ needs.prepare.outputs.version }}
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v6
@@ -80,7 +80,7 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_FE }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_FE }}:${{ needs.prepare.outputs.version }}
 
   create-release:
     name: Create GitHub Release
@@ -127,4 +127,3 @@ jobs:
   #           export IMAGE_FE=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_FE }}
   #           cd /opt/hive-platform && docker compose -f docker-compose.prod.yml pull || true
   #           cd /opt/hive-platform && VERSION=$VERSION IMAGE_API=$IMAGE_API IMAGE_FE=$IMAGE_FE docker compose -f docker-compose.prod.yml up -d
-
