@@ -114,27 +114,35 @@ export const tablesApi = {
     return api.get(`/clusters/${clusterId}/analysis`)
   },
 
-  // 扫描所有数据库
-  scanAllDatabases(clusterId: number): Promise<any> {
-    return api.post(`/tables/scan/${clusterId}`)
+  // 扫描所有数据库（带严格实连开关）
+  scanAllDatabases(clusterId: number, strictReal: boolean = true): Promise<any> {
+    return api.post(`/tables/scan/${clusterId}` as string, null, { params: { strict_real: strictReal } })
   },
 
-  // 扫描指定数据库
-  scanDatabase(clusterId: number, databaseName: string): Promise<any> {
+  // 扫描指定数据库（注意：该路径为 Mock 模式；如需严格实连请走 scan-real）
+  scanDatabase(clusterId: number, databaseName: string, strictReal: boolean = true): Promise<any> {
+    // 后端此端点为 Mock 路径，不读取 strict_real；保留参数以便将来兼容
     return api.post(`/tables/scan/${clusterId}/${databaseName}`)
   },
 
   // 扫描单个表
-  scanTable(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+  scanTable(clusterId: number, databaseName: string, tableName: string, strictReal: boolean = true): Promise<any> {
+    // 当前端点不接受 strict_real 参数；如需严格模式，建议使用统一入口 triggerScan
     return api.post(`/tables/scan-table/${clusterId}/${databaseName}/${tableName}`)
   },
 
-  // 触发表扫描 (保持兼容性)
-  triggerScan(clusterId: number, databaseName?: string, tableName?: string): Promise<any> {
-    return api.post('/tables/scan', {
+  // 触发表扫描 (保持兼容性) - 支持 strict_real 参数
+  triggerScan(
+    clusterId: number,
+    databaseName?: string,
+    tableName?: string,
+    strictReal: boolean = true
+  ): Promise<any> {
+    const data = {
       cluster_id: clusterId,
       database_name: databaseName,
       table_name: tableName
-    })
+    }
+    return api.post('/tables/scan', data, { params: { strict_real: strictReal } })
   }
 }

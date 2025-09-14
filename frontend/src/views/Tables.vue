@@ -21,6 +21,12 @@
                 :value="db"
               />
             </el-select>
+            <el-switch
+              v-model="strictReal"
+              active-text="严格实连"
+              inactive-text="允许Mock"
+              style="margin-right: 12px;"
+            />
             <el-button type="primary" @click="triggerScan">
               <el-icon><Refresh /></el-icon>
               扫描
@@ -107,6 +113,7 @@ const selectedCluster = ref<number | null>(null)
 const databases = ref<string[]>([])
 const selectedDatabase = ref<string | ''>('')
 const loading = ref(false)
+const strictReal = ref(true)
 
 // 方法
 const loadClusters = async () => {
@@ -152,7 +159,7 @@ const triggerScan = async () => {
   if (!selectedDatabase.value) { ElMessage.warning('请先选择数据库'); return }
   
   try {
-    await tablesApi.triggerScan(selectedCluster.value, selectedDatabase.value)
+    await tablesApi.triggerScan(selectedCluster.value, selectedDatabase.value, undefined, strictReal.value)
     ElMessage.success(`已启动扫描：${selectedDatabase.value}`)
     // 延迟刷新数据
     setTimeout(() => {
