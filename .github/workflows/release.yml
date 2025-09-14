@@ -64,6 +64,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve lowercase owner
+        id: owner
+        shell: bash
+        run: |
+          o=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "owner=$o" >> "$GITHUB_OUTPUT"
+
       - name: Build & push backend image
         uses: docker/build-push-action@v6
         with:
@@ -71,7 +78,7 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_API }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/${{ env.IMAGE_API }}:${{ needs.prepare.outputs.version }}
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v6
@@ -80,7 +87,7 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_FE }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/${{ env.IMAGE_FE }}:${{ needs.prepare.outputs.version }}
 
   create-release:
     name: Create GitHub Release
