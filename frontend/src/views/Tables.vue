@@ -31,6 +31,10 @@
               <el-icon><Refresh /></el-icon>
               扫描
             </el-button>
+            <el-button type="success" @click="triggerClusterScan" style="margin-left: 8px;">
+              <el-icon><Refresh /></el-icon>
+              全库扫描(进度)
+            </el-button>
           </div>
         </div>
       </template>
@@ -97,6 +101,11 @@
       </el-table>
     </el-card>
   </div>
+  <ScanProgressDialog
+    v-model="showProgress"
+    :task-id="currentTaskId || undefined"
+    @completed="onClusterScanCompleted"
+  />
 </template>
 
 <script setup lang="ts">
@@ -105,6 +114,7 @@ import { ElMessage } from 'element-plus'
 import { tablesApi, type TableMetric } from '@/api/tables'
 import { clustersApi, type Cluster } from '@/api/clusters'
 import dayjs from 'dayjs'
+import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
 
 // 数据
 const clusters = ref<Cluster[]>([])
@@ -114,6 +124,8 @@ const databases = ref<string[]>([])
 const selectedDatabase = ref<string | ''>('')
 const loading = ref(false)
 const strictReal = ref(true)
+const showProgress = ref(false)
+const currentTaskId = ref<string | null>(null)
 
 // 方法
 const loadClusters = async () => {
@@ -168,6 +180,28 @@ const triggerScan = async () => {
   } catch (error) {
     console.error('Failed to trigger scan:', error)
   }
+}
+
+// 触发全库扫描（带进度）
+const triggerClusterScan = async () => {
+  if (!selectedCluster.value) { ElMessage.warning('请先选择集群'); return }
+  try {
+    const res = await tablesApi.scanAllDatabases(selectedCluster.value, strictReal.value)
+    if (res && res.task_id) {
+      currentTaskId.value = res.task_id
+      showProgress.value = true
+    } else {
+      ElMessage.error('未获取到任务ID，无法追踪进度')
+    }
+  } catch (e) {
+    console.error('Failed to start cluster scan:', e)
+    ElMessage.error('启动全库扫描失败')
+  }
+}
+
+const onClusterScanCompleted = () => {
+  // 任务完成后刷新表格
+  loadTableMetrics()
 }
 
 const createMergeTask = (table: TableMetric) => {
