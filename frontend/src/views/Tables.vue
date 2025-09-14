@@ -62,8 +62,8 @@
         <el-table-column prop="small_file_ratio" label="小文件占比" width="120">
           <template #default="{ row }">
             <el-progress
-              :percentage="Math.round((row.small_files / row.total_files) * 100)"
-              :color="getProgressColor((row.small_files / row.total_files) * 100)"
+              :percentage="calcSmallFilePercent(row)"
+              :color="getProgressColor(calcSmallFilePercent(row))"
               :show-text="true"
               style="width: 80px;"
             />
@@ -236,6 +236,16 @@ const getProgressColor = (percentage: number): string => {
   if (percentage > 50) return '#e6a23c'
   if (percentage > 20) return '#1989fa'
   return '#67c23a'
+}
+
+// 计算小文件比例（避免除以 0/NaN）
+const calcSmallFilePercent = (row: TableMetric): number => {
+  const total = Number(row.total_files || 0)
+  const small = Number(row.small_files || 0)
+  if (!total || total <= 0) return 0
+  const pct = (small / total) * 100
+  if (!isFinite(pct) || isNaN(pct)) return 0
+  return Math.max(0, Math.min(100, Math.round(pct)))
 }
 
 // 监听集群变化
