@@ -42,6 +42,10 @@ venv.bak/
 
 # Logs
 *.log
+logs/
+
+# Local temp state
+.trees/
 
 # IDE
 .vscode/
