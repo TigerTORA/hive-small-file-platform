@@ -8,7 +8,10 @@ COPY package*.json ./
 
 # 安装依赖（包含 devDependencies，用于构建）
 # 说明：构建阶段需要 Vite/TypeScript 等 dev 依赖；最终运行阶段使用 Nginx，不会包含这些依赖。
-ENV CI=true
+ENV CI=true \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PUPPETEER_SKIP_DOWNLOAD=1 \
+    HUSKY=0
 RUN npm ci --no-audit --no-fund
 
 # 复制源代码
