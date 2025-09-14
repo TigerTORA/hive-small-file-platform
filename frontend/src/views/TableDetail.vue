@@ -17,14 +17,26 @@
               <el-icon><Refresh /></el-icon>
               刷新
             </el-button>
-            <el-button 
-              type="success" 
-              @click="showMergeDialog = true" 
-              :disabled="!tableMetric || tableMetric.small_files === 0"
-            >
-              <el-icon><Operation /></el-icon>
-              一键合并
-            </el-button>
+            <template v-if="mergeSupported">
+              <el-button 
+                type="success" 
+                @click="openMergeDialog" 
+                :disabled="!tableMetric || tableMetric.small_files === 0"
+              >
+                <el-icon><Operation /></el-icon>
+                一键合并
+              </el-button>
+            </template>
+            <template v-else>
+              <el-tooltip :content="unsupportedReason || '该表类型不支持合并'" placement="top">
+                <span>
+                  <el-button type="success" disabled>
+                    <el-icon><Operation /></el-icon>
+                    一键合并
+                  </el-button>
+                </span>
+              </el-tooltip>
+            </template>
           </div>
         </div>
       </template>
@@ -135,10 +147,10 @@
           <div class="partitions-header">
             <h3>分区小文件详情</h3>
             <div class="header-actions">
-              <el-button size="small" @click="refreshPartitionMetrics" :loading="partitionLoading">
-                <el-icon><Refresh /></el-icon>
-                刷新分区统计
-              </el-button>
+            <el-button size="small" @click="refreshPartitionMetrics" :loading="partitionLoading">
+              <el-icon><Refresh /></el-icon>
+              刷新分区统计
+            </el-button>
               <div class="concurrency-control">
                 <span class="label">并发度</span>
                 <el-input-number
@@ -196,6 +208,7 @@
               <el-table-column label="总大小" width="140">
                 <template #default="scope">{{ formatFileSize(scope.row.total_size || 0) }}</template>
               </el-table-column>
+              
             </el-table>
 
             <div class="partitions-actions">
@@ -289,11 +302,29 @@
     </el-card>
 
     <!-- 合并任务对话框 -->
-    <el-dialog v-model="showMergeDialog" title="创建合并任务" width="500px">
+    <el-dialog v-model="showMergeDialog" title="创建合并任务" width="520px">
       <el-form :model="mergeForm" :rules="mergeRules" ref="mergeFormRef" label-width="120px">
         <el-form-item label="任务名称" prop="task_name">
           <el-input v-model="mergeForm.task_name" placeholder="自动生成任务名称" />
         </el-form-item>
+        <template v-if="tableMetric?.is_partitioned">
+          <el-form-item label="合并范围">
+            <el-radio-group v-model="mergeScope">
+              <el-radio label="table">整表</el-radio>
+              <el-radio label="partition">指定分区</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="选择分区" v-if="mergeScope === 'partition'">
+            <el-select v-model="selectedPartition" placeholder="选择一个分区" filterable style="width: 100%">
+              <el-option
+                v-for="p in partitionOptions"
+                :key="p"
+                :label="p"
+                :value="p"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
         <el-form-item label="合并策略">
           <el-radio-group v-model="mergeForm.merge_strategy">
             <el-radio label="safe_merge">安全合并 (推荐)</el-radio>
@@ -318,7 +349,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="showMergeDialog = false">取消</el-button>
-          <el-button type="primary" @click="createMergeTask" :loading="creating">创建并执行</el-button>
+          <el-button type="primary" @click="createMergeTask" :loading="creating" :disabled="mergeScope==='partition' && !selectedPartition">创建并执行</el-button>
         </div>
       </template>
     </el-dialog>
@@ -345,6 +376,8 @@ const loading = ref(false)
 const creating = ref(false)
 const showMergeDialog = ref(false)
 const tableMetric = ref<TableMetric | null>(null)
+const mergeSupported = ref<boolean>(true)
+const unsupportedReason = ref<string>('')
 
 // 分区小文件统计
 const partitionLoading = ref(false)
@@ -363,6 +396,11 @@ const mergeForm = ref<MergeTaskCreate>({
   partition_filter: '',
   merge_strategy: 'safe_merge'
 })
+
+// 合并范围与分区选择
+const mergeScope = ref<'table' | 'partition'>('table')
+const selectedPartition = ref<string>('')
+const partitionOptions = ref<string[]>([])
 
 const mergeRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
@@ -388,6 +426,34 @@ const loadTableInfo = async () => {
         database_name: database.value,
         partition_filter: '',
         merge_strategy: 'safe_merge'
+      }
+      // 若是分区表，加载分区列表供选择
+      if (tableMetric.value.is_partitioned) {
+        try {
+          const resp = await tasksApi.getTablePartitions(clusterId.value, database.value, tableName.value)
+          const parts = (resp?.partitions || resp || []) as string[]
+          partitionOptions.value = parts
+        } catch (e) {
+          partitionOptions.value = []
+        }
+      } else {
+        mergeScope.value = 'table'
+        partitionOptions.value = []
+      }
+      // 加载表的更多信息（含是否支持合并）
+      try {
+        const info = await tasksApi.getTableInfo(clusterId.value, database.value, tableName.value)
+        // 默认支持合并；仅当明确返回 false 时禁用
+        if (info && Object.prototype.hasOwnProperty.call(info, 'merge_supported')) {
+          mergeSupported.value = info.merge_supported !== false
+        } else {
+          mergeSupported.value = true
+        }
+        unsupportedReason.value = info?.unsupported_reason && info.merge_supported === false ? info.unsupported_reason : ''
+      } catch (e: any) {
+        // 获取失败时保持默认（支持），并在真正执行时有后端兜底的严格校验
+        mergeSupported.value = true
+        unsupportedReason.value = ''
       }
     }
   } catch (error) {
@@ -460,7 +526,22 @@ const createMergeTask = async () => {
   try {
     await mergeFormRef.value.validate()
     creating.value = true
-    
+    // 根据合并范围设置 partition_filter 与默认策略
+    if (tableMetric.value?.is_partitioned && mergeScope.value === 'partition') {
+      if (!selectedPartition.value) {
+        ElMessage.warning('请选择分区')
+        creating.value = false
+        return
+      }
+      mergeForm.value.partition_filter = specToFilter(selectedPartition.value)
+      if (!mergeForm.value.merge_strategy || mergeForm.value.merge_strategy === 'safe_merge') {
+        mergeForm.value.merge_strategy = 'insert_overwrite'
+      }
+    } else {
+      mergeForm.value.partition_filter = ''
+      if (!mergeForm.value.merge_strategy) mergeForm.value.merge_strategy = 'safe_merge'
+    }
+
     const task = await tasksApi.create(mergeForm.value)
     await tasksApi.execute(task.id)
     
@@ -474,6 +555,32 @@ const createMergeTask = async () => {
   } finally {
     creating.value = false
   }
+}
+
+const openMergeDialog = async () => {
+  if (tableMetric.value?.is_partitioned && partitionOptions.value.length === 0) {
+    try {
+      const resp = await tasksApi.getTablePartitions(clusterId.value, database.value, tableName.value)
+      const parts = (resp?.partitions || resp || []) as string[]
+      partitionOptions.value = parts
+    } catch (e) {
+      partitionOptions.value = []
+    }
+  }
+  mergeScope.value = tableMetric.value?.is_partitioned ? 'partition' : 'table'
+  selectedPartition.value = ''
+  showMergeDialog.value = true
+}
+
+const specToFilter = (spec: string): string => {
+  const parts = String(spec || '').split('/')
+  const filters = parts.map(p => {
+    const [k, v] = p.split('=')
+    if (!k || v === undefined) return ''
+    const quoted = /^\d+$/.test(v) ? v : `'${v}'`
+    return `${k}=${quoted}`
+  }).filter(Boolean)
+  return filters.join(' AND ')
 }
 
 

@@ -67,6 +67,11 @@
           </span>
         </template>
       </el-table-column>
+      <el-table-column label="分区数" width="100" align="right" sortable :sort-by="partitionCountSortKey">
+        <template #default="{ row }">
+          {{ row.is_partitioned ? (row.partition_count ?? 0) : -1 }}
+        </template>
+      </el-table-column>
       <el-table-column prop="total_size" label="总大小" width="120" align="right">
         <template #default="{ row }">
           {{ formatSize(row.total_size) }}
@@ -176,6 +181,8 @@ const loadTables = async () => {
       table_name: m.table_name,
       file_count: m.total_files,
       small_file_count: m.small_files,
+      is_partitioned: !!m.is_partitioned,
+      partition_count: m.partition_count ?? 0,
       total_size: m.total_size,
       last_scan_time: m.scan_time
     }))
@@ -248,6 +255,11 @@ const viewTableDetail = (table: any) => {
       tableName: table.table_name
     }
   })
+}
+
+// 排序键：分区数（未分区为 -1）
+const partitionCountSortKey = (row: any): number => {
+  return row && row.is_partitioned ? (row.partition_count ?? 0) : -1
 }
 
 

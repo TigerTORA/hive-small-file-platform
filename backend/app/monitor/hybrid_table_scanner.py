@@ -208,7 +208,10 @@ class HybridTableScanner:
                 if hdfs_ok and t.get('table_path'):
                     file_scan_start = time.time()
                     try:
-                        stat = self.hdfs_scanner.scan_directory(t['table_path'])  # type: ignore
+                        stat = self.hdfs_scanner.scan_directory(
+                            t['table_path'],
+                            small_file_threshold=getattr(self.cluster, 'small_file_threshold', None) or 128*1024*1024,
+                        )  # type: ignore
                         files = int(stat.get('total_files') or 0)
                         small = int(stat.get('small_files') or 0)
                         total_size = int(stat.get('total_size') or 0)
@@ -311,7 +314,10 @@ class HybridTableScanner:
         try:
             path = table_info.get('table_path') if isinstance(table_info, dict) else None
             if hdfs_ok and path:
-                stat = self.hdfs_scanner.scan_directory(path)  # type: ignore
+                stat = self.hdfs_scanner.scan_directory(
+                    path,
+                    small_file_threshold=getattr(self.cluster, 'small_file_threshold', None) or 128*1024*1024,
+                )  # type: ignore
                 files = int(stat.get('total_files') or 0)
                 small = int(stat.get('small_files') or 0)
                 total_size = int(stat.get('total_size') or 0)

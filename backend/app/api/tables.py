@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import asyncio
 import time
 from app.config.database import get_db
@@ -145,7 +145,6 @@ async def scan_tables(
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
 @router.post("/scan/{cluster_id}")
-from typing import Optional
 async def scan_all_cluster_databases_with_progress(
     cluster_id: int,
     max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数（空表示不限制）"),
@@ -720,14 +719,22 @@ async def get_table_info(
         
         # 检查是否为分区表
         is_partitioned = engine._is_partitioned_table(database_name, table_name)
-        
+
+        # 合并支持性检查（Hudi/Iceberg/Delta/ACID 等不支持）
+        fmt = engine._get_table_format_info(database_name, table_name)
+        unsupported = engine._is_unsupported_table_type(fmt)
+        reason = engine._unsupported_reason(fmt) if unsupported else None
+
         # 获取基本信息
         table_info = {
             "database_name": database_name,
             "table_name": table_name,
             "is_partitioned": is_partitioned,
             "cluster_id": cluster_id,
-            "cluster_name": cluster.name
+            "cluster_name": cluster.name,
+            "merge_supported": not unsupported,
+            "unsupported_reason": reason,
+            "storage_format": fmt.get('input_format') or fmt.get('serde_lib') or None
         }
         
         if is_partitioned:
@@ -747,6 +754,35 @@ async def get_table_info(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get table info: {str(e)}")
+
+@router.get("/{cluster_id}/{database_name}/{table_name}/partitions")
+async def get_table_partitions_list(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db)
+):
+    """返回表的分区列表（简单字符串列表：key=val[/key2=val2]）。
+
+    说明：该接口仅用于前端分区选择，不做复杂分页；如分区很多，建议后续改造为分页/模糊查询。
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        engine = SafeHiveMergeEngine(cluster)
+
+        if not engine._table_exists(database_name, table_name):
+            raise HTTPException(status_code=404, detail="Table not found")
+
+        parts = engine._get_table_partitions(database_name, table_name) or []
+        return {"partitions": parts}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get partitions: {str(e)}")
 
 @router.post("/scan-all-databases/{cluster_id}")
 async def scan_all_databases(

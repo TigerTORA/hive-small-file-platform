@@ -74,7 +74,7 @@
             清空日志
           </el-button>
         </div>
-        <div class="logs-container" ref="logsContainer">
+        <div class="logs-container" ref="logsContainer" @scroll="handleLogsScroll">
           <div 
             v-for="(log, index) in displayLogs" 
             :key="index"
@@ -155,6 +155,7 @@ const progress = ref<ScanProgress | null>(null)
 const displayLogs = ref<ScanLog[]>([])
 const logsContainer = ref<HTMLElement>()
 let pollInterval: NodeJS.Timeout | null = null
+const autoStickBottom = ref(true)
 
 const scanStats = computed(() => ({
   tables: progress.value?.logs?.filter(log => log.level === 'INFO' && log.message.includes('扫描完成')).length || 0,
@@ -201,9 +202,11 @@ const fetchProgress = async () => {
     progress.value = data
     
     if (data.logs) {
-      displayLogs.value = [...data.logs].reverse() // 最新的在前面
+      const shouldStick = isAtBottom()
+      // 使用时间顺序（旧在上，新在下）
+      displayLogs.value = [...data.logs]
       await nextTick()
-      scrollLogsToBottom()
+      if (shouldStick) scrollLogsToBottom()
     }
     
     // 如果任务完成，停止轮询
@@ -228,6 +231,17 @@ const scrollLogsToBottom = () => {
   if (logsContainer.value) {
     logsContainer.value.scrollTop = logsContainer.value.scrollHeight
   }
+}
+
+const isAtBottom = () => {
+  const el = logsContainer.value
+  if (!el) return true
+  const threshold = 16 // px 容差
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold
+}
+
+const handleLogsScroll = () => {
+  autoStickBottom.value = isAtBottom()
 }
 
 const getStatusType = (status?: string) => {
