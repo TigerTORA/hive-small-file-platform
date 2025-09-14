@@ -20,6 +20,11 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-switch
+          v-model="strictReal"
+          active-text="严格实连"
+          inactive-text="允许Mock"
+        />
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
           添加集群
@@ -125,6 +130,12 @@
               </el-tag>
             </div>
             <div class="cluster-actions" @click.stop>
+              <el-tooltip content="全库扫描(带进度)" placement="top">
+                <el-button size="small" type="success" @click="startClusterScan(cluster.id)">
+                  <el-icon><Refresh /></el-icon>
+                  扫描
+                </el-button>
+              </el-tooltip>
               <el-tooltip content="进入集群详情" placement="top">
                 <el-button type="primary" size="small" circle @click="enterCluster(cluster.id)">
                   <el-icon><Right /></el-icon>
@@ -317,6 +328,11 @@
       :error="testError"
       @retest="handleRetest"
     />
+    <!-- 扫描进度对话框 -->
+    <ScanProgressDialog
+      v-model="showProgress"
+      :task-id="currentTaskId || undefined"
+    />
   </div>
 </template>
 
@@ -330,6 +346,8 @@ import {
 } from '@element-plus/icons-vue'
 import { clustersApi, type Cluster, type ClusterCreate } from '@/api/clusters'
 import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
+import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+import { tablesApi } from '@/api/tables'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -338,6 +356,9 @@ const router = useRouter()
 const clusters = ref<Cluster[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
+const showProgress = ref(false)
+const currentTaskId = ref<string | null>(null)
+const strictReal = ref(true)
 const editingCluster = ref<Cluster | null>(null)
 const selectedTemplate = ref('')
 const validateConnection = ref(false)
@@ -446,6 +467,22 @@ const loadClusters = async () => {
     console.error('Failed to load clusters:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 触发集群扫描（带进度）
+const startClusterScan = async (clusterId: number) => {
+  try {
+    const res = await tablesApi.scanAllDatabases(clusterId, strictReal.value)
+    if (res && res.task_id) {
+      currentTaskId.value = res.task_id
+      showProgress.value = true
+    } else {
+      ElMessage.error('未获取到任务ID，无法追踪进度')
+    }
+  } catch (e) {
+    console.error('Failed to start cluster scan:', e)
+    ElMessage.error('启动集群扫描失败')
   }
 }
 
