@@ -49,8 +49,12 @@ async function checkScanInterface() {
         }
         
         // 截图保存当前状态
-        await page.screenshot({ path: 'scan-interface-check.png' });
-        console.log('截图保存为: scan-interface-check.png');
+        const fs = require('fs');
+        const outDir = 'archive/screenshots';
+        try { fs.mkdirSync(outDir, { recursive: true }); } catch (e) {}
+        const outPath = `${outDir}/scan-interface-check.png`;
+        await page.screenshot({ path: outPath });
+        console.log(`截图保存为: ${outPath}`);
         
     } catch (error) {
         console.error('检查出错:', error);

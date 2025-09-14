@@ -47,6 +47,12 @@ logs/
 # Local temp state
 .trees/
 
+# Generated status/report artifacts
+project_status.json
+PROJECT_STATUS.md
+dist/*.tar
+dist/*.tgz
+
 # IDE
 .vscode/
 .idea/

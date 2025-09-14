@@ -144,6 +144,28 @@ celery -A app.scheduler.celery_app beat --loglevel=info
 - Web 界面: http://localhost:3000
 - API 文档: http://localhost:8000/docs
 
+## 生产发布
+
+- 推荐阅读：`RELEASE.md`（发布与部署全流程）
+- 生产编排：`docker-compose.prod.yml`（前端 Nginx 反代 `/api` → 后端）
+- 生产环境配置样例：
+  - 后端：`backend/.env.production.example`（生产请关闭 `AUTO_CREATE_SCHEMA` 并使用 Alembic 迁移）
+  - 前端：`frontend/.env.production.example`（默认通过相对路径 `/api/v1` 访问后端）
+
+打标签发布（示例）：
+```
+git tag v1.0.0 && git push origin v1.0.0
+```
+GitHub Actions 会构建并推送镜像到 GHCR，并创建 Release。
+
+更多细节参见 `RELEASE.md`。
+
+## 文档索引
+
+- 汇总入口：`docs/README.md`
+- 架构决策：`docs/adr/README.md`
+ - 开发联调用例与脚本：`scripts/dev/`（原本散落在根目录的测试/演示脚本已归档）
+
 ## 项目健康报告与持续集成
 
 - 一键生成本地报告：`make status`，输出 `PROJECT_STATUS.md` 与 `project_status.json`
@@ -410,7 +432,19 @@ CI 演示占位：本行用于触发 CI 并演示 PR 工作流（可在合并前
 - 最小 CI：`.github/workflows/ci.yml` 会在 PR 和 push 时自动运行后端/前端测试并上传状态报告。
 - PR 模板：`.github/pull_request_template.md` 引导描述动机、风险、验证与回滚步骤。
 - ADR（架构决策记录）：`docs/adr/` 存放重要技术决策；模板见 `0000-template.md`，示例见 `0001-hdfs-access-and-scan-approach.md`。
- - 自动合并：给 PR 打上 `automerge` 标签，`.github/workflows/automerge.yml` 会在 CI 通过后自动使用 squash 方式合并并删除分支。
+- 自动合并：给 PR 打上 `automerge` 标签，`.github/workflows/automerge.yml` 会在 CI 通过后自动使用 squash 方式合并并删除分支。
+
+### GH（GitHub CLI）一键化操作
+
+- 安装：`brew install gh`（或系统包管理器） → `gh auth login`（浏览器授权）
+- 设置默认仓库：`gh repo set-default TigerTORA/hive-small-file-platform`
+- 常用：
+  - 创建 PR：`gh pr create --fill --base main`
+  - 自动合并：`gh pr edit <PR#> --add-label automerge`
+  - 观看 CI：`gh run watch --exit-status`
+- 脚本：`scripts/gh-helpers.sh` 提供更快的封装（示例）：
+  - `source scripts/gh-helpers.sh && gh_pr_new_auto` → 当前分支开 PR 并自动合并（打标签）
+  - `gh_pr_my` 列出当前分支的 PR；`gh_run_watch` 等待 CI 结束
 
 建议工作流（不拖慢你速度）：
 1. 先写 3–5 行目标/验收（PR 描述里即可）。
