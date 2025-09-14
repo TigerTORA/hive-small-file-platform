@@ -20,6 +20,9 @@
 - Rollout steps (env vars, migrations, toggles)
 - Rollback steps (how to revert safely)
 
+Auto-merge
+- If safe to auto-merge once CI is green, add label `automerge` to this PR.
+
 ## Documentation
 - ADRs updated/added? Link:
 - README/Runbooks updated?
@@ -29,4 +32,3 @@
 - [ ] Tests pass locally and in CI
 - [ ] Docs updated (README/ADR/Runbook)
 - [ ] Safe to roll back with clear steps
-

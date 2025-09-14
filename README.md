@@ -410,6 +410,7 @@ CI 演示占位：本行用于触发 CI 并演示 PR 工作流（可在合并前
 - 最小 CI：`.github/workflows/ci.yml` 会在 PR 和 push 时自动运行后端/前端测试并上传状态报告。
 - PR 模板：`.github/pull_request_template.md` 引导描述动机、风险、验证与回滚步骤。
 - ADR（架构决策记录）：`docs/adr/` 存放重要技术决策；模板见 `0000-template.md`，示例见 `0001-hdfs-access-and-scan-approach.md`。
+ - 自动合并：给 PR 打上 `automerge` 标签，`.github/workflows/automerge.yml` 会在 CI 通过后自动使用 squash 方式合并并删除分支。
 
 建议工作流（不拖慢你速度）：
 1. 先写 3–5 行目标/验收（PR 描述里即可）。
