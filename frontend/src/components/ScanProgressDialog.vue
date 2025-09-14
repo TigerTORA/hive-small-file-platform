@@ -74,7 +74,7 @@
             清空日志
           </el-button>
         </div>
-        <div class="logs-container" ref="logsContainer" @scroll="handleLogsScroll">
+        <div class="logs-container" ref="logsContainer">
           <div 
             v-for="(log, index) in displayLogs" 
             :key="index"
@@ -155,7 +155,6 @@ const progress = ref<ScanProgress | null>(null)
 const displayLogs = ref<ScanLog[]>([])
 const logsContainer = ref<HTMLElement>()
 let pollInterval: NodeJS.Timeout | null = null
-const autoStickBottom = ref(true)
 
 const scanStats = computed(() => ({
   tables: progress.value?.logs?.filter(log => log.level === 'INFO' && log.message.includes('扫描完成')).length || 0,
@@ -202,11 +201,10 @@ const fetchProgress = async () => {
     progress.value = data
     
     if (data.logs) {
-      const shouldStick = isAtBottom()
-      // 使用时间顺序（旧在上，新在下）
-      displayLogs.value = [...data.logs]
+      // 最新在前，更新后滚动贴底确保可见
+      displayLogs.value = [...data.logs].reverse()
       await nextTick()
-      if (shouldStick) scrollLogsToBottom()
+      scrollLogsToBottom()
     }
     
     // 如果任务完成，停止轮询
@@ -233,16 +231,7 @@ const scrollLogsToBottom = () => {
   }
 }
 
-const isAtBottom = () => {
-  const el = logsContainer.value
-  if (!el) return true
-  const threshold = 16 // px 容差
-  return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold
-}
-
-const handleLogsScroll = () => {
-  autoStickBottom.value = isAtBottom()
-}
+// 简化：不再根据滚动位置判定，始终在更新后贴底
 
 const getStatusType = (status?: string) => {
   switch (status) {
