@@ -92,3 +92,6 @@ dump.rdb
 # Temporary files
 *.tmp
 *.temp
+
+# Local AI/dev workspace
+.claude/
