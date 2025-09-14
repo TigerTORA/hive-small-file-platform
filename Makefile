@@ -1,6 +1,6 @@
 # Makefile for Hive Small File Platform
 
-.PHONY: help install-dev format check test status clean ci-test setup
+.PHONY: help install-dev format check test status clean ci-test setup build-images build-backend-image build-frontend-image release-save
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,8 @@ help:
 	@echo "  ci-test         Run CI-compatible tests"
 	@echo "  status          Generate consolidated project status"
 	@echo "  clean           Clean up cache files"
+	@echo "  build-images    Build production Docker images (backend/frontend)"
+	@echo "  release-save    Save images as tar files to dist/ (offline delivery)"
 
 setup:
 	@echo "Setting up project..."
@@ -60,3 +62,25 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	cd frontend && rm -rf node_modules/.cache 2>/dev/null || true
+
+# -------- Release helpers --------
+
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo latest)
+IMAGE_API ?= hive-small-file-api
+IMAGE_FE  ?= hive-small-file-frontend
+
+build-images: build-backend-image build-frontend-image
+	@echo "Built images: $(IMAGE_API):$(VERSION), $(IMAGE_FE):$(VERSION)"
+
+build-backend-image:
+	docker build -t $(IMAGE_API):$(VERSION) backend
+
+build-frontend-image:
+	docker build -t $(IMAGE_FE):$(VERSION) frontend
+
+release-save: build-images
+	mkdir -p dist
+	docker save -o dist/$(IMAGE_API)-$(VERSION).tar $(IMAGE_API):$(VERSION)
+	docker save -o dist/$(IMAGE_FE)-$(VERSION).tar $(IMAGE_FE):$(VERSION)
+	@echo "Saved to dist/:"
+	ls -lh dist | sed -n '1,200p'
