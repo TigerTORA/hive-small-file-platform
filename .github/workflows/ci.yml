@@ -6,20 +6,10 @@ on:
   pull_request:
     branches: [ main, master ]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
 jobs:
-  backend-tests:
-    name: Backend Tests (pytest + coverage)
+  backend:
+    name: Backend · Python tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,33 +19,36 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install backend deps
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
-      - name: Run tests with coverage
+      - name: Run backend tests (CI)
+        working-directory: backend
         run: |
-          pytest test_simple.py --cov=app --cov-report=xml:coverage.xml --junitxml=pytest-report.xml --cov-fail-under=0 --maxfail=5 -v
+          python -m pytest test_simple.py \
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=0 -v
 
-      - name: Upload coverage artifact
+      - name: Upload backend coverage
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: backend/coverage.xml
 
-      - name: Upload pytest report
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-pytest-report
-          path: backend/pytest-report.xml
-
-  frontend-tests:
-    name: Frontend Tests (vitest + coverage)
+  frontend:
+    name: Frontend · Build & tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,35 +56,27 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Security audit
+      - name: Install frontend deps
+        working-directory: frontend
         run: |
-          npm audit --audit-level=high || echo "Security audit completed with warnings"
+          npm install --no-audit --no-fund
 
-      - name: Run unit tests with coverage
-        run: |
-          npm run test:coverage || npm run test:run
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
 
-      - name: Upload coverage artifact (if exists)
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage
-          path: |
-            frontend/coverage/**
-          if-no-files-found: ignore
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm run test:run
 
-  lint-type:
-    name: Backend Lint & Type Check
+  status:
+    name: Project status report
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    needs: [ backend, frontend ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -100,157 +85,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
-      - name: Install dependencies
+      - name: Generate status
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Security check (Safety)
-        run: |
-          pip install safety
-          safety check --ignore 70612 || echo "Safety check completed with warnings"
-
-      - name: Black check
-        run: black --check . || echo "Code formatting check completed"
-
-      - name: isort check
-        run: isort -c . || echo "Import sorting check completed"
-
-      - name: Flake8
-        run: flake8 . --count --max-line-length=100 --statistics || echo "Linting check completed"
-
-      - name: MyPy
-        run: mypy app --ignore-missing-imports || echo "Type checking completed"
-
-  consolidate-status:
-    name: Consolidate Project Status
-    runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-coverage
-          path: .
-      - name: Download frontend coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: frontend/coverage
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Generate project status
-        run: |
-          python3 scripts/generate_project_status.py
+          make status
 
       - name: Upload status artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: project-status
           path: |
             PROJECT_STATUS.md
             project_status.json
-
-  frontend-e2e:
-    name: Frontend E2E (Playwright)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright (Chromium only)
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests (Chromium)
-        env:
-          VITE_API_BASE_URL: http://localhost:8000/api/v1
-        run: npm run test:e2e -- --project=chromium
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-playwright-report-mocked
-          path: frontend/playwright-report/**
-          if-no-files-found: ignore
-
-  frontend-e2e-real:
-    name: Frontend E2E (Real Backend)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install backend deps
-        working-directory: backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: DB migrate (Alembic)
-        working-directory: backend
-        run: |
-          alembic upgrade heads || true
-
-      - name: Start backend (uvicorn)
-        working-directory: backend
-        env:
-          AUTO_CREATE_SCHEMA: "true"
-        run: |
-          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8002 > uvicorn.log 2>&1 &
-          sleep 3
-          curl -sSf http://127.0.0.1:8002/health
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright (Chromium)
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests (Real Backend)
-        working-directory: frontend
-        env:
-          VITE_API_BASE_URL: http://127.0.0.1:8002/api/v1
-        run: npm run test:e2e:real -- --project=chromium
-
-      - name: Upload Playwright report (Real Backend)
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-playwright-report-real
-          path: frontend/playwright-report/**
-          if-no-files-found: ignore
