@@ -1,30 +1,8 @@
-FROM node:18-alpine AS builder
-
-# 设置工作目录
-WORKDIR /app
-
-# 复制 package 文件
-COPY package*.json ./
-
-# 安装依赖（包含 devDependencies，用于构建）
-# 说明：构建阶段需要 Vite/TypeScript 等 dev 依赖；最终运行阶段使用 Nginx，不会包含这些依赖。
-ENV CI=true \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PUPPETEER_SKIP_DOWNLOAD=1 \
-    HUSKY=0
-RUN npm ci --no-audit --no-fund
-
-# 复制源代码
-COPY . .
-
-# 构建应用
-RUN npm run build
-
-# 使用 nginx 提供静态文件服务
 FROM nginx:alpine
 
-# 复制构建产物到 nginx 目录
-COPY --from=builder /app/dist /usr/share/nginx/html
+# 直接使用预构建的前端产物（在 Release 工作流中先执行 npm ci && npm run build 生成 frontend/dist）
+# 构建镜像时，工作目录即为 frontend/，因此直接复制 dist 即可。
+COPY dist /usr/share/nginx/html
 
 # 复制 nginx 配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
