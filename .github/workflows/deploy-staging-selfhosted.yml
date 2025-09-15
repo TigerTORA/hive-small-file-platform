@@ -124,21 +124,71 @@ jobs:
           fi
           ls -lh docker-compose.prod.yml backend/.env frontend/.env
 
-      - name: Login GHCR
-        shell: bash
-        env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: |
-          # Login for both docker and podman
-          echo "$GHCR_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          echo "$GHCR_PAT" | podman login ghcr.io -u ${{ github.actor }} --password-stdin || true
-
-      - name: Pull & Up
+      - name: Build and Deploy
         shell: bash
         run: |
           cd /opt/hive-platform
-          docker compose -f docker-compose.prod.yml pull
-          docker compose -f docker-compose.prod.yml up -d
+          # Create simple docker-compose for local build
+          cat > docker-compose.local.yml <<'EOF'
+          version: '3.8'
+          services:
+            postgres:
+              image: postgres:14
+              container_name: hive-platform-db
+              environment:
+                POSTGRES_DB: hive_small_file_db
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: postgres
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+              ports: [ "5432:5432" ]
+              networks: [ hive-platform ]
+            redis:
+              image: redis:6-alpine
+              container_name: hive-platform-redis
+              ports: [ "6379:6379" ]
+              volumes:
+                - redis_data:/data
+              networks: [ hive-platform ]
+            api:
+              build: ${{ github.workspace }}/backend
+              container_name: hive-platform-api
+              env_file: [ backend/.env ]
+              environment:
+                - SENTRY_ENVIRONMENT=staging
+                - AUTO_CREATE_SCHEMA=false
+                - RELOAD=false
+              depends_on: [ postgres, redis ]
+              ports: [ "8000:8000" ]
+              networks: [ hive-platform ]
+            celery-worker:
+              build: ${{ github.workspace }}/backend
+              container_name: hive-platform-worker
+              command: celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4
+              env_file: [ backend/.env ]
+              environment: [ "SENTRY_ENVIRONMENT=staging" ]
+              depends_on: [ postgres, redis ]
+              networks: [ hive-platform ]
+            celery-beat:
+              build: ${{ github.workspace }}/backend
+              container_name: hive-platform-beat
+              command: celery -A app.scheduler.celery_app beat --loglevel=info
+              env_file: [ backend/.env ]
+              environment: [ "SENTRY_ENVIRONMENT=staging" ]
+              depends_on: [ postgres, redis ]
+              networks: [ hive-platform ]
+            frontend:
+              build: ${{ github.workspace }}/frontend
+              container_name: hive-platform-frontend
+              depends_on: [ api ]
+              ports: [ "80:80" ]
+              networks: [ hive-platform ]
+          volumes: { postgres_data: {}, redis_data: {} }
+          networks: { hive-platform: { driver: bridge } }
+          EOF
+
+          # Build and start
+          docker compose -f docker-compose.local.yml up -d --build
 
       - name: DB migration
         shell: bash
