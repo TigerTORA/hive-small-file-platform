@@ -124,111 +124,89 @@ jobs:
           fi
           ls -lh docker-compose.prod.yml backend/.env frontend/.env
 
-      - name: Build Images on Runner
+      - name: Build and Deploy on Runner Yun
         shell: bash
         run: |
-          echo "=== 在Runner云端构建镜像 ==="
-
-          # 构建API镜像并推送到Docker Hub
-          cd ${{ github.workspace }}/backend
-          echo "构建API镜像..."
-          docker build -t hiveplatform/api:${{ env.VERSION }} . || { echo "API构建失败"; exit 1; }
-
-          # 构建前端镜像
-          cd ${{ github.workspace }}/frontend
-          echo "构建前端镜像..."
-          docker build -t hiveplatform/frontend:${{ env.VERSION }} . || { echo "前端构建失败"; exit 1; }
-
-          # 登录Docker Hub并推送
-          echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin || echo "Docker Hub登录失败，使用本地镜像"
-
-          # 推送镜像（忽略失败）
-          docker push hiveplatform/api:${{ env.VERSION }} || echo "API镜像推送失败，继续..."
-          docker push hiveplatform/frontend:${{ env.VERSION }} || echo "前端镜像推送失败，继续..."
-
-          echo "=== 镜像构建完成 ==="
-
-      - name: Deploy to 105 Server
-        shell: bash
-        run: |
-          echo "=== SSH到105机器进行部署 ==="
-
-          # 创建部署脚本
-          cat > deploy_script.sh <<'DEPLOY_EOF'
-          #!/bin/bash
-          set -e
-
-          echo "=== 在105机器上执行部署 ==="
-          cd /opt && mkdir -p hive-platform && cd hive-platform
+          echo "=== 直接在Runner yun上构建和部署 ==="
 
           # 停止旧服务
-          docker stop hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat >/dev/null 2>&1 || true
-          docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat >/dev/null 2>&1 || true
+          docker stop hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
+          docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
 
-          # 创建环境文件（如果不存在）
-          mkdir -p backend frontend
-          if [ ! -f backend/.env ]; then
-            cat > backend/.env <<'ENV_EOF'
-          SERVER_HOST=0.0.0.0
-          SERVER_PORT=8000
-          RELOAD=false
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hive_small_file_db
-          REDIS_URL=redis://localhost:6379/0
-          CELERY_BROKER_URL=redis://localhost:6379/1
-          CELERY_RESULT_BACKEND=redis://localhost:6379/2
-          SECRET_KEY=change-me-in-staging
-          ACCESS_TOKEN_EXPIRE_MINUTES=1440
-          DEFAULT_HIVE_HOST=localhost
-          DEFAULT_HIVE_PORT=10000
-          DEFAULT_HDFS_URL=http://namenode:9870/webhdfs/v1
-          SMALL_FILE_THRESHOLD=134217728
-          SENTRY_DSN=
-          SENTRY_ENVIRONMENT=staging
-          AUTO_CREATE_SCHEMA=false
-          DEMO_MODE=false
-          ENV_EOF
-          fi
+          # 启动数据库服务
+          echo "启动PostgreSQL数据库..."
+          docker run -d --name hive-platform-db \
+            -e POSTGRES_DB=hive_small_file_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 5432:5432 \
+            -v hive_postgres_data:/var/lib/postgresql/data \
+            --restart unless-stopped \
+            postgres:14
 
-          # 确保数据库运行
-          docker ps | grep postgres || docker run -d --name postgres-db -e POSTGRES_DB=hive_small_file_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:14 || echo "数据库启动跳过"
-          docker ps | grep redis || docker run -d --name redis-cache -p 6379:6379 redis:6-alpine || echo "Redis启动跳过"
+          echo "启动Redis缓存..."
+          docker run -d --name hive-platform-redis \
+            -p 6379:6379 \
+            -v hive_redis_data:/data \
+            --restart unless-stopped \
+            redis:6-alpine
 
-          sleep 10
+          echo "等待数据库启动..."
+          sleep 15
 
-          # 拉取并启动应用镜像（优先使用Docker Hub，失败则跳过）
-          docker pull hiveplatform/api:VERSION_PLACEHOLDER || echo "API镜像拉取失败"
-          docker pull hiveplatform/frontend:VERSION_PLACEHOLDER || echo "前端镜像拉取失败"
+          # 构建API镜像
+          echo "构建API服务..."
+          cd ${{ github.workspace }}/backend
+          docker build -t hive-api:local .
+
+          # 构建前端镜像
+          echo "构建前端服务..."
+          cd ${{ github.workspace }}/frontend
+          docker build -t hive-frontend:local .
 
           # 启动API服务
+          echo "启动API服务..."
           docker run -d --name hive-platform-api \
-            --env-file backend/.env \
+            --env-file /opt/hive-platform/backend/.env \
             -e SENTRY_ENVIRONMENT=staging \
-            -p 8000:8000 --restart unless-stopped \
-            hiveplatform/api:VERSION_PLACEHOLDER || echo "API启动失败"
+            -e AUTO_CREATE_SCHEMA=false \
+            -e RELOAD=false \
+            -p 8000:8000 \
+            --restart unless-stopped \
+            hive-api:local
 
           # 启动前端服务
+          echo "启动前端服务..."
           docker run -d --name hive-platform-frontend \
-            -p 80:80 --restart unless-stopped \
-            hiveplatform/frontend:VERSION_PLACEHOLDER || echo "前端启动失败"
+            -p 80:80 \
+            --restart unless-stopped \
+            hive-frontend:local
 
-          echo "=== 105机器部署完成 ==="
-          docker ps | grep hive-platform || echo "没有hive-platform容器运行"
-          DEPLOY_EOF
+          # 启动Worker服务
+          echo "启动Celery Worker..."
+          docker run -d --name hive-platform-worker \
+            --env-file /opt/hive-platform/backend/.env \
+            -e SENTRY_ENVIRONMENT=staging \
+            --restart unless-stopped \
+            hive-api:local \
+            celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4
 
-          # 替换版本号
-          sed -i "s/VERSION_PLACEHOLDER/${{ env.VERSION }}/g" deploy_script.sh
+          # 启动Beat服务
+          echo "启动Celery Beat..."
+          docker run -d --name hive-platform-beat \
+            --env-file /opt/hive-platform/backend/.env \
+            -e SENTRY_ENVIRONMENT=staging \
+            --restart unless-stopped \
+            hive-api:local \
+            celery -A app.scheduler.celery_app beat --loglevel=info
 
-          # 执行SSH部署（如果SSH配置可用）
-          if command -v ssh >/dev/null 2>&1; then
-            chmod +x deploy_script.sh
-            # 这里需要SSH密钥配置才能工作
-            # scp deploy_script.sh root@192.168.0.105:/tmp/
-            # ssh root@192.168.0.105 "bash /tmp/deploy_script.sh"
-            echo "SSH部署脚本已准备好: deploy_script.sh"
-            echo "请手动执行: scp deploy_script.sh root@192.168.0.105:/tmp/ && ssh root@192.168.0.105 'bash /tmp/deploy_script.sh'"
-          else
-            echo "SSH不可用，请手动将部署脚本复制到105机器执行"
-          fi
+          echo "=== 部署完成！检查服务状态 ==="
+          docker ps | grep hive-platform
+
+          echo "=== 运行健康检查 ==="
+          sleep 5
+          curl -f http://localhost:8000/health || echo "API健康检查失败"
+          curl -f http://localhost/health || echo "前端健康检查失败"
 
       - name: DB migration
         shell: bash
