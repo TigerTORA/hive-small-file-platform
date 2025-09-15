@@ -31,8 +31,8 @@ jobs:
             echo "npm版本: $(npm --version)"
           else
             echo "安装Node.js..."
-            # 使用NodeSource安装最新LTS版本
-            curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || echo "NodeSource脚本执行失败"
+            # 使用NodeSource安装Node.js 20（LTS）
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - || echo "NodeSource脚本执行失败"
             sudo apt-get install -y nodejs || echo "apt-get安装失败"
 
             # 如果还是没有，尝试使用snap安装
@@ -263,6 +263,8 @@ jobs:
           # 构建前端 - 先安装依赖并构建
           cd ${{ github.workspace }}/frontend
           echo "安装前端依赖..."
+          # 跳过Puppeteer浏览器下载，避免Google服务器连接超时
+          export PUPPETEER_SKIP_DOWNLOAD=true
           npm install --registry=https://registry.npmmirror.com
           echo "构建前端..."
           npm run build
