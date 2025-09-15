@@ -220,8 +220,13 @@ jobs:
           cd ${{ github.workspace }}/backend
           docker build -t hive-api:local .
 
-          # 构建前端镜像
+          # 构建前端 - 先安装依赖并构建
           cd ${{ github.workspace }}/frontend
+          echo "安装前端依赖..."
+          npm install --registry=https://registry.npmmirror.com
+          echo "构建前端..."
+          npm run build
+          echo "构建前端镜像..."
           docker build -t hive-frontend:local .
 
           echo "=== 启动应用服务 ==="
