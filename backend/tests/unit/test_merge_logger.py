@@ -119,8 +119,8 @@ class TestMergeTaskLogger:
         logger.end_phase(
             MergePhase.CONNECTION_TEST,
             "连接成功",
-            success=True,
-            {"result": "connected"}
+            {"result": "connected"},
+            success=True
         )
 
         # 验证日志条目
