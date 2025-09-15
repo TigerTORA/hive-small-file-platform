@@ -58,21 +58,25 @@ jobs:
           # 创建podman配置目录
           mkdir -p ~/.config/containers
 
-          # 配置podman镜像源
+          # 配置podman镜像源 - 使用v2格式
           tee ~/.config/containers/registries.conf > /dev/null <<'EOF'
+          unqualified-search-registries = ["docker.io"]
+
           [[registry]]
+          prefix = "docker.io"
           location = "docker.io"
+
           [[registry.mirror]]
           location = "docker.m.daocloud.io"
+
           [[registry.mirror]]
           location = "mirror.ccs.tencentyun.com"
+
           [[registry.mirror]]
           location = "hub-mirror.c.163.com"
+
           [[registry.mirror]]
           location = "reg-mirror.qiniu.com"
-
-          [registries.search]
-          registries = ["docker.io"]
           EOF
 
           echo "Podman镜像源配置完成:"
