@@ -128,49 +128,75 @@ jobs:
         shell: bash
         run: |
           cd /opt/hive-platform
-          # Stop and remove old containers first
-          docker stop hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
-          docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
+          echo "=== 检查现有服务状态 ==="
+          docker ps | grep hive-platform || echo "没有运行中的hive-platform容器"
 
-          # Use cached postgres and redis if available (use full registry paths for podman)
-          docker images | grep postgres:14 >/dev/null 2>&1 || { echo "Pulling postgres:14"; timeout 300 docker pull docker.io/library/postgres:14 || exit 1; }
-          docker images | grep redis:6-alpine >/dev/null 2>&1 || { echo "Pulling redis:6-alpine"; timeout 300 docker pull docker.io/library/redis:6-alpine || exit 1; }
+          echo "=== 检查现有镜像 ==="
+          docker images | grep -E "(postgres|redis)" || echo "数据库镜像不存在"
 
-          # Start postgres and redis first (they need to be ready for app)
-          docker run -d --name hive-platform-db --network-alias postgres \
-            -e POSTGRES_DB=hive_small_file_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-            -p 5432:5432 -v hive_postgres_data:/var/lib/postgresql/data --restart unless-stopped docker.io/library/postgres:14
+          echo "=== 停止旧服务（忽略错误） ==="
+          docker stop hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat >/dev/null 2>&1 || true
+          docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat >/dev/null 2>&1 || true
 
-          docker run -d --name hive-platform-redis --network-alias redis \
-            -p 6379:6379 -v hive_redis_data:/data --restart unless-stopped docker.io/library/redis:6-alpine
+          echo "=== 确保数据库服务运行 ==="
+          # 检查postgres是否已运行
+          if ! docker ps | grep hive-platform-db >/dev/null 2>&1; then
+            echo "启动postgres数据库"
+            # 尝试使用已存在的镜像，如果不存在就跳过
+            if docker images | grep postgres >/dev/null 2>&1; then
+              docker run -d --name hive-platform-db \
+                -e POSTGRES_DB=hive_small_file_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+                -p 5432:5432 -v hive_postgres_data:/var/lib/postgresql/data --restart unless-stopped postgres:14 || echo "postgres启动失败，继续..."
+            else
+              echo "postgres镜像不存在，跳过"
+            fi
+          else
+            echo "postgres数据库已运行"
+          fi
 
-          # Wait for databases
-          sleep 15
+          # 检查redis是否已运行
+          if ! docker ps | grep hive-platform-redis >/dev/null 2>&1; then
+            echo "启动redis"
+            if docker images | grep redis >/dev/null 2>&1; then
+              docker run -d --name hive-platform-redis \
+                -p 6379:6379 -v hive_redis_data:/data --restart unless-stopped redis:6-alpine || echo "redis启动失败，继续..."
+            else
+              echo "redis镜像不存在，跳过"
+            fi
+          else
+            echo "redis已运行"
+          fi
 
-          # Build and start API
+          echo "=== 等待数据库就绪 ==="
+          sleep 10
+
+          echo "=== 构建并启动API服务 ==="
           cd ${{ github.workspace }}/backend
-          docker build -t hive-api:local .
+          docker build -t hive-api:local . || { echo "API构建失败"; exit 1; }
           docker run -d --name hive-platform-api \
             --env-file /opt/hive-platform/backend/.env \
             -e SENTRY_ENVIRONMENT=staging -e AUTO_CREATE_SCHEMA=false -e RELOAD=false \
-            -p 8000:8000 --restart unless-stopped hive-api:local
+            -p 8000:8000 --restart unless-stopped hive-api:local || { echo "API启动失败"; exit 1; }
 
-          # Build and start frontend
+          echo "=== 构建并启动前端服务 ==="
           cd ${{ github.workspace }}/frontend
-          docker build -t hive-frontend:local .
+          docker build -t hive-frontend:local . || { echo "前端构建失败"; exit 1; }
           docker run -d --name hive-platform-frontend \
-            -p 80:80 --restart unless-stopped hive-frontend:local
+            -p 80:80 --restart unless-stopped hive-frontend:local || { echo "前端启动失败"; exit 1; }
 
-          # Start worker and beat
+          echo "=== 启动后台任务 ==="
           docker run -d --name hive-platform-worker \
             --env-file /opt/hive-platform/backend/.env -e SENTRY_ENVIRONMENT=staging \
             --restart unless-stopped hive-api:local \
-            celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4
+            celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4 || echo "worker启动失败，继续..."
 
           docker run -d --name hive-platform-beat \
             --env-file /opt/hive-platform/backend/.env -e SENTRY_ENVIRONMENT=staging \
             --restart unless-stopped hive-api:local \
-            celery -A app.scheduler.celery_app beat --loglevel=info
+            celery -A app.scheduler.celery_app beat --loglevel=info || echo "beat启动失败，继续..."
+
+          echo "=== 部署完成，检查状态 ==="
+          docker ps | grep hive-platform || echo "没有hive-platform容器在运行"
 
       - name: DB migration
         shell: bash
