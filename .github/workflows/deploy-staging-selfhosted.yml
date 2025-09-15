@@ -129,7 +129,9 @@ jobs:
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
+          # Login for both docker and podman
           echo "$GHCR_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "$GHCR_PAT" | podman login ghcr.io -u ${{ github.actor }} --password-stdin || true
 
       - name: Pull & Up
         shell: bash
