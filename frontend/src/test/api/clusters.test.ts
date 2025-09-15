@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios from 'axios'
-import { clustersAPI } from '@/api/clusters'
+import { clustersApi } from '@/api/clusters'
 
 // Mock axios
 vi.mock('axios')
@@ -38,7 +38,7 @@ describe('集群API测试', () => {
 
       mockedAxios.get.mockResolvedValue({ data: mockClusters })
 
-      const result = await clustersAPI.getClusters()
+      const result = await clustersApi.list()
 
       expect(mockedAxios.get).toHaveBeenCalledWith('/clusters/')
       expect(result).toEqual(mockClusters)
@@ -48,7 +48,7 @@ describe('集群API测试', () => {
       const errorMessage = 'Network Error'
       mockedAxios.get.mockRejectedValue(new Error(errorMessage))
 
-      await expect(clustersAPI.getClusters()).rejects.toThrow(errorMessage)
+      await expect(clustersApi.list()).rejects.toThrow(errorMessage)
     })
   })
 
@@ -70,7 +70,7 @@ describe('集群API测试', () => {
 
       mockedAxios.post.mockResolvedValue({ data: createdCluster })
 
-      const result = await clustersAPI.createCluster(newCluster)
+      const result = await clustersApi.create(newCluster)
 
       expect(mockedAxios.post).toHaveBeenCalledWith('/clusters/', newCluster)
       expect(result).toEqual(createdCluster)
@@ -98,7 +98,7 @@ describe('集群API测试', () => {
 
       mockedAxios.post.mockRejectedValue(validationError)
 
-      await expect(clustersAPI.createCluster(invalidCluster)).rejects.toMatchObject(validationError)
+      await expect(clustersApi.create(invalidCluster)).rejects.toMatchObject(validationError)
     })
   })
 
@@ -122,7 +122,7 @@ describe('集群API测试', () => {
 
       mockedAxios.put.mockResolvedValue({ data: updatedCluster })
 
-      const result = await clustersAPI.updateCluster(clusterId, updateData)
+      const result = await clustersApi.update(clusterId, updateData)
 
       expect(mockedAxios.put).toHaveBeenCalledWith(`/clusters/${clusterId}`, updateData)
       expect(result).toEqual(updatedCluster)
@@ -134,7 +134,7 @@ describe('集群API测试', () => {
       const clusterId = 1
       mockedAxios.delete.mockResolvedValue({ status: 204 })
 
-      await clustersAPI.deleteCluster(clusterId)
+      await clustersApi.delete(clusterId)
 
       expect(mockedAxios.delete).toHaveBeenCalledWith(`/clusters/${clusterId}`)
     })
@@ -150,7 +150,7 @@ describe('集群API测试', () => {
 
       mockedAxios.delete.mockRejectedValue(notFoundError)
 
-      await expect(clustersAPI.deleteCluster(clusterId)).rejects.toMatchObject(notFoundError)
+      await expect(clustersApi.delete(clusterId)).rejects.toMatchObject(notFoundError)
     })
   })
 
@@ -165,7 +165,7 @@ describe('集群API测试', () => {
 
       mockedAxios.post.mockResolvedValue({ data: connectionResult })
 
-      const result = await clustersAPI.testConnection(clusterId)
+      const result = await clustersApi.testConnection(clusterId)
 
       expect(mockedAxios.post).toHaveBeenCalledWith(`/clusters/${clusterId}/test`)
       expect(result).toEqual(connectionResult)
@@ -181,7 +181,7 @@ describe('集群API测试', () => {
 
       mockedAxios.post.mockResolvedValue({ data: connectionResult })
 
-      const result = await clustersAPI.testConnection(clusterId)
+      const result = await clustersApi.testConnection(clusterId)
 
       expect(result.overall_status).toBe('unhealthy')
       expect(result.hive_connection.status).toBe('error')
@@ -192,7 +192,7 @@ describe('集群API测试', () => {
     it('应该正确处理网络错误', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Network Error'))
 
-      await expect(clustersAPI.getClusters()).rejects.toThrow('Network Error')
+      await expect(clustersApi.list()).rejects.toThrow('Network Error')
     })
 
     it('应该正确处理服务器错误', async () => {
@@ -205,7 +205,7 @@ describe('集群API测试', () => {
 
       mockedAxios.get.mockRejectedValue(serverError)
 
-      await expect(clustersAPI.getClusters()).rejects.toMatchObject(serverError)
+      await expect(clustersApi.list()).rejects.toMatchObject(serverError)
     })
 
     it('应该正确处理认证错误', async () => {
@@ -218,7 +218,7 @@ describe('集群API测试', () => {
 
       mockedAxios.get.mockRejectedValue(authError)
 
-      await expect(clustersAPI.getClusters()).rejects.toMatchObject(authError)
+      await expect(clustersApi.list()).rejects.toMatchObject(authError)
     })
   })
 })
