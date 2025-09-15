@@ -142,14 +142,14 @@ jobs:
             -p 5432:5432 \
             -v hive_postgres_data:/var/lib/postgresql/data \
             --restart unless-stopped \
-            postgres:14
+            docker.io/library/postgres:14
 
           echo "启动Redis缓存..."
           docker run -d --name hive-platform-redis \
             -p 6379:6379 \
             -v hive_redis_data:/data \
             --restart unless-stopped \
-            redis:6-alpine
+            docker.io/library/redis:6-alpine
 
           echo "等待数据库启动..."
           sleep 15
