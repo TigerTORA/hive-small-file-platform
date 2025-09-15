@@ -21,6 +21,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        shell: bash
+        run: |
+          echo "=== 安装Node.js环境 ==="
+          # 检查是否已安装Node.js
+          if command -v node >/dev/null 2>&1; then
+            echo "Node.js已安装: $(node --version)"
+            echo "npm版本: $(npm --version)"
+          else
+            echo "安装Node.js..."
+            # 使用NodeSource安装最新LTS版本
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || echo "NodeSource脚本执行失败"
+            sudo apt-get install -y nodejs || echo "apt-get安装失败"
+
+            # 如果还是没有，尝试使用snap安装
+            if ! command -v node >/dev/null 2>&1; then
+              echo "尝试使用snap安装Node.js..."
+              sudo snap install node --classic || echo "snap安装失败"
+            fi
+
+            # 如果还是没有，下载二进制版本
+            if ! command -v node >/dev/null 2>&1; then
+              echo "下载Node.js二进制版本..."
+              cd /tmp
+              curl -fsSL https://nodejs.org/dist/v18.18.0/node-v18.18.0-linux-x64.tar.xz -o node.tar.xz
+              tar -xf node.tar.xz
+              sudo cp -r node-v18.18.0-linux-x64/* /usr/local/
+            fi
+          fi
+
+          # 验证安装
+          node --version && npm --version
+
       - name: Configure Docker Registry Mirrors
         shell: bash
         run: |
