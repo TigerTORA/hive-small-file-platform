@@ -195,8 +195,8 @@ jobs:
           docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
 
           echo "=== 启动数据库服务（使用镜像源） ==="
-          # 启动PostgreSQL
-          docker run -d --name hive-platform-db \
+          # 启动PostgreSQL（替换现有容器）
+          docker run -d --replace --name hive-platform-db \
             -e POSTGRES_DB=hive_small_file_db \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
@@ -205,8 +205,8 @@ jobs:
             --restart unless-stopped \
             postgres:14
 
-          # 启动Redis
-          docker run -d --name hive-platform-redis \
+          # 启动Redis（替换现有容器）
+          docker run -d --replace --name hive-platform-redis \
             -p 6379:6379 \
             -v hive_redis_data:/data \
             --restart unless-stopped \
@@ -230,8 +230,8 @@ jobs:
           docker build -t hive-frontend:local .
 
           echo "=== 启动应用服务 ==="
-          # 启动API服务
-          docker run -d --name hive-platform-api \
+          # 启动API服务（替换现有容器）
+          docker run -d --replace --name hive-platform-api \
             --env-file /opt/hive-platform/backend/.env \
             -e SENTRY_ENVIRONMENT=staging \
             -e AUTO_CREATE_SCHEMA=false \
@@ -240,22 +240,22 @@ jobs:
             --restart unless-stopped \
             hive-api:local
 
-          # 启动前端服务
-          docker run -d --name hive-platform-frontend \
+          # 启动前端服务（替换现有容器）
+          docker run -d --replace --name hive-platform-frontend \
             -p 80:80 \
             --restart unless-stopped \
             hive-frontend:local
 
-          # 启动Worker服务
-          docker run -d --name hive-platform-worker \
+          # 启动Worker服务（替换现有容器）
+          docker run -d --replace --name hive-platform-worker \
             --env-file /opt/hive-platform/backend/.env \
             -e SENTRY_ENVIRONMENT=staging \
             --restart unless-stopped \
             hive-api:local \
             celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4
 
-          # 启动Beat服务
-          docker run -d --name hive-platform-beat \
+          # 启动Beat服务（替换现有容器）
+          docker run -d --replace --name hive-platform-beat \
             --env-file /opt/hive-platform/backend/.env \
             -e SENTRY_ENVIRONMENT=staging \
             --restart unless-stopped \
