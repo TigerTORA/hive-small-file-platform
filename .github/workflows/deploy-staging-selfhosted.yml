@@ -1,0 +1,153 @@
+name: Deploy Staging (Self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image version tag (e.g., 1.0.2)'
+        required: true
+        default: '1.0.2'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, staging]
+    env:
+      VERSION: ${{ inputs.version }}
+      IMAGE_OWNER: ${{ vars.IMAGE_OWNER || github.repository_owner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure docker compose plugin (v2)
+        shell: bash
+        run: |
+          set -e
+          mkdir -p ~/.docker/cli-plugins
+          if ! docker compose version >/dev/null 2>&1; then
+            curl -L -o ~/.docker/cli-plugins/docker-compose \
+              https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64
+            chmod +x ~/.docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+      - name: Write compose and env files (if missing)
+        shell: bash
+        run: |
+          set -e
+          cd /opt && mkdir -p hive-platform && cd hive-platform
+          if [ ! -f docker-compose.prod.yml ]; then
+            cat > docker-compose.prod.yml <<'EOF'
+          version: '3.8'
+          services:
+            postgres:
+              image: postgres:14
+              container_name: hive-platform-db
+              environment:
+                POSTGRES_DB: hive_small_file_db
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: postgres
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+              ports: [ "5432:5432" ]
+              networks: [ hive-platform ]
+            redis:
+              image: redis:6-alpine
+              container_name: hive-platform-redis
+              ports: [ "6379:6379" ]
+              volumes:
+                - redis_data:/data
+              networks: [ hive-platform ]
+            api:
+              image: ghcr.io/${{ env.IMAGE_OWNER }}/hive-small-file-api:${{ env.VERSION }}
+              container_name: hive-platform-api
+              env_file: [ backend/.env ]
+              environment:
+                - SENTRY_ENVIRONMENT=staging
+                - AUTO_CREATE_SCHEMA=false
+                - RELOAD=false
+              depends_on: [ postgres, redis ]
+              ports: [ "8000:8000" ]
+              networks: [ hive-platform ]
+            celery-worker:
+              image: ghcr.io/${{ env.IMAGE_OWNER }}/hive-small-file-api:${{ env.VERSION }}
+              container_name: hive-platform-worker
+              command: celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=4
+              env_file: [ backend/.env ]
+              environment: [ "SENTRY_ENVIRONMENT=staging" ]
+              depends_on: [ postgres, redis ]
+              networks: [ hive-platform ]
+            celery-beat:
+              image: ghcr.io/${{ env.IMAGE_OWNER }}/hive-small-file-api:${{ env.VERSION }}
+              container_name: hive-platform-beat
+              command: celery -A app.scheduler.celery_app beat --loglevel=info
+              env_file: [ backend/.env ]
+              environment: [ "SENTRY_ENVIRONMENT=staging" ]
+              depends_on: [ postgres, redis ]
+              networks: [ hive-platform ]
+            frontend:
+              image: ghcr.io/${{ env.IMAGE_OWNER }}/hive-small-file-frontend:${{ env.VERSION }}
+              container_name: hive-platform-frontend
+              depends_on: [ api ]
+              ports: [ "80:80" ]
+              networks: [ hive-platform ]
+          volumes: { postgres_data: {}, redis_data: {} }
+          networks: { hive-platform: { driver: bridge } }
+          EOF
+          fi
+          mkdir -p backend frontend
+          if [ ! -f backend/.env ]; then
+            cat > backend/.env <<'EOF'
+          SERVER_HOST=0.0.0.0
+          SERVER_PORT=8000
+          RELOAD=false
+          DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hive_small_file_db
+          REDIS_URL=redis://redis:6379/0
+          CELERY_BROKER_URL=redis://redis:6379/1
+          CELERY_RESULT_BACKEND=redis://redis:6379/2
+          SECRET_KEY=change-me-in-staging
+          ACCESS_TOKEN_EXPIRE_MINUTES=1440
+          DEFAULT_HIVE_HOST=localhost
+          DEFAULT_HIVE_PORT=10000
+          DEFAULT_HDFS_URL=http://namenode:9870/webhdfs/v1
+          SMALL_FILE_THRESHOLD=134217728
+          SENTRY_DSN=
+          SENTRY_ENVIRONMENT=staging
+          AUTO_CREATE_SCHEMA=false
+          DEMO_MODE=false
+          EOF
+          fi
+          if [ ! -f frontend/.env ]; then
+            echo 'VITE_API_BASE_URL=/api/v1' > frontend/.env
+          fi
+          ls -lh docker-compose.prod.yml backend/.env frontend/.env
+
+      - name: Login GHCR
+        shell: bash
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          echo "$GHCR_PAT" | docker login ghcr.io -u ${{ env.IMAGE_OWNER }} --password-stdin
+
+      - name: Pull & Up
+        shell: bash
+        run: |
+          cd /opt/hive-platform
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
+
+      - name: DB migration
+        shell: bash
+        run: |
+          cd /opt/hive-platform
+          sleep 10 || true
+          docker compose -f docker-compose.prod.yml exec api alembic upgrade head || true
+
+      - name: Health checks
+        shell: bash
+        run: |
+          echo 'API:'; curl -s http://127.0.0.1:8000/health || true
+          echo 'FE :'; curl -s http://127.0.0.1/health || true
+
