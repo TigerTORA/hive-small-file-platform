@@ -132,17 +132,17 @@ jobs:
           docker stop hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
           docker rm hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat hive-platform-db hive-platform-redis >/dev/null 2>&1 || true
 
-          # Use cached postgres and redis if available
-          docker images | grep postgres:14 >/dev/null 2>&1 || { echo "Pulling postgres:14"; timeout 300 docker pull postgres:14 || exit 1; }
-          docker images | grep redis:6-alpine >/dev/null 2>&1 || { echo "Pulling redis:6-alpine"; timeout 300 docker pull redis:6-alpine || exit 1; }
+          # Use cached postgres and redis if available (use full registry paths for podman)
+          docker images | grep postgres:14 >/dev/null 2>&1 || { echo "Pulling postgres:14"; timeout 300 docker pull docker.io/library/postgres:14 || exit 1; }
+          docker images | grep redis:6-alpine >/dev/null 2>&1 || { echo "Pulling redis:6-alpine"; timeout 300 docker pull docker.io/library/redis:6-alpine || exit 1; }
 
           # Start postgres and redis first (they need to be ready for app)
           docker run -d --name hive-platform-db --network-alias postgres \
             -e POSTGRES_DB=hive_small_file_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-            -p 5432:5432 -v hive_postgres_data:/var/lib/postgresql/data --restart unless-stopped postgres:14
+            -p 5432:5432 -v hive_postgres_data:/var/lib/postgresql/data --restart unless-stopped docker.io/library/postgres:14
 
           docker run -d --name hive-platform-redis --network-alias redis \
-            -p 6379:6379 -v hive_redis_data:/data --restart unless-stopped redis:6-alpine
+            -p 6379:6379 -v hive_redis_data:/data --restart unless-stopped docker.io/library/redis:6-alpine
 
           # Wait for databases
           sleep 15
