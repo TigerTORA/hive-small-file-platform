@@ -19,14 +19,11 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/test/**/*.test.ts'],
     exclude: [
-      'node_modules', 
-      'dist', 
-      'src/test/e2e/**',
-      'src/test/components/**',
-      'src/test/ClusterDetail.test.ts',
-      'src/test/ClustersManagement.test.ts'
+      'node_modules',
+      'dist',
+      'src/test/e2e/**'
     ],
     coverage: {
       provider: 'v8',
@@ -38,10 +35,10 @@ export default defineConfig({
         'src/main.ts'
       ],
       thresholds: {
-        lines: 60,
-        functions: 60,
-        branches: 50,
-        statements: 60,
+        lines: 80,
+        functions: 85,
+        branches: 75,
+        statements: 80,
       },
     },
   },

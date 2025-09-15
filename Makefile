@@ -41,19 +41,27 @@ check:
 
 test:
 	@echo "Running backend tests..."
-	cd backend && python -m pytest test_simple.py --cov=app --cov-report=term --cov-fail-under=0 -v
+	cd backend && python -m pytest --cov=app --cov-report=term --cov-fail-under=75 -v --maxfail=5
 	@echo "Running frontend tests..."
 	cd frontend && npm run test:run
 
 ci-test:
 	@echo "Running CI-compatible tests..."
-	cd backend && python -m pytest test_simple.py --cov=app --cov-report=xml:coverage.xml --cov-fail-under=0 -v
+	cd backend && python -m pytest --cov=app --cov-report=xml:coverage.xml --cov-fail-under=75 -v --maxfail=5
 	cd frontend && npm run test:run
 
 status:
 	@echo "Generating consolidated project status..."
 	python3 scripts/generate_project_status.py
 	@echo "\nSummary written to PROJECT_STATUS.md and project_status.json"
+
+test-check:
+	@echo "Running quick test configuration check..."
+	python3 scripts/quick_test_check.py
+
+test-coverage:
+	@echo "Running comprehensive test coverage validation..."
+	python3 scripts/validate_test_coverage.py
 
 clean:
 	@echo "Cleaning up cache files..."
