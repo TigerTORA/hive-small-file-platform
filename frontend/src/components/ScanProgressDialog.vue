@@ -197,16 +197,24 @@ const fetchProgress = async () => {
   if (!props.taskId) return
 
   try {
-    const data = await api.get(`/tables/scan-progress/${props.taskId}`)
-    progress.value = data
-    
-    if (data.logs) {
-      // 最新在前，更新后滚动贴底确保可见
-      displayLogs.value = [...data.logs].reverse()
-      await nextTick()
-      scrollLogsToBottom()
+    // 获取扫描任务基本信息
+    const taskData = await api.get(`/scan-tasks/${props.taskId}`)
+    progress.value = taskData
+
+    // 获取扫描任务日志
+    try {
+      const logsData = await api.get(`/scan-tasks/${props.taskId}/logs`)
+      if (logsData && Array.isArray(logsData)) {
+        // 最新在前，更新后滚动贴底确保可见
+        displayLogs.value = [...logsData].reverse()
+        await nextTick()
+        scrollLogsToBottom()
+      }
+    } catch (logsError) {
+      console.warn('Failed to fetch scan logs:', logsError)
+      // 日志获取失败不影响主要功能
     }
-    
+
     // 如果任务完成，停止轮询
     if (progress.value?.status === 'completed' || progress.value?.status === 'failed') {
       stopPolling()
