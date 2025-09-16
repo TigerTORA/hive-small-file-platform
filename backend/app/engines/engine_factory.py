@@ -67,7 +67,8 @@ class MergeEngineFactory:
             推荐的合并策略
         """
         # 生产环境优先使用安全合并策略
-        if is_production and table_size > 1024 * 1024 * 1024:  # 大于1GB
+        # 大表优先选择零停机安全合并：生产环境 ≥1GB 直接使用 safe_merge
+        if is_production and table_size >= 1024 * 1024 * 1024:  # 大于等于1GB
             return 'safe_merge'
         
         # 基于表格式和文件数量推荐策略
@@ -162,6 +163,18 @@ class MergeEngineFactory:
         
         # 验证策略兼容性
         validation = cls.validate_strategy_compatibility(recommended_strategy, table_format)
+
+        # 针对极端规模补充风险提示（不改变 valid 结论，仅加 warnings）
+        try:
+            if file_count and file_count > 5000:
+                validation.setdefault('warnings', []).append(
+                    f"文件数量过多({file_count})，建议分批处理或在低峰期执行")
+            if partition_count and partition_count > 1000:
+                validation.setdefault('warnings', []).append(
+                    f"分区数量过多({partition_count})，建议限制并发或按分区批次合并")
+        except Exception:
+            # 不因指标计算失败影响任务创建
+            pass
         
         return {
             'database_name': database_name,
@@ -177,9 +190,15 @@ class MergeEngineFactory:
         """
         获取策略选择原因
         """
-        reasons = {
-            'concatenate': f"文件数量较少({file_count})且为行存储格式({table_format})，CONCATENATE最高效",
-            'insert_overwrite': f"中等文件数量({file_count})，INSERT OVERWRITE平衡性能和可靠性", 
-            'safe_merge': f"大量文件({file_count})或大表({table_size // (1024*1024)}MB)，使用零停机安全合并"
-        }
-        return reasons.get(strategy, f"根据表特征选择{strategy}策略")
+        # 细化提示文案：小表/中等/大表
+        size_mb = max(0, (table_size or 0) // (1024 * 1024))
+        if strategy == 'concatenate':
+            return f"小表/文件较少({file_count})且为行存储格式({table_format})，CONCATENATE最高效"
+        if strategy == 'insert_overwrite':
+            # 认为 <256MB 或文件数 <100 为小表场景
+            if (table_size and table_size < 256 * 1024 * 1024) or (file_count and file_count < 100):
+                return f"小表({size_mb}MB, {file_count}文件)，INSERT OVERWRITE在可靠性与性能间更均衡"
+            return f"中等文件数量({file_count})，INSERT OVERWRITE平衡性能和可靠性"
+        if strategy == 'safe_merge':
+            return f"大量文件({file_count})或大表({size_mb}MB)，使用零停机安全合并"
+        return f"根据表特征选择{strategy}策略"
