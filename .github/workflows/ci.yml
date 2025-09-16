@@ -36,9 +36,8 @@ jobs:
       - name: Run backend tests (CI)
         working-directory: backend
         run: |
-          # TODO: restore --cov-fail-under=75 after stabilizing test suites
           python -m pytest -m "not integration" \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=20 -v \
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=75 -v \
             --maxfail=5 --tb=short
 
       - name: Upload backend coverage

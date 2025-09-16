@@ -1,0 +1,41 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/integration-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  backend-integration:
+    name: Backend · Integration tests
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration')) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run integration tests
+        working-directory: backend
+        run: |
+          python -m pytest -m integration -v --maxfail=5 --tb=short
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-logs
+          path: backend/.pytest_cache
