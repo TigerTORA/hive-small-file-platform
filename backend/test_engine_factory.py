@@ -73,7 +73,7 @@ class TestMergeEngineFactory:
             table_format="textfile",
             file_count=200,
             partition_count=10,
-            table_size=1024 * 1024 * 1024,  # 1GB
+            table_size=1024 * 1024 * 1024,  # 1GB - 现在使用>=判断，所以1GB会返回safe_merge
             is_production=True
         )
         assert strategy == "safe_merge"
@@ -292,83 +292,78 @@ class TestSafeHiveMergeEngine:
         assert result["valid"] is False
         assert "不支持的合并策略" in result["message"]
     
-    @patch('app.engines.safe_hive_engine.SafeHiveMergeEngine._execute_concatenate')
-    def test_execute_merge_concatenate(self, mock_execute):
+    def test_execute_merge_concatenate(self):
         """测试执行concatenate合并"""
-        mock_execute.return_value = {
-            "success": True,
-            "message": "Concatenate merge completed",
-            "files_before": 100,
-            "files_after": 10,
-            "size_saved": 1024 * 1024
-        }
+        with patch.object(self.engine, '_execute_concatenate') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "message": "Concatenate merge completed",
+                "files_before": 100,
+                "files_after": 10,
+                "size_saved": 1024 * 1024
+            }
         
-        task = MergeTask(
-            cluster_id=1,
-            task_name="test_concatenate",
-            table_name="test_table",
-            database_name="test_db",
-            merge_strategy="concatenate"
-        )
-        
-        result = self.engine.execute_merge(task, Mock())
-        
-        assert result["success"] is True
-        assert result["files_before"] == 100
-        assert result["files_after"] == 10
-        mock_execute.assert_called_once_with(task, Mock())
+            task = MergeTask(
+                cluster_id=1,
+                task_name="test_concatenate",
+                table_name="test_table",
+                database_name="test_db",
+                merge_strategy="concatenate"
+            )
+            db = Mock()
+            result = self.engine.execute_merge(task, db)
+            assert result["success"] is True
+            assert result["files_before"] == 100
+            assert result["files_after"] == 10
+            mock_execute.assert_called_once_with(task, db)
     
-    @patch('app.engines.safe_hive_engine.SafeHiveMergeEngine._execute_insert_overwrite')
-    def test_execute_merge_insert_overwrite(self, mock_execute):
+    def test_execute_merge_insert_overwrite(self):
         """测试执行insert_overwrite合并"""
-        mock_execute.return_value = {
-            "success": True,
-            "message": "Insert overwrite merge completed",
-            "files_before": 200,
-            "files_after": 20,
-            "size_saved": 2048 * 1024
-        }
-        
-        task = MergeTask(
-            cluster_id=1,
-            task_name="test_insert_overwrite",
-            table_name="test_table",
-            database_name="test_db",
-            merge_strategy="insert_overwrite"
-        )
-        
-        result = self.engine.execute_merge(task, Mock())
-        
-        assert result["success"] is True
-        assert result["files_before"] == 200
-        assert result["files_after"] == 20
-        mock_execute.assert_called_once_with(task, Mock())
+        with patch.object(self.engine, '_execute_insert_overwrite') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "message": "Insert overwrite merge completed",
+                "files_before": 200,
+                "files_after": 20,
+                "size_saved": 2048 * 1024
+            }
+            task = MergeTask(
+                cluster_id=1,
+                task_name="test_insert_overwrite",
+                table_name="test_table",
+                database_name="test_db",
+                merge_strategy="insert_overwrite"
+            )
+            db = Mock()
+            result = self.engine.execute_merge(task, db)
+            assert result["success"] is True
+            assert result["files_before"] == 200
+            assert result["files_after"] == 20
+            mock_execute.assert_called_once_with(task, db)
     
-    @patch('app.engines.safe_hive_engine.SafeHiveMergeEngine._execute_safe_merge')
-    def test_execute_merge_safe_merge(self, mock_execute):
+    def test_execute_merge_safe_merge(self):
         """测试执行safe_merge合并"""
-        mock_execute.return_value = {
-            "success": True,
-            "message": "Safe merge completed",
-            "files_before": 500,
-            "files_after": 50,
-            "size_saved": 5120 * 1024
-        }
-        
-        task = MergeTask(
-            cluster_id=1,
-            task_name="test_safe_merge",
-            table_name="test_table",
-            database_name="test_db",
-            merge_strategy="safe_merge"
-        )
-        
-        result = self.engine.execute_merge(task, Mock())
-        
-        assert result["success"] is True
-        assert result["files_before"] == 500
-        assert result["files_after"] == 50
-        mock_execute.assert_called_once_with(task, Mock())
+        with patch.object(self.engine, '_execute_safe_merge') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "message": "Safe merge completed",
+                "files_before": 500,
+                "files_after": 50,
+                "size_saved": 5120 * 1024
+            }
+            task = MergeTask(
+                cluster_id=1,
+                task_name="test_safe_merge",
+                table_name="test_table",
+                database_name="test_db",
+                merge_strategy="safe_merge"
+            )
+            db = Mock()
+            result = self.engine.execute_merge(task, db)
+            assert result["success"] is True
+            assert result["files_before"] == 500
+            assert result["files_after"] == 50
+            mock_execute.assert_called_once_with(task, db)
     
     def test_execute_merge_invalid_strategy(self):
         """测试执行无效策略合并"""
