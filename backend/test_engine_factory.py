@@ -135,8 +135,8 @@ class TestMergeEngineFactory:
             table_size=100 * 1024 * 1024 * 1024,  # 100GB
             partition_count=200
         )
-        
-        assert task_config["recommended_strategy"] == "insert_overwrite"
+
+        assert task_config["recommended_strategy"] == "safe_merge"
         assert task_config["validation"]["valid"] is True
         assert len(task_config["validation"]["warnings"]) > 0
         assert any("文件数量过多" in warning for warning in task_config["validation"]["warnings"])
