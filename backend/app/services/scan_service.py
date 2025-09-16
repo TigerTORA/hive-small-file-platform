@@ -9,6 +9,7 @@ from app.models.cluster import Cluster
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.schemas.scan_task import ScanTaskLog
+from app.config.database import SessionLocal
 
 
 class ScanTaskManager:
@@ -215,11 +216,26 @@ class ScanTaskManager:
         
         # 在后台线程中执行扫描
         def run_scan():
+            # 为后台线程创建独立的数据库会话，避免跨线程复用同一 Session 导致崩溃
+            db_thread = SessionLocal()
             try:
-                self._execute_cluster_scan(db, task, cluster, max_tables_per_db, strict_real)
+                # 重新获取 cluster 与 task，确保在该会话上下文中托管
+                cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster.id).first() if cluster else None
+                task_t = db_thread.query(ScanTask).filter(ScanTask.id == task.id).first() if task else None
+                if not cluster_t or not task_t:
+                    raise RuntimeError('Failed to load task/cluster in thread-local session')
+
+                self._execute_cluster_scan(db_thread, task_t, cluster_t, max_tables_per_db, strict_real)
             except Exception as e:
-                self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db)
-                self.complete_task(db, task.task_id, success=False, error_message=str(e))
+                try:
+                    self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db_thread)
+                finally:
+                    self.complete_task(db_thread, task.task_id, success=False, error_message=str(e))
+            finally:
+                try:
+                    db_thread.close()
+                except Exception:
+                    pass
         
         thread = threading.Thread(target=run_scan)
         thread.daemon = True

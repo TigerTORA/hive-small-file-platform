@@ -47,21 +47,7 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
     return route.fulfill({ json: { cluster_id: 1, task_id: taskId, status: 'started' } })
   })
 
-  await page.route(`**/api/v1/tables/scan-progress/${taskId}`, async route => {
-    return route.fulfill({ json: {
-      task_id: taskId,
-      status: 'completed',
-      progress_percentage: 100,
-      current_item: null,
-      completed_items: 10,
-      total_items: 10,
-      estimated_remaining_seconds: 0,
-      logs: [
-        { timestamp: new Date().toISOString(), level: 'INFO', message: '开始扫描集群' },
-        { timestamp: new Date().toISOString(), level: 'INFO', message: '扫描完成' },
-      ]
-    } })
-  })
+  // 废弃API已移除，使用统一的scan-tasks API处理
 
   await page.route('**/api/v1/scan-tasks/**', async route => {
     // 列表/详情/日志统一返回已完成的任务
