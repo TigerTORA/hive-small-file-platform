@@ -28,7 +28,8 @@ class TestMergeEngineFactory:
             name="test-cluster",
             hive_metastore_url="mysql://test:test@localhost:3306/hive",
             hdfs_namenode_url="hdfs://localhost:9000",
-            connection_type="mysql"
+            hive_host="localhost",
+            hive_port=10000
         )
     
     def test_get_engine_returns_safe_hive_engine(self):
@@ -152,7 +153,8 @@ class TestSafeHiveMergeEngine:
             name="test-cluster",
             hive_metastore_url="mysql://test:test@localhost:3306/hive",
             hdfs_namenode_url="hdfs://localhost:9000",
-            connection_type="mysql"
+            hive_host="localhost",
+            hive_port=10000
         )
         # Mock SafeHiveMergeEngine since it has dependency issues
         with patch('app.engines.safe_hive_engine.SafeHiveMergeEngine') as mock_engine_class:

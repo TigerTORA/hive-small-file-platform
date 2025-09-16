@@ -61,7 +61,8 @@ class TestSmartMergeIntegration:
             description="Integration test cluster",
             hive_metastore_url="mysql://test:test@localhost:3306/hive",
             hdfs_namenode_url="hdfs://localhost:9000",
-            connection_type="mysql"
+            hive_host="localhost",
+            hive_port=10000
         )
         db.add(self.test_cluster)
         db.commit()
