@@ -353,3 +353,26 @@ jobs:
           echo 'API:'; curl -s http://127.0.0.1:8000/health || true
           echo 'FE :'; curl -s http://127.0.0.1/health || true
 
+      - name: Network diagnosis
+        shell: bash
+        run: |
+          echo "=== 容器运行状态 ==="
+          docker ps -a | grep hive-platform
+
+          echo -e "\n=== 端口监听状态 ==="
+          netstat -tlnp | grep ":80\|:8000"
+
+          echo -e "\n=== 防火墙状态检查 ==="
+          sudo iptables -L -n | head -20
+
+          echo -e "\n=== 开放端口到外网 ==="
+          echo "尝试开放80和8000端口..."
+          sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT || echo "80端口规则已存在"
+          sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT || echo "8000端口规则已存在"
+
+          echo -e "\n=== 防火墙规则保存 ==="
+          sudo iptables-save > /tmp/iptables.rules || echo "规则保存失败"
+
+          echo -e "\n=== 最终端口检查 ==="
+          netstat -tlnp | grep ":80\|:8000"
+
