@@ -282,14 +282,36 @@ jobs:
           echo 'API:'; curl -s http://127.0.0.1:8000/health || true
           echo 'FE :'; curl -s http://127.0.0.1/health || true
 
-      - name: Open firewall ports (Safe)
+      - name: Emergency SSH and firewall fix
         shell: bash
         run: |
-          echo "=== 安全地开放端口 ==="
-          # 只添加端口规则，不影响现有SSH规则
-          sudo iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-          sudo iptables -C INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null || sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT
+          echo "=== 紧急SSH和防火墙修复 ==="
 
-          echo "=== 检查端口状态 ==="
-          netstat -tlnp | grep ":80\|:8000" || echo "端口检查完成"
+          # 1. 检查并重启SSH服务
+          echo "检查SSH服务..."
+          sudo systemctl status ssh || sudo systemctl status sshd || echo "SSH服务检查"
+          sudo systemctl restart ssh || sudo systemctl restart sshd || echo "SSH重启"
+
+          # 2. 清理并重置防火墙规则
+          echo "重置防火墙规则..."
+          sudo iptables -F INPUT || echo "清理INPUT链"
+          sudo iptables -P INPUT ACCEPT || echo "设置默认策略ACCEPT"
+
+          # 3. 确保SSH端口优先开放
+          echo "确保SSH端口开放..."
+          sudo iptables -I INPUT -p tcp --dport 22 -j ACCEPT || echo "SSH规则"
+
+          # 4. 添加应用端口
+          echo "添加应用端口..."
+          sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT || echo "80端口"
+          sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT || echo "8000端口"
+
+          # 5. 检查最终状态
+          echo "=== 最终状态 ==="
+          echo "SSH服务:"
+          sudo systemctl is-active ssh || sudo systemctl is-active sshd || echo "SSH状态检查"
+          echo "端口监听:"
+          netstat -tlnp | grep ":22\|:80\|:8000" || echo "端口检查完成"
+
+          echo "=== SSH修复完成，可以尝试重新连接 ==="
 
