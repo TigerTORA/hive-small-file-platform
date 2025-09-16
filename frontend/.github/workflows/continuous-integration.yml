@@ -1,0 +1,413 @@
+name: 持续最小化集成测试
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # 每天UTC 2:00运行完整测试套件
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '18'
+  CACHE_VERSION: 'v1'
+
+jobs:
+  # 阶段1：快速验证（最小化测试）
+  quick-validation:
+    name: 快速验证 - 单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 代码格式检查
+        run: npm run lint
+
+      - name: 类型检查
+        run: npm run type-check
+
+      - name: 单元测试
+        run: npm run test:run
+        env:
+          VITEST_MIN_THREADS: 1
+          VITEST_MAX_THREADS: 2
+
+      - name: 测试覆盖率检查
+        run: npm run test:coverage
+        continue-on-error: true
+
+      - name: 上传覆盖率报告
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  # 阶段2：组件集成测试
+  component-integration:
+    name: 组件集成测试
+    runs-on: ubuntu-latest
+    needs: quick-validation
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        test-group: [
+          'feature-flags',
+          'api-integration',
+          'dashboard-components',
+          'performance'
+        ]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 运行集成测试 - ${{ matrix.test-group }}
+        run: npm run test:run -- src/test/integration/${{ matrix.test-group }}.integration.test.ts
+        env:
+          NODE_ENV: test
+
+      - name: 生成测试报告
+        if: always()
+        run: |
+          mkdir -p test-results
+          echo "集成测试完成: ${{ matrix.test-group }}" > test-results/${{ matrix.test-group }}-result.txt
+
+      - name: 上传测试结果
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-results-${{ matrix.test-group }}
+          path: test-results/
+
+  # 阶段3：端到端测试
+  e2e-tests:
+    name: 端到端测试
+    runs-on: ubuntu-latest
+    needs: component-integration
+    timeout-minutes: 30
+
+    services:
+      # 模拟后端服务
+      mock-backend:
+        image: node:18-alpine
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 安装Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: 构建应用
+        run: npm run build
+
+      - name: 启动应用服务器
+        run: |
+          npm run preview &
+          sleep 10
+          curl -f http://localhost:3000 || exit 1
+        env:
+          VITE_API_BASE_URL: http://localhost:8000
+
+      - name: 等待服务就绪
+        run: |
+          timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+
+      - name: 运行端到端测试
+        run: npx playwright test src/test/e2e/critical-user-journeys.spec.ts
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: http://localhost:3000
+          PLAYWRIGHT_API_BASE_URL: http://localhost:8000
+
+      - name: 上传测试报告
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-test-report
+          path: |
+            playwright-report/
+            test-results/
+
+      - name: 上传失败截图
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: test-results/
+
+  # 阶段4：性能回归测试
+  performance-regression:
+    name: 性能回归测试
+    runs-on: ubuntu-latest
+    needs: quick-validation
+    timeout-minutes: 20
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          # 获取历史提交用于性能对比
+          fetch-depth: 50
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 运行性能测试
+        run: npm run test:run -- src/test/integration/performance.integration.test.ts --reporter=json --outputFile=performance-results.json
+
+      - name: 分析性能结果
+        run: |
+          node -e "
+          const fs = require('fs');
+          const results = JSON.parse(fs.readFileSync('performance-results.json', 'utf8'));
+
+          const performanceTests = results.tests.filter(t =>
+            t.title.includes('性能') || t.title.includes('Performance')
+          );
+
+          const failedTests = performanceTests.filter(t => t.status === 'failed');
+
+          if (failedTests.length > 0) {
+            console.log('性能回归检测到问题:');
+            failedTests.forEach(t => console.log(\`- \${t.title}\`));
+            process.exit(1);
+          }
+
+          console.log(\`性能测试通过: \${performanceTests.length}个测试\`);
+          "
+
+      - name: 上传性能报告
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-results
+          path: performance-results.json
+
+  # 阶段5：视觉回归测试（仅在PR中运行）
+  visual-regression:
+    name: 视觉回归测试
+    runs-on: ubuntu-latest
+    needs: component-integration
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 25
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 安装Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: 构建应用
+        run: npm run build
+
+      - name: 启动应用
+        run: |
+          npm run preview &
+          sleep 10
+
+      - name: 运行视觉测试
+        run: npm run test:visual
+        env:
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+          PERCY_BRANCH: ${{ github.head_ref }}
+          PERCY_TARGET_BRANCH: ${{ github.base_ref }}
+
+  # 阶段6：安全和质量检查
+  security-quality:
+    name: 安全和质量检查
+    runs-on: ubuntu-latest
+    needs: quick-validation
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 安全漏洞扫描
+        run: npm audit --audit-level=high
+
+      - name: 依赖许可证检查
+        run: npx license-checker --summary
+
+      - name: 代码质量检查
+        run: |
+          # 检查包大小
+          npm run build
+          npx bundlesize
+
+      - name: TypeScript严格检查
+        run: npx tsc --noEmit --strict
+
+  # 阶段7：构建验证
+  build-verification:
+    name: 构建验证
+    runs-on: ubuntu-latest
+    needs: [component-integration, security-quality]
+    timeout-minutes: 15
+
+    strategy:
+      matrix:
+        node-version: ['16', '18', '20']
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 构建应用
+        run: npm run build
+
+      - name: 验证构建产物
+        run: |
+          ls -la dist/
+          test -f dist/index.html
+          test -d dist/assets
+
+          # 检查关键文件存在
+          find dist -name "*.js" | head -5
+          find dist -name "*.css" | head -5
+
+      - name: 构建大小检查
+        run: |
+          du -sh dist/
+          # 检查总大小不超过50MB
+          test $(du -s dist/ | cut -f1) -lt 51200
+
+  # 最终报告
+  test-summary:
+    name: 测试总结
+    runs-on: ubuntu-latest
+    needs: [
+      quick-validation,
+      component-integration,
+      e2e-tests,
+      performance-regression,
+      security-quality,
+      build-verification
+    ]
+    if: always()
+
+    steps:
+      - name: 下载所有测试结果
+        uses: actions/download-artifact@v3
+
+      - name: 生成测试总结
+        run: |
+          echo "# 持续集成测试总结" > test-summary.md
+          echo "" >> test-summary.md
+          echo "## 测试结果概览" >> test-summary.md
+          echo "- 快速验证: ${{ needs.quick-validation.result }}" >> test-summary.md
+          echo "- 组件集成: ${{ needs.component-integration.result }}" >> test-summary.md
+          echo "- 端到端测试: ${{ needs.e2e-tests.result }}" >> test-summary.md
+          echo "- 性能回归: ${{ needs.performance-regression.result }}" >> test-summary.md
+          echo "- 安全质量: ${{ needs.security-quality.result }}" >> test-summary.md
+          echo "- 构建验证: ${{ needs.build-verification.result }}" >> test-summary.md
+          echo "" >> test-summary.md
+          echo "测试时间: $(date)" >> test-summary.md
+          echo "提交SHA: ${{ github.sha }}" >> test-summary.md
+
+          cat test-summary.md
+
+      - name: 检查整体测试状态
+        run: |
+          if [[ "${{ needs.quick-validation.result }}" == "failure" ||
+                "${{ needs.component-integration.result }}" == "failure" ||
+                "${{ needs.e2e-tests.result }}" == "failure" ]]; then
+            echo "关键测试失败，阻止合并"
+            exit 1
+          fi
+
+          if [[ "${{ needs.performance-regression.result }}" == "failure" ]]; then
+            echo "性能回归检测到问题，需要关注"
+            # 不阻止合并，但标记为警告
+          fi
+
+          echo "所有关键测试通过"
+
+      - name: 通知测试结果
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "主分支测试失败，需要立即修复"
+          # 这里可以集成Slack、邮件等通知
+
+# 工作流配置
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend

@@ -1,0 +1,28 @@
+name: Diagnose Frontend Issue
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, staging]
+    steps:
+      - name: Check container status
+        shell: bash
+        run: |
+          echo "=== 检查所有平台容器状态 ==="
+          docker ps -a | grep hive-platform || echo "未发现hive-platform容器"
+
+          echo -e "\n=== 检查Docker Compose服务状态 ==="
+          cd /opt/hive-platform
+          docker compose -f docker-compose.prod.yml ps || echo "compose状态检查失败"
+
+          echo -e "\n=== 检查端口监听状态 ==="
+          netstat -tlnp | grep ":80\|:8000"
+
+          echo -e "\n=== 前端容器日志 ==="
+          docker logs hive-platform-frontend --tail 20 2>/dev/null || echo "无法获取前端日志"
+
+          echo -e "\n=== 测试本地访问 ==="
+          curl -I http://127.0.0.1/ 2>/dev/null || echo "本地80端口访问失败"
+          curl -I http://127.0.0.1:8000/health 2>/dev/null || echo "本地API访问失败"

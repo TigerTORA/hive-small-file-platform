@@ -71,7 +71,8 @@ class MergeEngineFactory:
             return 'safe_merge'
         
         # 基于表格式和文件数量推荐策略
-        if table_format in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
+        format_upper = table_format.upper() if table_format else ''
+        if format_upper in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
             # 对于行存储格式
             if file_count < 100:
                 return 'concatenate'  # 文件少时，CONCATENATE最快
@@ -79,7 +80,7 @@ class MergeEngineFactory:
                 return 'insert_overwrite'  # 中等文件数，INSERT OVERWRITE更可靠
             else:
                 return 'safe_merge'  # 文件太多时，使用安全合并
-        elif table_format in ['PARQUET', 'ORC']:
+        elif format_upper in ['PARQUET', 'ORC']:
             # 对于列存储格式，INSERT OVERWRITE 通常更好
             if file_count < 500:
                 return 'insert_overwrite'
@@ -104,6 +105,7 @@ class MergeEngineFactory:
         """
         result = {
             'compatible': True,
+            'valid': True,
             'warnings': [],
             'recommendations': []
         }
@@ -113,16 +115,18 @@ class MergeEngineFactory:
         # 检查引擎是否支持该策略
         if merge_strategy not in capabilities.get('supported_strategies', []):
             result['compatible'] = False
+            result['valid'] = False
             result['warnings'].append(f"SafeHiveMergeEngine does not support strategy {merge_strategy}")
             return result
         
         # 检查策略和表格式的兼容性
         if table_format:
-            if merge_strategy == 'concatenate' and table_format not in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
+            format_upper = table_format.upper()
+            if merge_strategy == 'concatenate' and format_upper not in ['TEXTFILE', 'SEQUENCEFILE', 'RCFILE']:
                 result['warnings'].append(f"CONCATENATE strategy may not work optimally with {table_format} format")
                 result['recommendations'].append("Consider using INSERT OVERWRITE or SAFE_MERGE strategy instead")
-            
-            if merge_strategy == 'insert_overwrite' and table_format in ['PARQUET', 'ORC']:
+
+            if merge_strategy == 'insert_overwrite' and format_upper in ['PARQUET', 'ORC']:
                 result['recommendations'].append("For large tables, consider using SAFE_MERGE for zero-downtime operation")
         
         return result

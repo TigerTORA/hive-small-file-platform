@@ -1,0 +1,26 @@
+version: 2
+snapshot:
+  widths: [375, 768, 1280, 1920]
+  min_height: 1024
+  percy_css: |
+    /* Hide dynamic elements */
+    [data-testid="real-time-clock"] { display: none !important; }
+    [data-testid="refresh-timer"] { display: none !important; }
+    .loading-spinner { display: none !important; }
+
+    /* Standardize animations */
+    *, *::before, *::after {
+      animation-duration: 0s !important;
+      animation-delay: 0s !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
+    }
+
+discovery:
+  allowed_hostnames:
+    - localhost
+    - 127.0.0.1
+
+agent:
+  asset_discovery:
+    network_idle_timeout: 750

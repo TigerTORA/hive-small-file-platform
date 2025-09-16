@@ -13,7 +13,10 @@
     "test:e2e": "playwright test",
     "test:e2e:real": "playwright test src/test/e2e/real-backend.spec.ts",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "test:visual": "percy exec -- playwright test tests/visual/",
+    "test:visual:local": "playwright test tests/visual/",
+    "test:visual:update": "percy exec -- playwright test tests/visual/ --update-snapshots"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
@@ -33,10 +36,13 @@
     "vue3-grid-layout-next": "^1.0.7"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
+    "@percy/cli": "^1.31.2",
+    "@percy/playwright": "^1.0.9",
+    "@pinia/testing": "^0.1.7",
     "@playwright/test": "^1.55.0",
     "@types/jsdom": "^21.1.7",
     "@vitejs/plugin-vue": "^4.6.2",
+    "@vitest/coverage-v8": "^3.2.4",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.4.0",
     "happy-dom": "^18.0.1",

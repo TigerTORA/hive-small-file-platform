@@ -1,0 +1,62 @@
+name: Quick Frontend Fix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-frontend:
+    runs-on: [self-hosted, staging]
+    steps:
+      - name: Diagnose and fix frontend
+        shell: bash
+        run: |
+          echo "=== 快速诊断前端问题 ==="
+
+          echo "1. 检查所有平台容器状态"
+          docker ps -a | grep hive-platform || echo "未发现hive-platform容器"
+
+          echo -e "\n2. 检查Docker Compose服务状态"
+          cd /opt/hive-platform
+          docker compose -f docker-compose.prod.yml ps || echo "compose状态检查失败"
+
+          echo -e "\n3. 检查端口监听状态"
+          netstat -tlnp | grep ":80\|:8000" || echo "端口检查完成"
+
+          echo -e "\n4. 前端容器日志（最近20行）"
+          docker logs hive-platform-frontend --tail 20 2>/dev/null || echo "无法获取前端日志，可能容器不存在"
+
+          echo -e "\n5. 测试本地访问"
+          echo "API测试："
+          curl -I http://127.0.0.1:8000/health 2>/dev/null || echo "本地API访问失败"
+          echo "前端测试："
+          curl -I http://127.0.0.1/ 2>/dev/null || echo "本地前端访问失败"
+
+          echo -e "\n=== 开始修复前端 ==="
+
+          echo "6. 强制重启前端服务"
+          cd /opt/hive-platform
+          docker compose -f docker-compose.prod.yml restart frontend 2>/dev/null || echo "前端重启失败"
+
+          echo "7. 如果重启失败，重新创建前端容器"
+          docker compose -f docker-compose.prod.yml up -d --force-recreate frontend 2>/dev/null || echo "前端重建失败"
+
+          echo "8. 等待前端启动"
+          sleep 10
+
+          echo "9. 最终状态检查"
+          docker ps | grep hive-platform-frontend || echo "前端容器仍未运行"
+          curl -I http://127.0.0.1/ 2>/dev/null && echo "✅ 前端修复成功！" || echo "❌ 前端仍无法访问"
+
+          echo -e "\n=== 如果还是失败，完全重新部署所有服务 ==="
+          echo "10. 重新部署整个平台"
+          docker compose -f docker-compose.prod.yml down 2>/dev/null || true
+          docker compose -f docker-compose.prod.yml up -d 2>/dev/null || echo "完整重新部署失败"
+
+          echo "11. 最终验证"
+          sleep 15
+          echo "API状态："
+          curl -s http://127.0.0.1:8000/health 2>/dev/null || echo "API不可用"
+          echo "前端状态："
+          curl -I http://127.0.0.1/ 2>/dev/null && echo "✅ 前端可访问" || echo "❌ 前端仍不可访问"
+
+          echo -e "\n=== 诊断和修复完成 ==="

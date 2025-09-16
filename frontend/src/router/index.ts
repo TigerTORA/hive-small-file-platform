@@ -5,7 +5,9 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/clusters'
+      name: 'Dashboard',
+      component: () => import('@/views/Dashboard.vue'),
+      meta: { title: '监控中心' }
     },
     {
       path: '/clusters',
@@ -44,6 +46,12 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('@/views/Settings.vue'),
       meta: { title: '系统设置' }
+    },
+    {
+      path: '/big-screen',
+      name: 'BigScreen',
+      component: () => import('@/views/BigScreen.vue'),
+      meta: { title: '实时监控大屏', fullscreen: true }
     }
   ]
 })
