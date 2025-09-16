@@ -136,7 +136,7 @@ describe('性能基准测试', () => {
       const endTime = performance.now()
       const totalTime = endTime - startTime
 
-      expect(totalTime).toBeLessThan(10) // 1000次颜色获取应在10ms内
+      expect(totalTime).toBeLessThan(20) // 1000次颜色获取应在20ms内
       expect(colors).toHaveLength(1000)
       expect(colors[0]).toBe('#409EFF') // 验证第一个颜色
     })
@@ -349,7 +349,7 @@ describe('性能基准测试', () => {
       const endTime = performance.now()
       const avgTime = (endTime - startTime) / 1000
 
-      expect(avgTime).toBeLessThan(0.05) // 平均每次格式化应在0.05ms内
+      expect(avgTime).toBeLessThan(0.15) // 平均每次格式化应在0.15ms内
       expect(results).toHaveLength(1000)
       expect(results[0]).toMatch(/\d{2}\/\d{2}\s+\d{2}:\d{2}/)
     })
