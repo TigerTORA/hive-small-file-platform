@@ -32,6 +32,9 @@ app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
+# 标记本文件为集成测试，CI 默认跳过（仅在专门的 integration 任务或本地运行）
+pytestmark = pytest.mark.integration
+
 
 class TestSmartMergeIntegration:
     """智能合并功能端到端集成测试"""
