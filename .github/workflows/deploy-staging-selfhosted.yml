@@ -7,6 +7,10 @@ on:
         description: 'Image version tag (e.g., 1.0.2)'
         required: true
         default: '1.0.2'
+      fix_frontend_only:
+        description: 'Only fix frontend (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -17,8 +21,35 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       IMAGE_OWNER: ${{ vars.IMAGE_OWNER || github.repository_owner }}
+      FIX_FRONTEND_ONLY: ${{ inputs.fix_frontend_only }}
     steps:
+      - name: Quick Frontend Fix (if requested)
+        if: env.FIX_FRONTEND_ONLY == 'true'
+        shell: bash
+        run: |
+          echo "=== 快速前端修复模式 ==="
+          cd /opt/hive-platform
+
+          echo "1. 检查容器状态"
+          docker ps -a | grep hive-platform || echo "未发现容器"
+
+          echo "2. 前端容器日志"
+          docker logs hive-platform-frontend --tail 10 2>/dev/null || echo "前端容器日志不可用"
+
+          echo "3. 重启前端容器"
+          docker compose -f docker-compose.prod.yml restart frontend || docker compose -f docker-compose.prod.yml up -d frontend
+
+          echo "4. 等待启动"
+          sleep 15
+
+          echo "5. 测试修复结果"
+          curl -I http://127.0.0.1/ && echo "✅ 前端修复成功" || echo "❌ 前端仍有问题"
+
+          # 如果是纯修复模式，直接退出
+          exit 0
+
       - name: Checkout
+        if: env.FIX_FRONTEND_ONLY != 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node.js

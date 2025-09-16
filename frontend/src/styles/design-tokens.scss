@@ -1,0 +1,351 @@
+// ================================
+// Hive 小文件治理平台 - 设计系统
+// ================================
+
+// 颜色系统
+:root {
+  // 主品牌色
+  --hive-primary: #409eff;
+  --hive-primary-light: #79bbff;
+  --hive-primary-lighter: #a0cfff;
+  --hive-primary-dark: #337ecc;
+  --hive-primary-darker: #2b69b0;
+
+  // 成功色
+  --hive-success: #67c23a;
+  --hive-success-light: #85ce61;
+  --hive-success-lighter: #a4da89;
+  --hive-success-dark: #529b2e;
+  --hive-success-darker: #437d24;
+
+  // 警告色
+  --hive-warning: #e6a23c;
+  --hive-warning-light: #ebb563;
+  --hive-warning-lighter: #f0c78a;
+  --hive-warning-dark: #b88230;
+  --hive-warning-darker: #9b6827;
+
+  // 危险色
+  --hive-danger: #f56c6c;
+  --hive-danger-light: #f78989;
+  --hive-danger-lighter: #fab6b6;
+  --hive-danger-dark: #c45656;
+  --hive-danger-darker: #a54747;
+
+  // 信息色
+  --hive-info: #909399;
+  --hive-info-light: #a6a9ad;
+  --hive-info-lighter: #b1b3b8;
+  --hive-info-dark: #73767a;
+  --hive-info-darker: #5d6064;
+
+  // 中性色
+  --hive-white: #ffffff;
+  --hive-black: #000000;
+  --hive-gray-50: #f9fafb;
+  --hive-gray-100: #f3f4f6;
+  --hive-gray-200: #e5e7eb;
+  --hive-gray-300: #d1d5db;
+  --hive-gray-400: #9ca3af;
+  --hive-gray-500: #6b7280;
+  --hive-gray-600: #4b5563;
+  --hive-gray-700: #374151;
+  --hive-gray-800: #1f2937;
+  --hive-gray-900: #111827;
+
+  // 背景色
+  --hive-bg-primary: #ffffff;
+  --hive-bg-secondary: #f5f7fa;
+  --hive-bg-tertiary: #f0f2f5;
+  --hive-bg-page: #f5f7fa;
+  --hive-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  // 文字颜色
+  --hive-text-primary: #303133;
+  --hive-text-regular: #606266;
+  --hive-text-secondary: #909399;
+  --hive-text-placeholder: #c0c4cc;
+  --hive-text-disabled: #c0c4cc;
+
+  // 边框颜色
+  --hive-border-lighter: #f2f6fc;
+  --hive-border-light: #e4e7ed;
+  --hive-border-base: #dcdfe6;
+  --hive-border-dark: #d4d7de;
+  --hive-border-darker: #cdd0d6;
+
+  // 阴影
+  --hive-shadow-light: 0 2px 4px rgba(0, 0, 0, 0.04);
+  --hive-shadow-base: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --hive-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --hive-shadow-deeper: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  // 功能特定颜色
+  --hive-chart-blue: #409eff;
+  --hive-chart-green: #67c23a;
+  --hive-chart-orange: #e6a23c;
+  --hive-chart-red: #f56c6c;
+  --hive-chart-purple: #9c27b0;
+  --hive-chart-teal: #00bcd4;
+  --hive-chart-indigo: #3f51b5;
+  --hive-chart-pink: #e91e63;
+
+  // 状态指示色
+  --hive-status-online: #52c41a;
+  --hive-status-offline: #ff4d4f;
+  --hive-status-warning: #faad14;
+  --hive-status-processing: #1890ff;
+
+  // 渐变色
+  --hive-gradient-primary: linear-gradient(135deg, #409eff 0%, #79bbff 100%);
+  --hive-gradient-success: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  --hive-gradient-warning: linear-gradient(135deg, #e6a23c 0%, #ebb563 100%);
+  --hive-gradient-danger: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
+}
+
+// 深色主题
+:root.dark {
+  // 背景色 (深色模式)
+  --hive-bg-primary: #1f2937;
+  --hive-bg-secondary: #111827;
+  --hive-bg-tertiary: #0f172a;
+  --hive-bg-page: #111827;
+  --hive-bg-overlay: rgba(0, 0, 0, 0.8);
+
+  // 文字颜色 (深色模式)
+  --hive-text-primary: #f9fafb;
+  --hive-text-regular: #e5e7eb;
+  --hive-text-secondary: #d1d5db;
+  --hive-text-placeholder: #6b7280;
+  --hive-text-disabled: #6b7280;
+
+  // 边框颜色 (深色模式)
+  --hive-border-lighter: #374151;
+  --hive-border-light: #4b5563;
+  --hive-border-base: #6b7280;
+  --hive-border-dark: #9ca3af;
+  --hive-border-darker: #d1d5db;
+
+  // 阴影 (深色模式)
+  --hive-shadow-light: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --hive-shadow-base: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --hive-shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --hive-shadow-deeper: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+// 字体系统
+:root {
+  // 字体族
+  --hive-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                      'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+                      'Microsoft YaHei', Arial, sans-serif;
+  --hive-font-family-mono: 'SF Mono', Monaco, Consolas, 'Liberation Mono',
+                           'Courier New', monospace;
+
+  // 字体大小
+  --hive-font-size-xs: 12px;
+  --hive-font-size-sm: 14px;
+  --hive-font-size-base: 16px;
+  --hive-font-size-lg: 18px;
+  --hive-font-size-xl: 20px;
+  --hive-font-size-2xl: 24px;
+  --hive-font-size-3xl: 30px;
+  --hive-font-size-4xl: 36px;
+  --hive-font-size-5xl: 48px;
+
+  // 字体重量
+  --hive-font-weight-light: 300;
+  --hive-font-weight-normal: 400;
+  --hive-font-weight-medium: 500;
+  --hive-font-weight-semibold: 600;
+  --hive-font-weight-bold: 700;
+  --hive-font-weight-extrabold: 800;
+
+  // 行高
+  --hive-line-height-none: 1;
+  --hive-line-height-tight: 1.25;
+  --hive-line-height-snug: 1.375;
+  --hive-line-height-normal: 1.5;
+  --hive-line-height-relaxed: 1.625;
+  --hive-line-height-loose: 2;
+}
+
+// 间距系统
+:root {
+  --hive-space-0: 0;
+  --hive-space-1: 4px;
+  --hive-space-2: 8px;
+  --hive-space-3: 12px;
+  --hive-space-4: 16px;
+  --hive-space-5: 20px;
+  --hive-space-6: 24px;
+  --hive-space-7: 28px;
+  --hive-space-8: 32px;
+  --hive-space-10: 40px;
+  --hive-space-12: 48px;
+  --hive-space-16: 64px;
+  --hive-space-20: 80px;
+  --hive-space-24: 96px;
+  --hive-space-32: 128px;
+}
+
+// 圆角系统
+:root {
+  --hive-radius-none: 0;
+  --hive-radius-sm: 2px;
+  --hive-radius-base: 4px;
+  --hive-radius-md: 6px;
+  --hive-radius-lg: 8px;
+  --hive-radius-xl: 12px;
+  --hive-radius-2xl: 16px;
+  --hive-radius-3xl: 24px;
+  --hive-radius-full: 9999px;
+}
+
+// 动画系统
+:root {
+  // 过渡时间
+  --hive-duration-75: 75ms;
+  --hive-duration-100: 100ms;
+  --hive-duration-150: 150ms;
+  --hive-duration-200: 200ms;
+  --hive-duration-300: 300ms;
+  --hive-duration-500: 500ms;
+  --hive-duration-700: 700ms;
+  --hive-duration-1000: 1000ms;
+
+  // 缓动函数
+  --hive-ease-linear: linear;
+  --hive-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --hive-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --hive-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --hive-ease-back: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+// 断点系统
+:root {
+  --hive-breakpoint-xs: 480px;
+  --hive-breakpoint-sm: 768px;
+  --hive-breakpoint-md: 992px;
+  --hive-breakpoint-lg: 1200px;
+  --hive-breakpoint-xl: 1600px;
+  --hive-breakpoint-2xl: 1920px;
+}
+
+// Z-index 层级
+:root {
+  --hive-z-hide: -1;
+  --hive-z-auto: auto;
+  --hive-z-base: 0;
+  --hive-z-docked: 10;
+  --hive-z-dropdown: 1000;
+  --hive-z-sticky: 1100;
+  --hive-z-banner: 1200;
+  --hive-z-overlay: 1300;
+  --hive-z-modal: 1400;
+  --hive-z-popover: 1500;
+  --hive-z-skipLink: 1600;
+  --hive-z-toast: 1700;
+  --hive-z-tooltip: 1800;
+}
+
+// 组件特定 tokens
+:root {
+  // 卡片
+  --hive-card-bg: var(--hive-bg-primary);
+  --hive-card-border: var(--hive-border-light);
+  --hive-card-radius: var(--hive-radius-lg);
+  --hive-card-shadow: var(--hive-shadow-base);
+  --hive-card-padding: var(--hive-space-6);
+
+  // 按钮
+  --hive-button-height-sm: 32px;
+  --hive-button-height-md: 40px;
+  --hive-button-height-lg: 48px;
+  --hive-button-radius: var(--hive-radius-base);
+  --hive-button-padding-sm: var(--hive-space-3) var(--hive-space-4);
+  --hive-button-padding-md: var(--hive-space-4) var(--hive-space-6);
+  --hive-button-padding-lg: var(--hive-space-5) var(--hive-space-8);
+
+  // 表格
+  --hive-table-header-bg: var(--hive-gray-50);
+  --hive-table-border: var(--hive-border-light);
+  --hive-table-hover-bg: var(--hive-gray-50);
+  --hive-table-padding: var(--hive-space-3) var(--hive-space-4);
+
+  // 导航
+  --hive-nav-height: 64px;
+  --hive-nav-bg: var(--hive-bg-primary);
+  --hive-nav-border: var(--hive-border-light);
+  --hive-nav-item-padding: var(--hive-space-4) var(--hive-space-6);
+
+  // 侧边栏
+  --hive-sidebar-width: 250px;
+  --hive-sidebar-collapsed-width: 64px;
+  --hive-sidebar-bg: var(--hive-gray-800);
+  --hive-sidebar-text: var(--hive-gray-300);
+  --hive-sidebar-active: var(--hive-primary);
+}
+
+// 深色主题组件覆盖
+:root.dark {
+  --hive-card-bg: var(--hive-gray-800);
+  --hive-card-border: var(--hive-gray-700);
+
+  --hive-table-header-bg: var(--hive-gray-700);
+  --hive-table-hover-bg: var(--hive-gray-700);
+
+  --hive-nav-bg: var(--hive-gray-800);
+  --hive-nav-border: var(--hive-gray-700);
+
+  --hive-sidebar-bg: var(--hive-gray-900);
+}
+
+// 工具类
+.hive-text-gradient {
+  background: var(--hive-gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hive-shadow-glow {
+  box-shadow: 0 0 20px rgba(64, 158, 255, 0.3);
+}
+
+.hive-transition-all {
+  transition: all var(--hive-duration-200) var(--hive-ease-out);
+}
+
+// 响应式工具类
+@media (max-width: 768px) {
+  :root {
+    --hive-nav-height: 56px;
+    --hive-sidebar-width: 100%;
+    --hive-card-padding: var(--hive-space-4);
+  }
+}
+
+// 打印样式
+@media print {
+  :root {
+    --hive-shadow-light: none;
+    --hive-shadow-base: none;
+    --hive-shadow-dark: none;
+    --hive-shadow-deeper: none;
+  }
+}
+
+// 减少动画偏好
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --hive-duration-75: 0ms;
+    --hive-duration-100: 0ms;
+    --hive-duration-150: 0ms;
+    --hive-duration-200: 0ms;
+    --hive-duration-300: 0ms;
+    --hive-duration-500: 0ms;
+    --hive-duration-700: 0ms;
+    --hive-duration-1000: 0ms;
+  }
+}

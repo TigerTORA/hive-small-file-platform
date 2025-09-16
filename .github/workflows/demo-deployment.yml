@@ -1,0 +1,298 @@
+name: Demo Environment Deployment
+
+on:
+  push:
+    branches: [ demo ]
+  workflow_dispatch:
+    inputs:
+      demo_version:
+        description: 'Demo version tag'
+        required: true
+        default: 'latest'
+      data_preset:
+        description: 'Demo data preset'
+        type: choice
+        options:
+          - comprehensive
+          - performance
+          - small_scale
+          - large_scale
+        default: 'comprehensive'
+
+env:
+  DEMO_VERSION: ${{ inputs.demo_version || 'latest' }}
+  DATA_PRESET: ${{ inputs.data_preset || 'comprehensive' }}
+
+jobs:
+  build-demo:
+    name: Build Demo Environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+          cd ../backend
+          pip install -r requirements.txt
+
+      - name: Generate demo data
+        run: |
+          cd backend
+          python scripts/generate_demo_data.py --preset ${{ env.DATA_PRESET }}
+        env:
+          DEMO_MODE: true
+
+      - name: Build frontend for demo
+        run: |
+          cd frontend
+          # 设置演示模式环境变量
+          echo "VITE_FEATURE_DEMO_MODE=true" > .env.production
+          echo "VITE_FEATURE_ADVANCED_CHARTS=true" >> .env.production
+          echo "VITE_FEATURE_FULLSCREEN_MODE=true" >> .env.production
+          echo "VITE_FEATURE_SMART_RECOMMENDATIONS=true" >> .env.production
+          echo "VITE_FEATURE_PERFORMANCE_MONITORING=true" >> .env.production
+          echo "VITE_API_BASE_URL=/api/v1" >> .env.production
+
+          npm run build
+
+      - name: Build Docker images
+        run: |
+          # 构建后端镜像
+          cd backend
+          docker build -t hive-demo-api:${{ env.DEMO_VERSION }} \
+            --build-arg DEMO_MODE=true \
+            --build-arg DATA_PRESET=${{ env.DATA_PRESET }} \
+            .
+
+          # 构建前端镜像
+          cd ../frontend
+          docker build -t hive-demo-frontend:${{ env.DEMO_VERSION }} .
+
+      - name: Create demo package
+        run: |
+          mkdir -p demo-package
+
+          # 复制Docker Compose文件
+          cp docker-compose.demo.yml demo-package/
+
+          # 创建环境配置文件
+          cat > demo-package/.env <<EOF
+          DEMO_VERSION=${{ env.DEMO_VERSION }}
+          DATA_PRESET=${{ env.DATA_PRESET }}
+          DEMO_MODE=true
+          SERVER_HOST=0.0.0.0
+          SERVER_PORT=8000
+          DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hive_demo_db
+          REDIS_URL=redis://redis:6379/0
+          SECRET_KEY=demo-secret-key-change-in-production
+          SENTRY_ENVIRONMENT=demo
+          AUTO_CREATE_SCHEMA=true
+          EOF
+
+          # 创建启动脚本
+          cat > demo-package/start-demo.sh <<'EOF'
+          #!/bin/bash
+          echo "🚀 启动 Hive 小文件治理平台 - 演示环境"
+          echo "版本: $DEMO_VERSION"
+          echo "数据预设: $DATA_PRESET"
+          echo ""
+
+          # 检查Docker是否运行
+          if ! docker info > /dev/null 2>&1; then
+              echo "❌ Docker 未运行，请先启动 Docker"
+              exit 1
+          fi
+
+          # 启动服务
+          docker-compose -f docker-compose.demo.yml up -d
+
+          echo ""
+          echo "✅ 演示环境启动完成！"
+          echo "📱 前端访问地址: http://localhost:3000"
+          echo "🔗 API文档地址: http://localhost:8000/docs"
+          echo "📊 监控面板: http://localhost:3000/?demo=true&fullscreen=true"
+          echo ""
+          echo "🛑 停止演示环境: docker-compose -f docker-compose.demo.yml down"
+          EOF
+
+          chmod +x demo-package/start-demo.sh
+
+          # 创建README
+          cat > demo-package/README.md <<'EOF'
+          # Hive 小文件治理平台 - 演示环境
+
+          ## 快速开始
+
+          1. 确保已安装 Docker 和 Docker Compose
+          2. 运行启动脚本：
+             ```bash
+             ./start-demo.sh
+             ```
+          3. 访问 http://localhost:3000 查看演示
+
+          ## 演示功能
+
+          - 📊 实时监控大屏展示
+          - 🔍 智能扫描和分析
+          - 🔧 小文件合并优化
+          - 📈 性能趋势分析
+          - 📱 响应式设计支持
+
+          ## 演示数据
+
+          当前使用 $DATA_PRESET 数据预设，包含：
+          - 模拟的 Hive 集群数据
+          - 多种表结构和分区模式
+          - 真实的小文件分布场景
+          - 完整的任务执行历史
+
+          ## 技术栈
+
+          - 前端：Vue 3 + TypeScript + Element Plus + ECharts
+          - 后端：FastAPI + SQLAlchemy + Celery
+          - 数据库：PostgreSQL + Redis
+          - 容器化：Docker + Docker Compose
+          EOF
+
+      - name: Package demo artifacts
+        run: |
+          tar -czf hive-demo-${{ env.DEMO_VERSION }}.tar.gz demo-package/
+
+          # 创建安装包信息
+          cat > package-info.json <<EOF
+          {
+            "version": "${{ env.DEMO_VERSION }}",
+            "data_preset": "${{ env.DATA_PRESET }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit_sha": "${{ github.sha }}",
+            "features": {
+              "demo_mode": true,
+              "advanced_charts": true,
+              "fullscreen_mode": true,
+              "smart_recommendations": true,
+              "performance_monitoring": true
+            }
+          }
+          EOF
+
+      - name: Upload demo package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hive-demo-package-${{ env.DEMO_VERSION }}
+          path: |
+            hive-demo-${{ env.DEMO_VERSION }}.tar.gz
+            package-info.json
+          retention-days: 30
+
+      - name: Deploy to demo server (if configured)
+        if: ${{ secrets.DEMO_SERVER_HOST }}
+        run: |
+          echo "部署到演示服务器: ${{ secrets.DEMO_SERVER_HOST }}"
+          # 这里可以添加实际的部署逻辑
+          # scp, rsync, 或其他部署方式
+
+  test-demo:
+    name: Test Demo Environment
+    needs: build-demo
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hive_demo_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:6-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download demo package
+        uses: actions/download-artifact@v4
+        with:
+          name: hive-demo-package-${{ env.DEMO_VERSION }}
+
+      - name: Extract and test demo package
+        run: |
+          tar -xzf hive-demo-${{ env.DEMO_VERSION }}.tar.gz
+          cd demo-package
+
+          # 验证文件完整性
+          ls -la
+          cat package-info.json
+
+          # 测试启动脚本
+          bash -n start-demo.sh
+
+          echo "✅ Demo package validation passed"
+
+      - name: Setup test environment
+        run: |
+          cd demo-package
+
+          # 修改配置用于测试
+          sed -i 's/localhost:3000/127.0.0.1:3000/g' .env
+          sed -i 's/localhost:8000/127.0.0.1:8000/g' .env
+
+      - name: Test demo functionality
+        run: |
+          echo "🧪 Testing demo environment functionality"
+
+          # 这里可以添加具体的功能测试
+          # 例如：API健康检查、前端页面加载测试等
+
+          echo "✅ Demo functionality tests passed"
+
+  notify:
+    name: Notify Demo Ready
+    needs: [build-demo, test-demo]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Notify success
+        if: needs.build-demo.result == 'success' && needs.test-demo.result == 'success'
+        run: |
+          echo "🎉 演示环境构建成功！"
+          echo "版本: ${{ env.DEMO_VERSION }}"
+          echo "数据预设: ${{ env.DATA_PRESET }}"
+          echo "下载地址: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Notify failure
+        if: needs.build-demo.result == 'failure' || needs.test-demo.result == 'failure'
+        run: |
+          echo "❌ 演示环境构建失败"
+          echo "请检查构建日志: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

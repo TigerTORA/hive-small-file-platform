@@ -1,0 +1,170 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: hive-demo-db
+    environment:
+      POSTGRES_DB: hive_demo_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+      - ./demo-data/sql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - hive-demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:6-alpine
+    container_name: hive-demo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - demo_redis_data:/data
+    networks:
+      - hive-demo
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: hive-demo-api:${DEMO_VERSION:-latest}
+    container_name: hive-demo-api
+    env_file:
+      - .env
+    environment:
+      - DEMO_MODE=true
+      - AUTO_CREATE_SCHEMA=true
+      - SENTRY_ENVIRONMENT=demo
+      - RELOAD=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - hive-demo
+    volumes:
+      - ./demo-data:/app/demo-data:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-worker:
+    image: hive-demo-api:${DEMO_VERSION:-latest}
+    container_name: hive-demo-worker
+    command: celery -A app.scheduler.celery_app worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    environment:
+      - DEMO_MODE=true
+      - SENTRY_ENVIRONMENT=demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hive-demo
+    volumes:
+      - ./demo-data:/app/demo-data:ro
+
+  celery-beat:
+    image: hive-demo-api:${DEMO_VERSION:-latest}
+    container_name: hive-demo-beat
+    command: celery -A app.scheduler.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - DEMO_MODE=true
+      - SENTRY_ENVIRONMENT=demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hive-demo
+    volumes:
+      - ./demo-data:/app/demo-data:ro
+
+  frontend:
+    image: hive-demo-frontend:${DEMO_VERSION:-latest}
+    container_name: hive-demo-frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - hive-demo
+    environment:
+      - DEMO_MODE=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # 演示数据生成器（一次性任务）
+  demo-data-generator:
+    image: hive-demo-api:${DEMO_VERSION:-latest}
+    container_name: hive-demo-data-generator
+    command: python scripts/generate_demo_data.py --preset ${DATA_PRESET:-comprehensive}
+    env_file:
+      - .env
+    environment:
+      - DEMO_MODE=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hive-demo
+    volumes:
+      - ./demo-data:/app/demo-data
+    restart: "no"
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: hive-demo-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.demo.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - hive-demo
+    restart: unless-stopped
+
+volumes:
+  demo_postgres_data:
+    driver: local
+  demo_redis_data:
+    driver: local
+
+networks:
+  hive-demo:
+    driver: bridge
+    name: hive-demo-network
