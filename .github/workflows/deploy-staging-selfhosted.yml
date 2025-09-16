@@ -241,6 +241,11 @@ jobs:
           # 返回部署目录，使用compose部署
           cd /opt/hive-platform
           echo "=== 使用Docker Compose部署 ==="
+
+          # 强制清理所有相关容器
+          echo "清理旧容器..."
+          docker rm -f hive-platform-db hive-platform-redis hive-platform-api hive-platform-frontend hive-platform-worker hive-platform-beat 2>/dev/null || true
+
           docker compose -f docker-compose.prod.yml down || true
           docker compose -f docker-compose.prod.yml up -d
 
