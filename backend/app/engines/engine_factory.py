@@ -104,6 +104,7 @@ class MergeEngineFactory:
         """
         result = {
             'compatible': True,
+            'valid': True,
             'warnings': [],
             'recommendations': []
         }
@@ -113,6 +114,7 @@ class MergeEngineFactory:
         # 检查引擎是否支持该策略
         if merge_strategy not in capabilities.get('supported_strategies', []):
             result['compatible'] = False
+            result['valid'] = False
             result['warnings'].append(f"SafeHiveMergeEngine does not support strategy {merge_strategy}")
             return result
         
