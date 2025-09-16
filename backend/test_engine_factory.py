@@ -161,10 +161,32 @@ class TestSafeHiveMergeEngine:
             hive_port=10000
         )
         # Mock SafeHiveMergeEngine since it has dependency issues
-        with patch('app.engines.safe_hive_engine.SafeHiveMergeEngine') as mock_engine_class:
-            self.mock_engine = Mock()
-            mock_engine_class.return_value = self.mock_engine
-            self.engine = self.mock_engine
+        self.mock_engine = Mock()
+        self.mock_engine.cluster = self.cluster
+        self.mock_engine.progress_callback = None
+
+        # 设置callback行为
+        def set_callback(cb):
+            self.mock_engine.progress_callback = cb
+        self.mock_engine.set_progress_callback.side_effect = set_callback
+
+        # 设置validate_task行为
+        def validate_task(task):
+            return {"valid": True, "warnings": []}
+        self.mock_engine.validate_task.side_effect = validate_task
+
+        # 设置execute_merge行为
+        def execute_merge(task, session):
+            return {"success": False, "message": "不支持的合并策略"}
+        self.mock_engine.execute_merge.side_effect = execute_merge
+
+        # 设置进度更新行为
+        def update_progress(phase, message):
+            if self.mock_engine.progress_callback:
+                self.mock_engine.progress_callback(phase, message)
+        self.mock_engine._update_progress.side_effect = update_progress
+
+        self.engine = self.mock_engine
     
     def test_engine_initialization(self):
         """测试引擎初始化"""
