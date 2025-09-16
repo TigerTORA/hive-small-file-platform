@@ -1,0 +1,59 @@
+name: Emergency SSH Fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fix-ssh:
+    runs-on: [self-hosted, staging]
+    steps:
+      - name: Emergency SSH restoration
+        shell: bash
+        run: |
+          echo "=== 紧急SSH修复 ==="
+
+          # 1. 检查当前SSH服务状态
+          echo "检查SSH服务状态..."
+          sudo systemctl status ssh || sudo systemctl status sshd || echo "SSH服务检查失败"
+
+          # 2. 重启SSH服务
+          echo "重启SSH服务..."
+          sudo systemctl restart ssh || sudo systemctl restart sshd || echo "SSH重启失败"
+
+          # 3. 检查22端口监听
+          echo "检查22端口监听..."
+          netstat -tlnp | grep ":22" || echo "22端口未监听"
+
+          # 4. 清理可能有问题的防火墙规则
+          echo "清理防火墙规则..."
+          sudo iptables -F INPUT || echo "清理INPUT链失败"
+          sudo iptables -P INPUT ACCEPT || echo "设置INPUT默认策略失败"
+
+          # 5. 确保SSH端口开放
+          echo "确保SSH端口开放..."
+          sudo iptables -I INPUT -p tcp --dport 22 -j ACCEPT || echo "SSH规则添加失败"
+
+          # 6. 重新添加必要的端口（安全方式）
+          echo "安全地添加应用端口..."
+          sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT || echo "80端口规则添加失败"
+          sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT || echo "8000端口规则添加失败"
+
+          # 7. 保存规则
+          echo "保存防火墙规则..."
+          sudo iptables-save > /etc/iptables/rules.v4 2>/dev/null || echo "规则保存到备用位置"
+
+          # 8. 最终检查
+          echo "=== 最终状态检查 ==="
+          echo "SSH服务:"
+          sudo systemctl is-active ssh || sudo systemctl is-active sshd || echo "SSH服务状态未知"
+
+          echo "端口监听:"
+          netstat -tlnp | grep ":22\|:80\|:8000" || echo "端口检查完成"
+
+          echo "防火墙规则:"
+          sudo iptables -L INPUT -n | head -10
+
+          echo "=== SSH修复完成 ==="
