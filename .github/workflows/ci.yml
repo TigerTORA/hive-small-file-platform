@@ -72,7 +72,14 @@ jobs:
 
       - name: Run frontend unit tests
         working-directory: frontend
-        run: npm run test:run
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/coverage-summary.json
 
   status:
     name: Project status report
@@ -81,6 +88,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download coverage artifacts
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: .
+
+      - name: Download frontend coverage artifacts
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: .
 
       - name: Setup Python
         uses: actions/setup-python@v5
