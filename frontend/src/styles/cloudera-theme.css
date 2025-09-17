@@ -1,0 +1,617 @@
+/**
+ * Cloudera 风格主题
+ * 专为企业级数据平台设计的专业界面
+ */
+
+/* ============================================
+   Cloudera 侧边栏导航
+============================================ */
+
+.cloudera-sidebar {
+  background: linear-gradient(180deg, var(--nav-bg-start) 0%, var(--nav-bg-end) 100%);
+  border-right: 1px solid var(--nav-border);
+  width: 240px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--z-fixed);
+  transition: all var(--transition-normal);
+}
+
+.cloudera-sidebar.collapsed {
+  width: 64px;
+}
+
+/* 侧边栏顶部品牌区域 */
+.sidebar-brand {
+  padding: var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--nav-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sidebar-brand .logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-brand .logo::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, var(--primary-400), var(--primary-600), var(--primary-400));
+  border-radius: var(--radius-lg);
+  z-index: -1;
+  animation: logoGlow 3s ease-in-out infinite;
+}
+
+@keyframes logoGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.sidebar-brand .brand-text {
+  color: var(--nav-text-primary);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+
+.cloudera-sidebar.collapsed .brand-text {
+  display: none;
+}
+
+/* 导航菜单 */
+.sidebar-nav {
+  padding: var(--space-4) 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: var(--space-6);
+}
+
+.nav-section-title {
+  color: var(--nav-text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: var(--font-semibold);
+  padding: 0 var(--space-4) var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.cloudera-sidebar.collapsed .nav-section-title {
+  display: none;
+}
+
+.nav-item {
+  margin: 0 var(--space-2);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  color: var(--nav-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  position: relative;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.nav-link:hover {
+  background: var(--nav-hover-bg);
+  color: var(--nav-text-primary);
+  transform: translateX(2px);
+}
+
+.nav-link.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-text-primary);
+}
+
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--primary-500);
+  border-radius: 0 2px 2px 0;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-text {
+  white-space: nowrap;
+  flex: 1;
+}
+
+.cloudera-sidebar.collapsed .nav-text {
+  display: none;
+}
+
+.nav-badge {
+  background: var(--danger-500);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.cloudera-sidebar.collapsed .nav-badge {
+  display: none;
+}
+
+/* 折叠按钮 */
+.sidebar-toggle {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 24px;
+  height: 24px;
+  background: var(--nav-hover-bg);
+  border: 1px solid var(--nav-border);
+  border-radius: var(--radius-md);
+  color: var(--nav-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+  background: var(--nav-active-bg);
+  color: var(--nav-text-primary);
+}
+
+/* ============================================
+   Cloudera 主内容区域
+============================================ */
+
+.cloudera-main {
+  margin-left: 240px;
+  min-height: 100vh;
+  transition: margin-left var(--transition-normal);
+}
+
+.cloudera-main.sidebar-collapsed {
+  margin-left: 64px;
+}
+
+/* Cloudera 风格的顶部栏 */
+.cloudera-header {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0 var(--space-6);
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.header-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--gray-600);
+  font-size: var(--text-sm);
+}
+
+.breadcrumb-separator {
+  color: var(--gray-400);
+}
+
+.header-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* ============================================
+   Cloudera 数据卡片
+============================================ */
+
+.cloudera-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+  padding: var(--space-2);
+}
+
+.cloudera-metric-card {
+  background: #ffffff !important;  /* 强制纯白背景 */
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  position: relative;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cloudera-metric-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-color: var(--gray-300);
+  background: #ffffff !important;  /* 保持纯白 */
+}
+
+.metric-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  min-height: 48px;
+}
+
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+}
+
+/* Cloudera风格：统一的灰色图标，仅状态使用彩色 */
+.metric-icon.primary {
+  background: var(--gray-500);
+}
+
+.metric-icon.info {
+  background: var(--gray-500);
+}
+
+.metric-icon.success {
+  background: var(--success-500);
+}
+
+.metric-icon.warning {
+  background: var(--warning-500);
+}
+
+.metric-icon.danger {
+  background: var(--danger-500);
+}
+
+.metric-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.metric-value {
+  font-size: var(--text-4xl);
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
+  margin-bottom: var(--space-2);
+  line-height: 1.1;
+}
+
+.metric-label {
+  font-size: var(--text-base);
+  color: var(--gray-600);
+  font-weight: var(--font-medium);
+  margin-bottom: var(--space-3);
+  letter-spacing: 0.02em;
+}
+
+.metric-trend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.metric-trend.up {
+  color: var(--success-600);
+}
+
+.metric-trend.down {
+  color: var(--danger-600);
+}
+
+.metric-trend.stable {
+  color: var(--gray-500);
+}
+
+/* ============================================
+   Cloudera 表格样式
+============================================ */
+
+.cloudera-table {
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--gray-200);
+}
+
+.cloudera-table .el-table {
+  border-radius: 0;
+}
+
+.cloudera-table .el-table__header {
+  background: var(--gray-50);
+}
+
+.cloudera-table .el-table__header th {
+  background: var(--gray-50);
+  border-bottom: 2px solid var(--gray-200);
+  color: var(--gray-700);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  padding: var(--space-4) var(--space-3);
+}
+
+.cloudera-table .el-table__body tr:nth-child(even) {
+  background: var(--gray-50);
+}
+
+.cloudera-table .el-table__body tr:hover {
+  background: var(--primary-50) !important;
+  position: relative;
+}
+
+.cloudera-table .el-table__body tr:hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--primary-500);
+}
+
+.cloudera-table .el-table__body td {
+  padding: var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--gray-200);
+  font-size: var(--text-sm);
+}
+
+/* ============================================
+   Cloudera 按钮样式
+============================================ */
+
+.cloudera-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.cloudera-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+.cloudera-btn.primary {
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  color: white;
+}
+
+.cloudera-btn.primary:hover {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+}
+
+.cloudera-btn.secondary {
+  background: var(--bg-primary);
+  border-color: var(--gray-300);
+  color: var(--gray-700);
+}
+
+.cloudera-btn.secondary:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-600);
+}
+
+.cloudera-btn.success {
+  background: linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%);
+  color: white;
+}
+
+.cloudera-btn.warning {
+  background: linear-gradient(135deg, var(--warning-500) 0%, var(--warning-600) 100%);
+  color: white;
+}
+
+.cloudera-btn.danger {
+  background: linear-gradient(135deg, var(--danger-500) 0%, var(--danger-600) 100%);
+  color: white;
+}
+
+/* ============================================
+   Cloudera 标签样式
+============================================ */
+
+.cloudera-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cloudera-tag.success {
+  background: var(--success-50);
+  color: var(--success-700);
+  border: 1px solid var(--success-200);
+}
+
+.cloudera-tag.warning {
+  background: var(--warning-50);
+  color: var(--warning-700);
+  border: 1px solid var(--warning-200);
+}
+
+.cloudera-tag.danger {
+  background: var(--danger-50);
+  color: var(--danger-700);
+  border: 1px solid var(--danger-200);
+}
+
+.cloudera-tag.info {
+  background: var(--info-50);
+  color: var(--info-700);
+  border: 1px solid var(--info-200);
+}
+
+/* ============================================
+   响应式适配
+============================================ */
+
+@media (max-width: 768px) {
+  .cloudera-sidebar {
+    transform: translateX(-100%);
+  }
+
+  .cloudera-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .cloudera-main {
+    margin-left: 0;
+  }
+
+  .cloudera-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .cloudera-header {
+    padding: 0 var(--space-4);
+  }
+}
+
+/* ============================================
+   动画增强
+============================================ */
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-normal);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform var(--transition-normal);
+}
+
+.slide-enter-from {
+  transform: translateX(-100%);
+}
+
+.slide-leave-to {
+  transform: translateX(-100%);
+}
+
+/* 页面进入动画 */
+.page-enter-active {
+  transition: all var(--transition-slow);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* 卡片依次出现动画 */
+.stagger-item {
+  animation: staggerIn 0.6s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0.1s; }
+.stagger-item:nth-child(2) { animation-delay: 0.2s; }
+.stagger-item:nth-child(3) { animation-delay: 0.3s; }
+.stagger-item:nth-child(4) { animation-delay: 0.4s; }
+.stagger-item:nth-child(5) { animation-delay: 0.5s; }
+.stagger-item:nth-child(6) { animation-delay: 0.6s; }
+
+@keyframes staggerIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

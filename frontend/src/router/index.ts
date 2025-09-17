@@ -52,6 +52,12 @@ const router = createRouter({
       name: 'BigScreen',
       component: () => import('@/views/BigScreen.vue'),
       meta: { title: '实时监控大屏', fullscreen: true }
+    },
+    {
+      path: '/demo',
+      name: 'DemoComponents',
+      component: () => import('@/views/DemoComponents.vue'),
+      meta: { title: 'DataNova 组件库展示' }
     }
   ]
 })
@@ -59,7 +65,7 @@ const router = createRouter({
 // 设置页面标题
 router.beforeEach((to, from, next) => {
   if (to.meta?.title) {
-    document.title = `${to.meta.title} - Hive 小文件治理平台`
+    document.title = `${to.meta.title} - DataNova`
   }
   next()
 })

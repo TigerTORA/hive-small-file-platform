@@ -1,161 +1,149 @@
 <template>
-  <div class="dashboard" data-testid="dashboard-loaded">
-    <!-- 增强信息栏 -->
-    <div class="dashboard-header">
-      <div class="header-left">
-        <div class="cluster-info">
-          <div class="cluster-icon-wrapper">
-            <el-icon class="cluster-icon"><Connection /></el-icon>
-            <div class="cluster-status-indicator" :class="clusterStatusClass"></div>
+  <div class="dashboard">
+    <!-- Cloudera风格指标网格 -->
+    <div class="cloudera-metrics-grid">
+      <div
+        v-for="(metric, index) in keyMetrics"
+        :key="metric.key"
+        class="cloudera-metric-card"
+      >
+        <div class="metric-header">
+          <div class="metric-icon" :class="metric.type">
+            <el-icon><component :is="metric.icon" /></el-icon>
           </div>
-          <div class="cluster-details">
-            <h1 class="cluster-name">{{ currentClusterName }}</h1>
-            <span class="cluster-status" :class="clusterStatusClass">
-              <el-icon><CircleCheckFilled /></el-icon>
-              {{ clusterStatusText }}
-            </span>
-          </div>
-        </div>
-
-        <div class="key-metrics">
-          <div class="metric-item" v-for="metric in keyMetrics" :key="metric.key">
-            <div class="metric-icon" :class="metric.type">
-              <el-icon><component :is="metric.icon" /></el-icon>
-            </div>
-            <div class="metric-content">
-              <span class="metric-value" :class="metric.type">{{ metric.value }}</span>
-              <span class="metric-label">{{ metric.label }}</span>
-              <div v-if="metric.trend" class="metric-trend" :class="metric.trend.type">
-                <el-icon><component :is="metric.trend.icon" /></el-icon>
-                <span>{{ metric.trend.value }}</span>
-              </div>
-            </div>
+          <div class="metric-status" v-if="metric.trend">
+            <el-icon><component :is="metric.trend.icon" /></el-icon>
+            <span class="metric-trend" :class="metric.trend.type">{{ metric.trend.value }}</span>
           </div>
         </div>
+        <div class="metric-value">{{ metric.value }}</div>
+        <div class="metric-label">{{ metric.label }}</div>
       </div>
 
-      <div class="header-right">
-        <div class="refresh-info" v-if="monitoringStore.isAutoRefreshEnabled">
-          <el-icon><Timer /></el-icon>
-          <span>{{ nextRefreshText }}</span>
-          <div class="refresh-progress">
-            <div class="progress-bar" :style="{ width: refreshProgress + '%' }"></div>
+      <!-- 集群状态卡片 -->
+      <div class="cloudera-metric-card cluster-status-card">
+        <div class="metric-header">
+          <div class="metric-icon info">
+            <el-icon><Connection /></el-icon>
+          </div>
+          <div class="metric-status">
+            <div class="status-dot" :class="clusterStatusClass"></div>
+            <span class="cluster-status-text">{{ clusterStatusText }}</span>
           </div>
         </div>
+        <div class="metric-value">{{ currentClusterName }}</div>
+        <div class="metric-label">集群状态</div>
+      </div>
 
-        <div class="action-buttons">
+      <!-- 刷新状态卡片 -->
+      <div v-if="monitoringStore.isAutoRefreshEnabled" class="cloudera-metric-card refresh-card">
+        <div class="metric-header">
+          <div class="metric-icon info">
+            <el-icon><Timer /></el-icon>
+          </div>
           <el-button
-            type="success"
-            @click="performBatchScan"
-            :loading="isBatchScanning"
-            :icon="Search"
-            size="default"
-            class="action-button"
-          >
-            {{ isBatchScanning ? '批量扫描中...' : '批量扫描' }}
-          </el-button>
-
-          <el-button
-            type="primary"
+            size="small"
             @click="performRefresh"
             :loading="isRefreshing"
-            :icon="Refresh"
-            size="default"
-            class="action-button"
+            class="cloudera-btn secondary"
           >
-            {{ monitoringStore.isAutoRefreshEnabled ? '自动刷新中' : '立即刷新' }}
+            刷新
           </el-button>
-
-          <el-button
-            v-if="isEnabled('fullscreenMode')"
-            :icon="FullScreen"
-            circle
-            size="default"
-            @click="enterBigScreenMode"
-            title="进入大屏模式"
-            class="fullscreen-button"
-          />
+        </div>
+        <div class="metric-value">{{ nextRefreshText || '实时' }}</div>
+        <div class="metric-label">自动刷新</div>
+        <div class="refresh-progress" v-if="refreshProgress > 0">
+          <div class="progress-bar" :style="{ width: refreshProgress + '%' }"></div>
         </div>
       </div>
     </div>
 
-    <!-- 主要监控面板 - 表文件数监控 -->
+    <!-- 快速操作区域 -->
+    <div class="action-section">
+      <h3 class="section-title">
+        <el-icon><Operation /></el-icon>
+        快速操作
+      </h3>
+      <div class="action-grid">
+        <el-button
+          type="success"
+          @click="performBatchScan"
+          :loading="isBatchScanning"
+          :icon="Search"
+          size="large"
+          class="cloudera-btn success"
+        >
+          {{ isBatchScanning ? '批量扫描中...' : '批量扫描' }}
+        </el-button>
+
+        <el-button
+          type="danger"
+          @click="handleStartMerge"
+          :loading="mergingFiles"
+          :icon="Operation"
+          size="large"
+          class="cloudera-btn danger"
+        >
+          开始合并
+        </el-button>
+
+        <el-button
+          type="warning"
+          @click="handleAnalyzeFiles"
+          :loading="analyzingFiles"
+          :icon="TrendCharts"
+          size="large"
+          class="cloudera-btn warning"
+        >
+          深度分析
+        </el-button>
+
+        <el-button
+          v-if="isEnabled('fullscreenMode')"
+          :icon="FullScreen"
+          @click="enterBigScreenMode"
+          size="large"
+          class="cloudera-btn secondary"
+        >
+          大屏模式
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 主要监控面板 -->
     <div class="main-monitoring-panel">
       <div class="panel-left">
-        <TableFileCountChart 
-          :cluster-id="monitoringStore.settings.selectedCluster"
-          :refreshing="isRefreshing"
-          @refresh="performRefresh"
-          @table-analyze="handleTableAnalysis"
-          class="main-chart"
-        />
+        <div class="cloudera-table">
+          <TableFileCountChart
+            :cluster-id="monitoringStore.settings.selectedCluster"
+            :refreshing="isRefreshing"
+            @refresh="performRefresh"
+            @table-analyze="handleTableAnalysis"
+            class="main-chart"
+          />
+        </div>
       </div>
-      
-      <div class="panel-right">
-        <!-- 快速操作面板 -->
-        <el-card class="action-panel" shadow="hover">
-          <template #header>
-            <div class="panel-header">
-              <el-icon><Operation /></el-icon>
-              <span>快速操作</span>
-            </div>
-          </template>
-          
-          <div class="action-buttons">
-            <el-button 
-              type="primary" 
-              size="default"
-              @click="handleScanTables"
-              :loading="scanningTables"
-              :icon="Search"
-              block
-            >
-              扫描表
-            </el-button>
-            
-            <el-button 
-              type="danger" 
-              size="default"
-              @click="handleStartMerge"
-              :loading="mergingFiles"
-              :icon="Operation"
-              block
-            >
-              开始合并
-            </el-button>
-            
-            <el-button 
-              type="warning" 
-              size="default"
-              @click="handleAnalyzeFiles"
-              :loading="analyzingFiles"
-              :icon="TrendCharts"
-              block
-            >
-              深度分析
-            </el-button>
-          </div>
-        </el-card>
 
-        <!-- 最近任务 -->
-        <el-card class="recent-tasks-panel" shadow="hover">
-          <template #header>
-            <div class="panel-header">
+      <div class="panel-right">
+        <!-- 最近任务面板 -->
+        <div class="cloudera-table recent-tasks-panel">
+          <div class="panel-header">
+            <div class="header-title">
               <el-icon><List /></el-icon>
               <span>最近任务</span>
-              <el-button 
-                type="text" 
-                size="small" 
-                @click="handleViewAllTasks"
-              >
-                查看全部
-              </el-button>
             </div>
-          </template>
-          
+            <el-button
+              size="small"
+              @click="handleViewAllTasks"
+              class="cloudera-btn secondary"
+            >
+              查看全部
+            </el-button>
+          </div>
+
           <div class="task-list">
-            <div 
-              v-for="task in dashboardStore.recentTasks.slice(0, 5)" 
+            <div
+              v-for="task in dashboardStore.recentTasks.slice(0, 5)"
               :key="task.id"
               class="task-item"
               @click="handleViewTask(task)"
@@ -165,17 +153,18 @@
                 <div class="task-table">{{ task.table_name }}</div>
               </div>
               <div class="task-status">
-                <el-tag :type="getStatusType(task.status)" size="small">
+                <span class="cloudera-tag" :class="getStatusType(task.status)">
                   {{ getStatusText(task.status) }}
-                </el-tag>
+                </span>
               </div>
             </div>
-            
+
             <div v-if="!dashboardStore.recentTasks.length" class="no-tasks">
-              暂无任务记录
+              <el-icon><InfoFilled /></el-icon>
+              <span>暂无任务记录</span>
             </div>
           </div>
-        </el-card>
+        </div>
       </div>
     </div>
 
@@ -243,7 +232,7 @@ const keyMetrics = computed(() => {
       label: '总表数',
       value: formatNumber(summary.total_tables),
       icon: Grid,
-      type: 'primary',
+      type: 'info',
       trend: {
         type: 'up',
         icon: ArrowUp,
@@ -267,7 +256,7 @@ const keyMetrics = computed(() => {
       label: '小文件数',
       value: formatNumber(summary.total_small_files),
       icon: Document,
-      type: 'warning',
+      type: 'info',
       trend: {
         type: 'down',
         icon: ArrowDown,
@@ -532,616 +521,248 @@ onMounted(async () => {
 })
 </script>
 
-@import '@/styles/design-tokens.scss';
-
 <style scoped>
 .dashboard {
-  padding: var(--hive-space-5);
-  background: var(--hive-bg-page);
-  min-height: 100vh;
-  transition: all var(--hive-duration-300) var(--hive-ease-out);
+  padding: var(--space-3) var(--space-4) 400px var(--space-4);
+  min-height: 150vh;
+  overflow-y: visible;
+  background: var(--bg-app);
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-/* 仪表盘头部 - 使用设计系统 */
-.dashboard-header {
-  background: var(--hive-card-bg);
-  border-radius: var(--hive-card-radius);
-  padding: var(--hive-space-6);
-  margin-bottom: var(--hive-space-5);
-  box-shadow: var(--hive-card-shadow);
-  border: 1px solid var(--hive-card-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: var(--hive-transition-all);
+/* 快速操作区域 */
+.action-section {
+  background: var(--bg-secondary);
+  padding: var(--space-8);
+  border-radius: var(--radius-2xl);
+  margin-bottom: var(--space-10);
+  border: 1px solid var(--gray-100);
 }
 
-.header-left {
+.section-title {
   display: flex;
   align-items: center;
-  gap: var(--hive-space-8);
+  gap: var(--space-3);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--gray-200);
 }
 
-.cluster-info {
+.section-title .el-icon {
+  color: var(--primary-500);
+  font-size: var(--text-xl);
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-6);
+}
+
+/* 集群状态卡片特殊样式 */
+.cluster-status-card .metric-status {
   display: flex;
   align-items: center;
-  gap: var(--hive-space-4);
+  gap: var(--space-2);
 }
 
-.cluster-icon-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  background: var(--hive-gradient-primary);
-  border-radius: var(--hive-radius-xl);
-  box-shadow: var(--hive-shadow-base);
+.cluster-status-text {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--gray-700);
 }
 
-.cluster-icon {
-  font-size: 24px;
-  color: var(--hive-white);
+.status-dot.status-active {
+  background-color: var(--success-500);
 }
 
-.cluster-status-indicator {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--hive-radius-full);
-  border: 2px solid var(--hive-white);
-  box-shadow: var(--hive-shadow-light);
+.status-dot.status-inactive {
+  background-color: var(--danger-500);
 }
 
-.cluster-status-indicator.status-active {
-  background: var(--hive-status-online);
+.status-dot.status-error {
+  background-color: var(--danger-500);
 }
 
-.cluster-status-indicator.status-inactive {
-  background: var(--hive-status-offline);
-}
-
-.cluster-status-indicator.status-error {
-  background: var(--hive-status-offline);
-}
-
-.cluster-details {
-  display: flex;
-  flex-direction: column;
-  gap: var(--hive-space-1);
-}
-
-.cluster-name {
-  margin: 0;
-  font-size: var(--hive-font-size-xl);
-  font-weight: var(--hive-font-weight-semibold);
-  color: var(--hive-text-primary);
-  line-height: var(--hive-line-height-tight);
-}
-
-.cluster-status {
-  display: flex;
-  align-items: center;
-  gap: var(--hive-space-1);
-  font-size: var(--hive-font-size-sm);
-  font-weight: var(--hive-font-weight-medium);
-  padding: var(--hive-space-1) var(--hive-space-3);
-  border-radius: var(--hive-radius-base);
-  width: fit-content;
-  transition: var(--hive-transition-all);
-}
-
-.cluster-status.status-active {
-  background: rgba(82, 196, 26, 0.1);
-  color: var(--hive-status-online);
-}
-
-.cluster-status.status-inactive {
-  background: rgba(255, 77, 79, 0.1);
-  color: var(--hive-status-offline);
-}
-
-.cluster-status.status-error {
-  background: rgba(255, 77, 79, 0.1);
-  color: var(--hive-status-offline);
-}
-
-/* 关键指标 */
-.key-metrics {
-  display: flex;
-  gap: var(--hive-space-6);
-  padding-left: var(--hive-space-8);
-  border-left: 2px solid var(--hive-border-light);
-}
-
-.metric-item {
-  display: flex;
-  align-items: center;
-  gap: var(--hive-space-3);
-  padding: var(--hive-space-4);
-  background: var(--hive-gray-50);
-  border-radius: var(--hive-radius-lg);
-  border: 1px solid var(--hive-border-lighter);
-  transition: var(--hive-transition-all);
-  min-width: 120px;
-}
-
-.metric-item:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--hive-shadow-base);
-}
-
-.metric-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--hive-radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
-
-.metric-icon.primary {
-  background: rgba(64, 158, 255, 0.1);
-  color: var(--hive-primary);
-}
-
-.metric-icon.danger {
-  background: rgba(245, 108, 108, 0.1);
-  color: var(--hive-danger);
-}
-
-.metric-icon.warning {
-  background: rgba(230, 162, 60, 0.1);
-  color: var(--hive-warning);
-}
-
-.metric-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--hive-space-1);
-}
-
-.metric-value {
-  font-size: var(--hive-font-size-2xl);
-  font-weight: var(--hive-font-weight-bold);
-  line-height: var(--hive-line-height-tight);
-}
-
-.metric-value.primary {
-  color: var(--hive-primary);
-}
-
-.metric-value.danger {
-  color: var(--hive-danger);
-}
-
-.metric-value.warning {
-  color: var(--hive-warning);
-}
-
-.metric-label {
-  font-size: var(--hive-font-size-xs);
-  color: var(--hive-text-secondary);
-  font-weight: var(--hive-font-weight-medium);
-}
-
-.metric-trend {
-  display: flex;
-  align-items: center;
-  gap: var(--hive-space-1);
-  font-size: var(--hive-font-size-xs);
-  font-weight: var(--hive-font-weight-medium);
-}
-
-.metric-trend.up {
-  color: var(--hive-success);
-}
-
-.metric-trend.down {
-  color: var(--hive-danger);
-}
-
-/* 头部右侧 */
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--hive-space-4);
-}
-
-.refresh-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--hive-space-2);
-  font-size: var(--hive-font-size-sm);
-  color: var(--hive-text-secondary);
-  padding: var(--hive-space-3) var(--hive-space-4);
-  background: var(--hive-gray-50);
-  border-radius: var(--hive-radius-lg);
-  border: 1px solid var(--hive-border-lighter);
-  min-width: 120px;
-}
-
-.refresh-progress {
+/* 刷新卡片特殊样式 */
+.refresh-card .refresh-progress {
   width: 100%;
   height: 4px;
-  background: var(--hive-border-light);
-  border-radius: var(--hive-radius-full);
+  background: var(--gray-200);
+  border-radius: var(--radius-md);
   overflow: hidden;
+  margin-top: var(--space-3);
 }
 
-.progress-bar {
+.refresh-card .progress-bar {
   height: 100%;
-  background: var(--hive-gradient-primary);
-  border-radius: var(--hive-radius-full);
-  transition: width var(--hive-duration-300) var(--hive-ease-out);
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  border-radius: var(--radius-md);
+  transition: width var(--transition-normal);
 }
 
-.action-buttons {
-  display: flex;
-  align-items: center;
-  gap: var(--hive-space-3);
-}
-
-.action-button {
-  height: 40px;
-  font-weight: var(--hive-font-weight-medium);
-  border-radius: var(--hive-radius-lg);
-  box-shadow: var(--hive-shadow-light);
-  transition: var(--hive-transition-all);
-}
-
-.action-button:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--hive-shadow-base);
-}
-
-.fullscreen-button {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--hive-radius-lg);
-  box-shadow: var(--hive-shadow-light);
-  transition: var(--hive-transition-all);
-}
-
-.fullscreen-button:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--hive-shadow-base);
-}
-
-/* 主监控面板 - 使用设计系统 */
+/* 主监控面板 */
 .main-monitoring-panel {
   display: flex;
-  gap: var(--hive-space-5);
-  height: calc(100vh - 200px);
-  transition: var(--hive-transition-all);
+  gap: var(--space-8);
+  min-height: 640px;
+  margin-top: var(--space-4);
 }
 
 .panel-left {
   flex: 1;
-  background: var(--hive-card-bg);
-  border-radius: var(--hive-card-radius);
-  box-shadow: var(--hive-card-shadow);
-  border: 1px solid var(--hive-card-border);
-  overflow: hidden;
-  transition: var(--hive-transition-all);
 }
 
-.panel-left:hover {
-  box-shadow: var(--hive-shadow-dark);
+.panel-right {
+  width: 400px;
 }
 
 .main-chart {
   height: 100%;
-  transition: var(--hive-transition-all);
+  border-radius: var(--radius-xl);
 }
 
-/* 右侧面板 - 使用设计系统 */
-.panel-right {
-  width: 320px;
+/* 任务面板 */
+.recent-tasks-panel {
+  padding: var(--space-8);
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: var(--hive-space-4);
-}
-
-.action-panel {
-  border: 1px solid var(--hive-card-border);
-  border-radius: var(--hive-card-radius);
-  box-shadow: var(--hive-card-shadow);
-  background: var(--hive-card-bg);
-  transition: var(--hive-transition-all);
-}
-
-.action-panel:hover {
-  box-shadow: var(--hive-shadow-dark);
-}
-
-.recent-tasks-panel {
-  flex: 1;
-  border: 1px solid var(--hive-card-border);
-  border-radius: var(--hive-card-radius);
-  box-shadow: var(--hive-card-shadow);
-  background: var(--hive-card-bg);
-  transition: var(--hive-transition-all);
-}
-
-.recent-tasks-panel:hover {
-  box-shadow: var(--hive-shadow-dark);
-}
-
-:deep(.el-card__header) {
-  padding: var(--hive-space-5) var(--hive-space-5) var(--hive-space-4);
-  border-bottom: 1px solid var(--hive-border-light);
-  background: var(--hive-card-bg);
-}
-
-:deep(.el-card__body) {
-  padding: var(--hive-space-5);
-  background: var(--hive-card-bg);
+  background: var(--bg-primary);
+  border: 1px solid var(--gray-150);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
-  gap: var(--hive-space-2);
-  font-size: var(--hive-font-size-lg);
-  font-weight: var(--hive-font-weight-semibold);
-  color: var(--hive-text-primary);
-  line-height: var(--hive-line-height-tight);
+  justify-content: space-between;
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 2px solid var(--gray-200);
 }
 
-.panel-header .el-icon {
-  color: var(--hive-primary);
-  font-size: var(--hive-font-size-lg);
-}
-
-.panel-header .el-button {
-  margin-left: auto;
-}
-
-.action-buttons {
+.header-title {
   display: flex;
-  flex-direction: column;
-  gap: var(--hive-space-3);
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
 }
 
-.action-buttons .el-button {
-  height: var(--hive-button-height-md);
-  font-size: var(--hive-font-size-sm);
-  font-weight: var(--hive-font-weight-medium);
-  border-radius: var(--hive-button-radius);
-  transition: var(--hive-transition-all);
+.header-title .el-icon {
+  color: var(--primary-500);
+  font-size: var(--text-lg);
 }
 
-.action-buttons .el-button:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--hive-shadow-base);
-}
-
-/* 任务列表 - 使用设计系统 */
+/* 任务列表 */
 .task-list {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--hive-space-2);
-  max-height: 400px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hive-border-base) transparent;
-}
-
-.task-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.task-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.task-list::-webkit-scrollbar-thumb {
-  background: var(--hive-border-base);
-  border-radius: var(--hive-radius-full);
-}
-
-.task-list::-webkit-scrollbar-thumb:hover {
-  background: var(--hive-border-dark);
+  gap: var(--space-4);
+  padding-right: var(--space-2);
 }
 
 .task-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--hive-space-3);
-  background: var(--hive-bg-secondary);
-  border-radius: var(--hive-radius-lg);
-  border: 1px solid var(--hive-border-light);
+  padding: var(--space-5);
+  background: var(--bg-secondary);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: var(--hive-transition-all);
+  transition: all var(--transition-fast);
 }
 
 .task-item:hover {
-  background: rgba(64, 158, 255, 0.05);
-  border-color: var(--hive-primary-light);
+  background: var(--bg-primary);
+  border-color: var(--gray-300);
   transform: translateY(-1px);
-  box-shadow: var(--hive-shadow-light);
+  box-shadow: var(--elevation-2);
 }
 
 .task-info {
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: var(--hive-space-1);
 }
 
 .task-name {
-  font-size: var(--hive-font-size-sm);
-  font-weight: var(--hive-font-weight-medium);
-  color: var(--hive-text-primary);
-  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--gray-900);
+  margin-bottom: var(--space-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: var(--hive-line-height-tight);
 }
 
 .task-table {
-  font-size: var(--hive-font-size-xs);
-  color: var(--hive-text-secondary);
+  font-size: var(--text-xs);
+  color: var(--gray-600);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: var(--hive-font-weight-normal);
 }
 
 .task-status {
   flex-shrink: 0;
+  margin-left: var(--space-3);
 }
 
 .no-tasks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-16);
+  color: var(--gray-500);
+  font-size: var(--text-sm);
   text-align: center;
-  color: var(--hive-text-secondary);
-  font-size: var(--hive-font-size-sm);
-  font-weight: var(--hive-font-weight-normal);
-  padding: var(--hive-space-10) var(--hive-space-5);
-  border-radius: var(--hive-radius-lg);
-  background: var(--hive-bg-secondary);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xl);
+  margin: var(--space-4);
 }
 
-/* 响应式适配 - 使用设计系统断点 */
-@media (max-width: var(--hive-breakpoint-xl)) {
-  .panel-right {
-    width: 280px;
-  }
-
-  .key-metrics {
-    gap: var(--hive-space-5);
-    padding-left: var(--hive-space-6);
-  }
+.no-tasks .el-icon {
+  font-size: var(--text-2xl);
+  color: var(--gray-400);
 }
 
-@media (max-width: var(--hive-breakpoint-lg)) {
+/* Cloudera风格：简洁无动画 */
+
+/* 响应式适配 */
+@media (max-width: 1200px) {
   .main-monitoring-panel {
     flex-direction: column;
-    height: auto;
-    gap: var(--hive-space-4);
+    gap: var(--space-6);
   }
 
   .panel-right {
     width: 100%;
-    flex-direction: row;
-    overflow-x: auto;
-    gap: var(--hive-space-4);
-  }
-
-  .action-panel,
-  .recent-tasks-panel {
-    min-width: 280px;
-    flex: none;
-  }
-
-  .recent-tasks-panel {
-    flex: 1;
-    min-width: 320px;
   }
 }
 
-@media (max-width: var(--hive-breakpoint-sm)) {
+@media (max-width: 768px) {
   .dashboard {
-    padding: var(--hive-space-3);
+    padding: var(--space-4);
   }
 
-  .dashboard-header {
-    flex-direction: column;
-    gap: var(--hive-space-4);
-    padding: var(--hive-card-padding);
-    text-align: center;
-  }
-
-  .header-left {
-    flex-direction: column;
-    gap: var(--hive-space-4);
-  }
-
-  .key-metrics {
-    padding-left: 0;
-    border-left: none;
-    border-top: 2px solid var(--hive-border-light);
-    padding-top: var(--hive-space-4);
-  }
-
-  .cluster-name {
-    font-size: var(--hive-font-size-lg);
-  }
-
-  .metric-value {
-    font-size: var(--hive-font-size-xl);
-  }
-
-  .panel-right {
-    flex-direction: column;
-    gap: var(--hive-space-4);
+  .action-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
   }
 
   .main-monitoring-panel {
-    gap: var(--hive-space-3);
-  }
-
-  .action-panel,
-  .recent-tasks-panel {
-    min-width: auto;
-  }
-}
-
-@media (max-width: var(--hive-breakpoint-xs)) {
-  .dashboard {
-    padding: var(--hive-space-2);
-  }
-
-  .dashboard-header {
-    padding: var(--hive-space-3);
-  }
-
-  .key-metrics {
-    gap: var(--hive-space-4);
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .metric-item {
-    min-width: auto;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .metric-value {
-    font-size: var(--hive-font-size-lg);
-  }
-
-  .refresh-info {
-    font-size: var(--hive-font-size-xs);
-    padding: var(--hive-space-2) var(--hive-space-3);
-    min-width: auto;
-  }
-
-  .panel-header {
-    font-size: var(--hive-font-size-sm);
-  }
-
-  :deep(.el-card__header) {
-    padding: var(--hive-space-4) var(--hive-space-4) var(--hive-space-3);
-  }
-
-  :deep(.el-card__body) {
-    padding: var(--hive-space-4);
-  }
-
-  .action-buttons .el-button {
-    height: var(--hive-button-height-sm);
-    font-size: var(--hive-font-size-xs);
+    gap: var(--space-4);
   }
 }
 </style>

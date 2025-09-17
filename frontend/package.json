@@ -1,7 +1,7 @@
 {
-  "name": "hive-small-file-frontend",
+  "name": "datanova-frontend",
   "version": "1.0.0",
-  "description": "Frontend for Hive Small File Management Platform",
+  "description": "Frontend for DataNova Data Governance Platform",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
