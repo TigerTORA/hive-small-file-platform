@@ -20,42 +20,47 @@
         <div class="left">
           <el-text size="small" type="info">任务ID：</el-text>
           <el-text size="small" class="mono">{{ shortTaskId }}</el-text>
-          <el-button size="small" link @click="copyTaskId">复制</el-button>
+          <el-button size="small" link @click="copyTaskId" class="cloudera-btn secondary">复制</el-button>
         </div>
         <div class="right">
-          <el-button size="small" @click="toggleFollow">{{ autoFollow ? '暂停跟随' : '继续跟随' }}</el-button>
-          <el-button size="small" @click="copyLogs" :disabled="displayLogs.length === 0">复制日志</el-button>
-          <el-button size="small" @click="exportLogs" :disabled="displayLogs.length === 0">导出TXT</el-button>
+          <el-button size="small" @click="toggleFollow" class="cloudera-btn secondary">{{ autoFollow ? '暂停跟随' : '继续跟随' }}</el-button>
+          <el-button size="small" @click="copyLogs" :disabled="displayLogs.length === 0" class="cloudera-btn secondary">复制日志</el-button>
+          <el-button size="small" @click="exportLogs" :disabled="displayLogs.length === 0" class="cloudera-btn secondary">导出TXT</el-button>
         </div>
       </div>
-      <!-- 进度概览 -->
-      <div class="progress-overview">
-        <el-row :gutter="20">
-          <el-col :span="8">
-            <el-card class="progress-card">
-              <div class="progress-item">
-                <div class="progress-label">扫描状态</div>
-                <el-tag :type="getStatusType(progress?.status)">{{ getStatusText(progress?.status) }}</el-tag>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="8">
-            <el-card class="progress-card">
-              <div class="progress-item">
-                <div class="progress-label">当前进度</div>
-                <div class="progress-value">{{ progress?.completed_items || 0 }} / {{ progress?.total_items || 0 }}</div>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="8">
-            <el-card class="progress-card">
-              <div class="progress-item">
-                <div class="progress-label">预计剩余</div>
-                <div class="progress-value">{{ formatTime(progress?.estimated_remaining_seconds) }}</div>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
+      <!-- Cloudera风格进度概览 -->
+      <div class="cloudera-metrics-grid">
+        <div class="cloudera-metric-card">
+          <div class="metric-header">
+            <div class="metric-icon" :class="getStatusType(progress?.status)">
+              <el-icon><InfoFilled /></el-icon>
+            </div>
+          </div>
+          <div class="metric-value">
+            <span class="cloudera-tag" :class="getStatusType(progress?.status)">{{ getStatusText(progress?.status) }}</span>
+          </div>
+          <div class="metric-label">扫描状态</div>
+        </div>
+
+        <div class="cloudera-metric-card">
+          <div class="metric-header">
+            <div class="metric-icon primary">
+              <el-icon><TrendCharts /></el-icon>
+            </div>
+          </div>
+          <div class="metric-value">{{ progress?.completed_items || 0 }} / {{ progress?.total_items || 0 }}</div>
+          <div class="metric-label">当前进度</div>
+        </div>
+
+        <div class="cloudera-metric-card">
+          <div class="metric-header">
+            <div class="metric-icon warning">
+              <el-icon><Timer /></el-icon>
+            </div>
+          </div>
+          <div class="metric-value">{{ formatTime(progress?.estimated_remaining_seconds) }}</div>
+          <div class="metric-label">预计剩余</div>
+        </div>
       </div>
 
       <!-- 进度条 -->
@@ -94,26 +99,22 @@
       <div class="logs-section">
         <div class="logs-header">
           <h4>扫描日志</h4>
-          <el-button size="small" @click="clearLogs" :disabled="progress?.status === 'running'">
+          <el-button size="small" @click="clearLogs" :disabled="progress?.status === 'running'" class="cloudera-btn secondary">
             清空日志
           </el-button>
         </div>
-        <div class="logs-container" ref="logsContainer">
-          <div 
-            v-for="(log, index) in displayLogs" 
-            :key="index"
-            :class="['log-entry', levelClass(log.level)]"
-          >
-            <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
-            <el-tag 
-              :type="getLogType(log.level)" 
-              size="small"
-              class="log-level"
+        <div class="cloudera-table logs-container-wrapper">
+          <div class="logs-container" ref="logsContainer">
+            <div
+              v-for="(log, index) in displayLogs"
+              :key="index"
+              :class="['log-entry', levelClass(log.level)]"
             >
-              {{ log.level }}
-            </el-tag>
-            <span class="log-message">{{ log.message }}</span>
-            <span v-if="log.database_name" class="log-db">[{{ log.database_name }}]</span>
+              <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
+              <span class="cloudera-tag" :class="getLogType(log.level)">{{ log.level }}</span>
+              <span class="log-message">{{ log.message }}</span>
+              <span v-if="log.database_name" class="log-db">[{{ log.database_name }}]</span>
+            </div>
           </div>
         </div>
       </div>
@@ -121,14 +122,14 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button v-if="progress?.status === 'running'" type="warning" @click="cancelTask" :loading="cancelling">取消任务</el-button>
-        <el-button @click="handleClose" :disabled="progress?.status === 'running'">
+        <el-button v-if="progress?.status === 'running'" @click="cancelTask" :loading="cancelling" class="cloudera-btn warning">取消任务</el-button>
+        <el-button @click="handleClose" :disabled="progress?.status === 'running'" class="cloudera-btn secondary">
           {{ progress?.status === 'running' ? '扫描中...' : '关闭' }}
         </el-button>
-        <el-button 
-          v-if="progress?.status === 'completed'" 
-          type="primary" 
+        <el-button
+          v-if="progress?.status === 'completed'"
           @click="viewResults"
+          class="cloudera-btn primary"
         >
           查看结果
         </el-button>
@@ -140,6 +141,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { InfoFilled, Timer, TrendCharts } from '@element-plus/icons-vue'
 import api from '../api'
 import { scanTasksApi } from '@/api/scanTasks'
 
@@ -400,124 +402,147 @@ const cancelTask = async () => {
 
 <style scoped>
 .scan-progress {
-  padding: 20px 0;
+  padding: var(--space-6) 0;
 }
 
-.status-alert { margin-bottom: 8px; }
+.status-alert {
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-lg);
+}
 
 .dialog-tools {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-}
-.dialog-tools .mono { font-family: Menlo, Monaco, monospace; }
-
-.progress-overview {
-  margin-bottom: 24px;
-}
-
-.progress-card {
-  text-align: center;
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
 }
 
-.progress-item {
-  padding: 12px;
+.dialog-tools .mono {
+  font-family: var(--font-mono);
+  background: var(--bg-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-300);
 }
 
-.progress-label {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
-}
-
-.progress-value {
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
+.dialog-tools .left,
+.dialog-tools .right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .progress-bar-section {
-  margin: 24px 0;
+  margin: var(--space-6) 0;
   text-align: center;
 }
 
 .progress-text {
-  font-weight: bold;
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
 }
 
 .current-task {
-  margin-top: 12px;
-  padding: 8px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--primary-50);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+  color: var(--primary-700);
 }
 
 .stats-section {
-  margin: 24px 0;
-  padding: 20px;
-  background-color: #fafafa;
-  border-radius: 8px;
+  margin: var(--space-6) 0;
+  padding: var(--space-6);
+  background: var(--gray-50);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--gray-200);
 }
 
 .logs-section {
-  margin-top: 24px;
+  margin-top: var(--space-6);
 }
 
 .logs-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-4);
 }
 
 .logs-header h4 {
   margin: 0;
-  color: #333;
+  color: var(--gray-900);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+}
+
+.logs-container-wrapper {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
 }
 
 .logs-container {
   height: 300px;
   overflow-y: auto;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  padding: 12px;
-  background-color: #1e1e1e;
+  padding: var(--space-4);
+  background-color: #1a1d29;
   color: #ffffff;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.logs-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.logs-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.logs-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-md);
 }
 
 .log-entry {
   display: flex;
   align-items: center;
-  padding: 4px 0;
-  border-bottom: 1px solid #333;
-  gap: 8px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: var(--space-3);
+  transition: background-color var(--transition-fast);
 }
 
 .log-entry:last-child {
   border-bottom: none;
 }
 
-.log-time {
-  color: #888;
-  white-space: nowrap;
-  min-width: 80px;
+.log-entry:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.log-level {
-  min-width: 60px;
+.log-time {
+  color: var(--nav-text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+  font-size: var(--text-xs);
 }
 
 .log-message {
   flex: 1;
   word-break: break-word;
+  color: #ffffff;
 }
 
 .log-db {
   color: #66ccff;
-  font-weight: bold;
+  font-weight: var(--font-medium);
+  font-size: var(--text-xs);
 }
 
 .log-info .log-message {
@@ -525,11 +550,23 @@ const cancelTask = async () => {
 }
 
 .log-warning .log-message {
-  color: #f0ad4e;
+  color: var(--warning-400);
 }
 
 .log-error .log-message {
-  color: #d9534f;
+  color: var(--danger-400);
+}
+
+.log-info {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.log-warning {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.log-error {
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .log-info { background: rgba(255,255,255,0.02); }
@@ -537,6 +574,9 @@ const cancelTask = async () => {
 .log-error { background: rgba(245,108,108,0.10); }
 
 .dialog-footer {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
 }
 </style>

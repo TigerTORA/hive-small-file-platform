@@ -1,20 +1,97 @@
 <template>
   <FeatureFlagProvider>
     <template #default="{ features, isEnabled }">
-      <div class="app" data-testid="app-loaded">
-        <el-container>
-          <!-- Header -->
-          <el-header class="app-header">
+      <div class="app cloudera-app" data-testid="app-loaded">
+        <!-- Cloudera 风格侧边栏 -->
+        <aside class="cloudera-sidebar" :class="{ collapsed: sidebarCollapsed }">
+          <!-- 品牌区域 -->
+          <div class="sidebar-brand">
+            <div class="logo">DN</div>
+            <div class="brand-text">DataNova</div>
+          </div>
+
+          <!-- 导航菜单 -->
+          <nav class="sidebar-nav">
+            <div class="nav-section">
+              <div class="nav-section-title">核心功能</div>
+              <div class="nav-item">
+                <router-link to="/" class="nav-link" :class="{ active: $route.path === '/' }">
+                  <div class="nav-icon">
+                    <el-icon><Monitor /></el-icon>
+                  </div>
+                  <span class="nav-text">监控中心</span>
+                </router-link>
+              </div>
+              <div class="nav-item">
+                <router-link to="/clusters" class="nav-link" :class="{ active: $route.path.startsWith('/clusters') }">
+                  <div class="nav-icon">
+                    <el-icon><Connection /></el-icon>
+                  </div>
+                  <span class="nav-text">集群管理</span>
+                </router-link>
+              </div>
+              <div class="nav-item">
+                <router-link to="/tasks" class="nav-link" :class="{ active: $route.path === '/tasks' }">
+                  <div class="nav-icon">
+                    <el-icon><List /></el-icon>
+                  </div>
+                  <span class="nav-text">任务管理</span>
+                </router-link>
+              </div>
+            </div>
+
+            <div class="nav-section">
+              <div class="nav-section-title">系统管理</div>
+              <div class="nav-item">
+                <router-link to="/settings" class="nav-link" :class="{ active: $route.path === '/settings' }">
+                  <div class="nav-icon">
+                    <el-icon><Setting /></el-icon>
+                  </div>
+                  <span class="nav-text">系统设置</span>
+                </router-link>
+              </div>
+              <div class="nav-item">
+                <router-link to="/demo" class="nav-link" :class="{ active: $route.path === '/demo' }">
+                  <div class="nav-icon">
+                    <el-icon><DataBoard /></el-icon>
+                  </div>
+                  <span class="nav-text">组件演示</span>
+                </router-link>
+              </div>
+            </div>
+          </nav>
+
+          <!-- 折叠按钮 -->
+          <div class="sidebar-toggle" @click="toggleSidebar">
+            <el-icon>
+              <component :is="sidebarCollapsed ? 'Expand' : 'Fold'" />
+            </el-icon>
+          </div>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <div class="cloudera-main" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+          <!-- Cloudera 风格头部 -->
+          <header class="cloudera-header">
             <div class="header-left">
-              <h1 class="app-title">
-                <el-icon><DataBoard /></el-icon>
-                Hive 小文件治理平台
+              <div class="header-breadcrumb">
+                <span>{{ currentPageTitle }}</span>
                 <el-tag v-if="isEnabled('demoMode')" type="warning" size="small" style="margin-left: 8px;">
                   演示模式
                 </el-tag>
-              </h1>
+              </div>
             </div>
             <div class="header-right">
+              <!-- 刷新按钮 -->
+              <el-button
+                :icon="Refresh"
+                circle
+                size="small"
+                @click="refreshPage"
+                title="刷新数据"
+                class="cloudera-btn secondary"
+              />
+
               <!-- 全屏模式切换 -->
               <el-button
                 v-if="isEnabled('fullscreenMode')"
@@ -23,7 +100,7 @@
                 size="small"
                 @click="toggleFullscreen"
                 :title="isFullscreen ? '退出全屏' : '进入全屏'"
-                style="margin-right: 12px;"
+                class="cloudera-btn secondary"
               />
 
               <!-- 主题切换 -->
@@ -33,7 +110,6 @@
                 :active-action-icon="Moon"
                 :inactive-action-icon="Sunny"
                 size="large"
-                style="margin-right: 16px;"
                 @change="toggleTheme"
               />
 
@@ -51,76 +127,25 @@
                 </template>
               </el-dropdown>
             </div>
-          </el-header>
+          </header>
 
-          <el-container>
-            <!-- Sidebar -->
-            <el-aside
-              v-if="!isFullscreen"
-              width="250px"
-              class="app-sidebar"
-            >
-              <el-menu
-                :default-active="$route.path"
-                router
-                class="sidebar-menu"
-                :background-color="isDarkTheme ? '#1f2937' : '#304156'"
-                :text-color="isDarkTheme ? '#d1d5db' : '#bfcbd9'"
-                active-text-color="#409eff"
-              >
-
-                <el-menu-item index="/">
-                  <el-icon><Monitor /></el-icon>
-                  <span>监控中心</span>
-                </el-menu-item>
-
-                <el-menu-item index="/clusters">
-                  <el-icon><Connection /></el-icon>
-                  <span>集群管理</span>
-                </el-menu-item>
-
-                <el-menu-item index="/tables">
-                  <el-icon><Grid /></el-icon>
-                  <span>表管理</span>
-                </el-menu-item>
-
-                <el-menu-item index="/tasks">
-                  <el-icon><List /></el-icon>
-                  <span>任务管理</span>
-                </el-menu-item>
-
-                <el-menu-item index="/settings">
-                  <el-icon><Setting /></el-icon>
-                  <span>系统设置</span>
-                </el-menu-item>
-
-                <el-menu-item
-                  v-if="isEnabled('demoMode')"
-                  index="/test-dashboard"
-                >
-                  <el-icon><DataBoard /></el-icon>
-                  <span>测试中心</span>
-                </el-menu-item>
-              </el-menu>
-            </el-aside>
-
-            <!-- Main Content -->
-            <el-main
-              class="app-main"
-              :class="{ 'fullscreen-main': isFullscreen, 'dark-theme': isDarkTheme }"
-              data-testid="main-content"
-            >
-              <router-view />
-            </el-main>
-          </el-container>
-        </el-container>
+          <!-- 主内容区域 -->
+          <main class="page-content">
+            <router-view v-slot="{ Component }">
+              <transition name="page" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
+          </main>
+        </div>
       </div>
     </template>
   </FeatureFlagProvider>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   User,
   CaretBottom,
@@ -133,13 +158,49 @@ import {
   FullScreen,
   Close,
   Moon,
-  Sunny
+  Sunny,
+  Refresh,
+  Expand,
+  Fold
 } from '@element-plus/icons-vue'
 import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
+
+const route = useRoute()
+const router = useRouter()
+
+// 侧边栏状态
+const sidebarCollapsed = ref(false)
 
 // 全屏状态
 const isFullscreen = ref(false)
 const isDarkTheme = ref(false)
+
+// 页面标题计算
+const currentPageTitle = computed(() => {
+  const titleMap: Record<string, string> = {
+    '/': '监控中心',
+    '/clusters': '集群管理',
+    '/tasks': '任务管理',
+    '/settings': '系统设置'
+  }
+
+  // 处理动态路由
+  if (route.path.startsWith('/clusters/')) {
+    return '集群详情'
+  }
+
+  return titleMap[route.path] || '页面'
+})
+
+// 侧边栏切换
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 刷新页面
+const refreshPage = () => {
+  window.location.reload()
+}
 
 // 全屏切换
 const toggleFullscreen = () => {
@@ -164,117 +225,57 @@ document.addEventListener('fullscreenchange', () => {
 })
 </script>
 
-<style scoped>
-.app {
-  height: 100vh;
+<style>
+/* 引入设计系统 */
+@import './styles/design-system.css';
+@import './styles/cloudera-theme.css';
+
+/* 应用全局样式 */
+.cloudera-app {
+  min-height: 100vh;
+  overflow: visible;
 }
 
-.app-header {
-  background-color: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  transition: all 0.3s ease;
+/* 页面内容区域 */
+.page-content {
+  padding: 0;
+  min-height: auto;
+  overflow-y: visible;
+  background: var(--bg-app);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.app-title {
-  margin: 0;
-  color: #2c3e50;
-  font-size: 20px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-}
-
+/* 用户信息样式 */
 .user-info {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   cursor: pointer;
-  color: #606266;
+  color: var(--gray-600);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
 }
 
-.app-sidebar {
-  background-color: #304156;
-  transition: all 0.3s ease;
+.user-info:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
 }
 
-.sidebar-menu {
-  border: none;
-  height: 100%;
+/* 页面过渡动画 */
+.page-enter-active,
+.page-leave-active {
+  transition: all var(--transition-normal);
 }
 
-.app-main {
-  background-color: #f0f2f5;
-  padding: 20px;
-  transition: all 0.3s ease;
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
 }
 
-.fullscreen-main {
-  padding: 0;
-  background-color: #000;
-}
-
-/* 深色主题 */
-.dark-theme {
-  background-color: #1f2937 !important;
-  color: #f9fafb;
-}
-
-.dark-theme .app-header {
-  background-color: #374151;
-  border-bottom-color: #4b5563;
-}
-
-.dark-theme .app-title {
-  color: #f9fafb;
-}
-
-.dark-theme .user-info {
-  color: #d1d5db;
-}
-
-/* 全屏模式样式 */
-.app:fullscreen {
-  background: #000;
-}
-
-.app:fullscreen .app-header {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.app:fullscreen .app-title {
-  color: #fff;
-}
-
-.app:fullscreen .user-info {
-  color: #fff;
-}
-</style>
-
-<style>
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-#app {
-  height: 100vh;
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>

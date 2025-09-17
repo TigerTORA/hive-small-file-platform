@@ -2,7 +2,7 @@
   <div class="table-file-count-chart">
     <div class="chart-header">
       <div class="header-left">
-        <h3 class="chart-title">Hive表文件数监控</h3>
+        <h3 class="chart-title">表文件数监控</h3>
         <p class="chart-subtitle">实时监控所有表的文件数量及变化趋势</p>
       </div>
       <div class="header-right">

@@ -8,7 +8,7 @@
       </div>
       <div class="actions-section">
         <el-dropdown @command="handleTemplate">
-          <el-button>
+          <el-button class="cloudera-btn secondary">
             配置模板
             <el-icon><CaretBottom /></el-icon>
           </el-button>
@@ -25,83 +25,13 @@
           active-text="严格实连"
           inactive-text="允许Mock"
         />
-        <el-button type="primary" @click="showCreateDialog = true">
+        <el-button @click="showCreateDialog = true" class="cloudera-btn primary">
           <el-icon><Plus /></el-icon>
           添加集群
         </el-button>
       </div>
     </div>
 
-    <!-- 集群统计概览 -->
-    <el-row :gutter="20" class="stats-section">
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <el-statistic title="总集群数" :value="totalClusters">
-            <template #suffix>
-              <el-icon><Monitor /></el-icon>
-            </template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <el-statistic title="在线集群" :value="onlineClusters">
-            <template #suffix>
-              <el-icon style="color: #67c23a"><CircleCheckFilled /></el-icon>
-            </template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <el-statistic title="监控的表" :value="totalTables">
-            <template #suffix>
-              <el-icon><Grid /></el-icon>
-            </template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <el-statistic title="待处理任务" :value="pendingTasks">
-            <template #suffix>
-              <el-icon style="color: #e6a23c"><Clock /></el-icon>
-            </template>
-          </el-statistic>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- 搜索和过滤 -->
-    <el-card class="filter-section">
-      <el-row :gutter="20" align="middle">
-        <el-col :span="8">
-          <el-input 
-            v-model="searchText" 
-            placeholder="搜索集群名称或主机..." 
-            clearable
-            @input="filterClusters"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </el-col>
-        <el-col :span="6">
-          <el-select v-model="statusFilter" placeholder="筛选状态" clearable @change="filterClusters">
-            <el-option label="全部状态" value="" />
-            <el-option label="正常" value="active" />
-            <el-option label="异常" value="inactive" />
-          </el-select>
-        </el-col>
-        <el-col :span="6">
-          <el-button @click="loadClusters" :loading="loading">
-            <el-icon><Refresh /></el-icon>
-            刷新
-          </el-button>
-        </el-col>
-      </el-row>
-    </el-card>
 
     <!-- 集群卡片列表 -->
     <div v-loading="loading" class="clusters-grid">
@@ -113,37 +43,28 @@
         </el-empty>
       </div>
       
-      <el-card 
-        v-for="cluster in filteredClusters" 
+      <div
+        v-for="cluster in filteredClusters"
         :key="cluster.id"
-        class="cluster-card"
+        class="cloudera-metric-card cluster-card hover-lift"
         @click="enterCluster(cluster.id)"
         :class="{ 'cluster-online': cluster.status === 'active' }"
-        shadow="hover"
       >
-        <template #header>
-          <div class="cluster-header">
-            <div class="cluster-title">
-              <h3>{{ cluster.name }}</h3>
-              <el-tag :type="getStatusType(cluster.status)" size="small">
-                {{ cluster.status === 'active' ? '正常' : '异常' }}
-              </el-tag>
-            </div>
-            <div class="cluster-actions" @click.stop>
-              <el-tooltip content="全库扫描(带进度)" placement="top">
-                <el-button size="small" type="success" @click="startClusterScan(cluster.id)">
-                  <el-icon><Refresh /></el-icon>
-                  扫描
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="进入集群详情" placement="top">
-                <el-button type="primary" size="small" circle @click="enterCluster(cluster.id)">
-                  <el-icon><Right /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
+        <div class="cluster-header">
+          <div class="cluster-title">
+            <h3>{{ cluster.name }}</h3>
+            <span class="cloudera-tag" :class="getStatusType(cluster.status)">
+              {{ cluster.status === 'active' ? '正常' : '异常' }}
+            </span>
           </div>
-        </template>
+          <div class="cluster-actions" @click.stop>
+            <el-tooltip content="进入集群详情" placement="top">
+              <el-button size="small" circle @click="enterCluster(cluster.id)" class="cloudera-btn primary">
+                <el-icon><Right /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
+        </div>
         
         <div class="cluster-content">
           <div class="cluster-info">
@@ -184,21 +105,21 @@
           </div>
 
           <div class="cluster-operations" @click.stop>
-            <el-button size="small" @click="testConnection(cluster, 'mock')">
+            <el-button size="small" @click="testConnection(cluster, 'mock')" class="cloudera-btn secondary">
               <el-icon><Connection /></el-icon>
               快速测试
             </el-button>
-            <el-button size="small" @click="editCluster(cluster)">
+            <el-button size="small" @click="editCluster(cluster)" class="cloudera-btn secondary">
               <el-icon><Edit /></el-icon>
               编辑
             </el-button>
-            <el-button size="small" type="danger" @click="deleteCluster(cluster)">
+            <el-button size="small" @click="deleteCluster(cluster)" class="cloudera-btn danger">
               <el-icon><Delete /></el-icon>
               删除
             </el-button>
           </div>
         </div>
-      </el-card>
+      </div>
     </div>
 
     <!-- 创建/编辑对话框 -->
@@ -784,117 +705,160 @@ onMounted(() => {
 
 <style scoped>
 .clusters-management {
-  padding: 24px;
-  background-color: #f5f5f5;
-  min-height: 100vh;
+  padding: var(--space-3) var(--space-4) 400px var(--space-4);
+  min-height: 150vh;
+  background: var(--bg-app);
+  overflow-y: visible;
 }
 
 .header-section {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--elevation-1);
 }
 
 .title-section h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--gray-900);
 }
 
 .title-section p {
   margin: 0;
-  color: #6b7280;
-  font-size: 16px;
+  color: var(--gray-600);
+  font-size: var(--text-lg);
 }
 
 .actions-section {
   display: flex;
-  gap: 12px;
+  gap: var(--space-4);
   align-items: center;
 }
 
-.stats-section {
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  text-align: center;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
+/* 筛选区域 */
 .filter-section {
-  margin-bottom: 24px;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
 }
 
+.filter-header {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--primary-500);
+}
+
+.filter-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
+}
+
+.filter-controls {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  min-width: 300px;
+}
+
+.status-filter {
+  min-width: 150px;
+}
+
+/* 集群网格 */
 .clusters-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 24px;
+  gap: var(--space-6);
 }
 
 .cluster-card {
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
   cursor: pointer;
+  padding: var(--space-6);
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
 }
 
-.cluster-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.cluster-online {
-  border-left: 4px solid #67c23a;
+.cluster-online::before {
+  background: linear-gradient(90deg, var(--success-500), var(--success-300));
 }
 
 .cluster-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.cluster-title {
+  flex: 1;
 }
 
 .cluster-title h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--gray-900);
+}
+
+.cluster-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.cluster-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .cluster-description {
-  color: #6b7280;
-  margin: 0 0 16px 0;
-  font-size: 14px;
-  line-height: 1.5;
+  color: var(--gray-600);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 
 .cluster-details {
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .detail-item {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #6b7280;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--gray-600);
 }
 
 .detail-item .el-icon {
-  margin-right: 8px;
-  color: #9ca3af;
+  color: var(--primary-500);
 }
 
 .cluster-stats {
-  margin-bottom: 20px;
-  padding: 16px;
-  background-color: #f9fafb;
-  border-radius: 8px;
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  flex: 1;
 }
 
 .stat-item {
@@ -902,26 +866,99 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 4px;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--primary-600);
+  margin-bottom: var(--space-1);
 }
 
 .stat-label {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+  font-weight: var(--font-medium);
 }
 
 .cluster-operations {
   display: flex;
-  gap: 8px;
+  gap: var(--space-3);
   flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--gray-200);
 }
 
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 60px 20px;
+  padding: var(--space-16) var(--space-6);
+}
+
+/* 依次出现动画 */
+.stagger-animation {
+  perspective: 1000px;
+}
+
+.stagger-item {
+  animation: staggerIn 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  opacity: 0;
+  transform: translateY(30px) scale(0.95);
+  animation-delay: var(--stagger-delay, 0s);
+}
+
+.stagger-item:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: var(--elevation-4);
+}
+
+@keyframes staggerIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  60% {
+    opacity: 0.8;
+    transform: translateY(-5px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 1200px) {
+  .clusters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 768px) {
+  .clusters-management {
+    padding: var(--space-4);
+  }
+
+  .header-section {
+    flex-direction: column;
+    gap: var(--space-4);
+    text-align: center;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input {
+    min-width: auto;
+  }
+
+  .clusters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cluster-operations {
+    justify-content: center;
+  }
 }
 </style>
