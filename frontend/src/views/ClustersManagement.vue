@@ -103,7 +103,7 @@
           </div>
 
           <div class="cluster-operations" @click.stop>
-            <el-button size="small" @click="testConnection(cluster, 'mock')" class="cloudera-btn secondary">
+            <el-button size="small" @click="testConnection(cluster, 'enhanced')" class="cloudera-btn secondary">
               <el-icon><Connection /></el-icon>
               连接测试
             </el-button>
@@ -428,17 +428,30 @@ const startClusterScan = async (clusterId: number) => {
 }
 
 const loadClusterStats = async () => {
-  // 这里应该调用API获取每个集群的统计数据
-  // 暂时使用模拟数据
+  // 调用真实API获取每个集群的统计数据
   const stats: Record<number, any> = {}
+
   for (const cluster of clusters.value) {
-    stats[cluster.id] = {
-      databases: Math.floor(Math.random() * 20) + 1,
-      tables: Math.floor(Math.random() * 100) + 10,
-      small_files: Math.floor(Math.random() * 1000) + 50,
-      pending_tasks: Math.floor(Math.random() * 10)
+    try {
+      const clusterStats = await clustersApi.getStats(cluster.id)
+      stats[cluster.id] = {
+        databases: clusterStats.total_databases,
+        tables: clusterStats.total_tables,
+        small_files: clusterStats.total_small_files,
+        pending_tasks: 0 // 暂时设为0，后续可以添加任务统计API
+      }
+    } catch (error) {
+      console.error(`Failed to load stats for cluster ${cluster.id}:`, error)
+      // 如果API调用失败，设置默认值
+      stats[cluster.id] = {
+        databases: 0,
+        tables: 0,
+        small_files: 0,
+        pending_tasks: 0
+      }
     }
   }
+
   clusterStats.value = stats
 }
 
@@ -525,24 +538,72 @@ const deleteCluster = async (cluster: Cluster) => {
   }
 }
 
+// 增强连接测试
+const testConnectionEnhanced = async (cluster: Cluster, options?: {
+  connectionTypes?: string[]
+  forceRefresh?: boolean
+}) => {
+  currentTestConfig.value = cluster
+  testResult.value = null
+  testError.value = null
+  testingConnection.value = true
+  showTestDialog.value = true
+
+  try {
+    const result = await clustersApi.testConnectionEnhanced(cluster.id, options)
+    testResult.value = result
+
+    // 更新连接状态缓存
+    if (result.tests) {
+      // 状态映射函数：后端状态 -> 前端状态
+      const mapStatus = (backendStatus: string) => {
+        switch (backendStatus) {
+          case 'success': return 'success'
+          case 'failed': return 'error'
+          case 'unknown': return 'unknown'
+          default: return 'error'
+        }
+      }
+
+      // 确保连接状态对象存在
+      if (!connectionStatus.value[cluster.id]) {
+        connectionStatus.value[cluster.id] = {}
+      }
+
+      // 更新每个服务的状态
+      for (const [service, serviceResult] of Object.entries(result.tests)) {
+        const mappedServiceKey = service === 'metastore' ? 'metastore' :
+                                service === 'hdfs' ? 'hdfs' :
+                                service === 'hiveserver2' ? 'hiveserver' : service
+
+        connectionStatus.value[cluster.id][mappedServiceKey] = {
+          status: mapStatus(serviceResult.status),
+          message: serviceResult.error_message || `响应时间: ${serviceResult.response_time_ms.toFixed(0)}ms`,
+          lastChecked: new Date(),
+          responseTime: serviceResult.response_time_ms,
+          failureType: serviceResult.failure_type,
+          attemptCount: serviceResult.attempt_count
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('Failed to test connection:', error)
+    testError.value = error.response?.data?.detail || error.message || '增强连接测试失败'
+  } finally {
+    testingConnection.value = false
+  }
+}
+
 const testConnection = async (cluster: Cluster, mode: string = 'mock') => {
   if (mode === 'real') {
-    // 详细测试 - 显示测试对话框
-    currentTestConfig.value = cluster
-    testResult.value = null
-    testError.value = null
-    testingConnection.value = true
-    showTestDialog.value = true
-    
-    try {
-      const result = await clustersApi.testConnection(cluster.id, mode)
-      testResult.value = result
-    } catch (error: any) {
-      console.error('Failed to test connection:', error)
-      testError.value = error.response?.data?.detail || error.message || '测试失败'
-    } finally {
-      testingConnection.value = false
-    }
+    // 使用增强连接测试
+    await testConnectionEnhanced(cluster, { forceRefresh: true })
+  } else if (mode === 'enhanced') {
+    // 增强模式，测试所有服务
+    await testConnectionEnhanced(cluster, {
+      connectionTypes: ['metastore', 'hdfs', 'hiveserver2'],
+      forceRefresh: true
+    })
   } else {
     // Mock测试 - 简单消息提示
     const loadingMessage = ElMessage({
@@ -698,25 +759,35 @@ const updateConnectionStatus = async (clusterId: number) => {
   connectionStatus.value[clusterId].loading = true
 
   try {
-    const result = await clustersApi.testConnection(clusterId, 'mock')
+    const result = await clustersApi.testConnection(clusterId, 'enhanced')
     const tests = result.tests || {}
+
+    // 状态映射函数：后端状态 -> 前端状态
+    const mapStatus = (backendStatus: string) => {
+      switch (backendStatus) {
+        case 'success': return 'success'
+        case 'failed': return 'error'
+        case 'unknown': return 'unknown'
+        default: return 'error'
+      }
+    }
 
     connectionStatus.value[clusterId] = {
       hiveserver: {
         // HiveServer2状态暂时使用metastore状态作为参考
-        status: tests.metastore?.status === 'success' ? 'success' : 'error',
+        status: mapStatus(tests.metastore?.status || 'unknown'),
         message: tests.metastore?.message || '基于MetaStore连接状态推测',
-        mode: tests.metastore?.mode || 'mock'
+        mode: tests.metastore?.mode || 'enhanced'
       },
       hdfs: {
-        status: tests.hdfs?.status === 'success' ? 'success' : 'error',
+        status: mapStatus(tests.hdfs?.status || 'unknown'),
         message: tests.hdfs?.message || '',
-        mode: tests.hdfs?.mode || 'mock'
+        mode: tests.hdfs?.mode || 'enhanced'
       },
       metastore: {
-        status: tests.metastore?.status === 'success' ? 'success' : 'error',
+        status: mapStatus(tests.metastore?.status || 'unknown'),
         message: tests.metastore?.message || '',
-        mode: tests.metastore?.mode || 'mock'
+        mode: tests.metastore?.mode || 'enhanced'
       },
       loading: false,
       lastChecked: new Date()
@@ -734,28 +805,75 @@ const updateConnectionStatus = async (clusterId: number) => {
 }
 
 const testSpecificConnection = async (clusterId: number, service: string) => {
+  console.log(`Testing ${service} connection for cluster ${clusterId}`)
+
   // 设置特定服务为测试中状态
   if (!connectionStatus.value[clusterId]) {
     connectionStatus.value[clusterId] = {}
   }
 
   const currentStatus = connectionStatus.value[clusterId]
-  switch (service) {
-    case 'hiveserver':
-      currentStatus.hiveserver = { status: 'testing', message: '正在测试连接...' }
-      break
-    case 'hdfs':
-      currentStatus.hdfs = { status: 'testing', message: '正在测试连接...' }
-      break
-    case 'metastore':
-      currentStatus.metastore = { status: 'testing', message: '正在测试连接...' }
-      break
-  }
+  const serviceKey = service === 'hiveserver' ? 'hiveserver2' : service
 
-  // 延迟后更新状态
-  setTimeout(() => {
-    updateConnectionStatus(clusterId)
-  }, 1000)
+  // 设置测试中状态
+  currentStatus[serviceKey] = { status: 'testing', message: '正在测试连接...' }
+
+  try {
+    // 使用增强API测试特定服务
+    const result = await clustersApi.testConnectionEnhanced(clusterId, {
+      connectionTypes: [serviceKey],
+      forceRefresh: true
+    })
+
+    // 更新连接状态
+    if (result.tests && result.tests[serviceKey]) {
+      const serviceResult = result.tests[serviceKey]
+      // 状态映射函数：后端状态 -> 前端状态
+      const mapStatus = (backendStatus: string) => {
+        switch (backendStatus) {
+          case 'success': return 'success'
+          case 'failed': return 'error'
+          case 'unknown': return 'unknown'
+          default: return 'error'
+        }
+      }
+
+      currentStatus[serviceKey] = {
+        status: mapStatus(serviceResult.status),
+        message: serviceResult.error_message || `响应时间: ${serviceResult.response_time_ms.toFixed(0)}ms`,
+        lastChecked: new Date(),
+        responseTime: serviceResult.response_time_ms,
+        failureType: serviceResult.failure_type,
+        attemptCount: serviceResult.attempt_count
+      }
+
+      // 显示测试结果
+      if (serviceResult.status === 'success') {
+        ElMessage({
+          message: `${service} 连接测试成功 (${serviceResult.response_time_ms.toFixed(0)}ms)`,
+          type: 'success'
+        })
+      } else {
+        ElMessage({
+          message: `${service} 连接测试失败: ${serviceResult.error_message || '未知错误'}`,
+          type: 'error',
+          duration: 5000
+        })
+      }
+    }
+  } catch (error: any) {
+    console.error(`Failed to test ${service} connection:`, error)
+    currentStatus[serviceKey] = {
+      status: 'error',
+      message: error.message || '网络错误',
+      lastChecked: new Date()
+    }
+
+    ElMessage({
+      message: `${service} 连接测试失败: ${error.message || '网络错误'}`,
+      type: 'error'
+    })
+  }
 }
 
 const checkAllConnectionStatus = async () => {
