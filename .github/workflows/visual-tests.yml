@@ -1,20 +1,17 @@
 name: Visual Regression Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/visual-tests.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'frontend/**'
       - '.github/workflows/visual-tests.yml'
+  workflow_dispatch:
 
 jobs:
   visual-tests:
     name: Visual Regression Tests
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'visual-tests')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

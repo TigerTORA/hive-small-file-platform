@@ -2,6 +2,10 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.config.database import Base
+# 确保相关模型在映射配置前已注册到同一 Base（避免关系解析失败）
+from . import scan_task as _scan_task  # noqa: F401
+from . import merge_task as _merge_task  # noqa: F401
+from . import table_metric as _table_metric  # noqa: F401
 
 class Cluster(Base):
     __tablename__ = "clusters"

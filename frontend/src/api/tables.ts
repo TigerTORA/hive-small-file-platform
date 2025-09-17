@@ -111,12 +111,32 @@ export const tablesApi = {
     potential_savings: number
     table_details: any[]
   }> {
-    return api.get(`/clusters/${clusterId}/analysis`)
+    // 使用实际可用的API端点
+    return api.get('/tables/small-files', {
+      params: { cluster_id: clusterId }
+    }).then(response => {
+      // 转换数据格式以匹配前端期望的结构
+      return {
+        total_tables: response.total_tables,
+        affected_tables: Math.round(response.total_tables * response.small_file_ratio / 100),
+        total_small_files: response.total_small_files,
+        potential_savings: Math.round(response.total_small_files * 128 * 1024), // 假设每个小文件平均节省128KB
+        table_details: [] // 暂时返回空数组，等后端提供详细接口
+      }
+    })
   },
 
-  // 扫描所有数据库（带严格实连开关）
-  scanAllDatabases(clusterId: number, strictReal: boolean = true): Promise<any> {
-    return api.post(`/tables/scan/${clusterId}` as string, null, { params: { strict_real: strictReal } })
+  // 扫描所有数据库（带严格实连与每库表数上限）
+  scanAllDatabases(
+    clusterId: number,
+    strictReal: boolean = true,
+    maxTablesPerDb?: number | null
+  ): Promise<any> {
+    const params: any = { strict_real: strictReal }
+    if (typeof maxTablesPerDb === 'number' && maxTablesPerDb > 0) {
+      params.max_tables_per_db = maxTablesPerDb
+    }
+    return api.post(`/tables/scan/${clusterId}` as string, null, { params })
   },
 
   // 扫描指定数据库（注意：该路径为 Mock 模式；如需严格实连请走 scan-real）

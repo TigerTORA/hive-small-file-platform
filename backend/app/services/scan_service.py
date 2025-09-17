@@ -9,6 +9,7 @@ from app.models.cluster import Cluster
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.schemas.scan_task import ScanTaskLog
+from app.config.database import SessionLocal
 
 
 class ScanTaskManager:
@@ -18,6 +19,7 @@ class ScanTaskManager:
         self.active_tasks: Dict[str, ScanTask] = {}
         self.task_logs: Dict[str, List[ScanTaskLog]] = {}
         self._lock = threading.Lock()
+        self._cancelled: set[str] = set()
     
     def create_scan_task(
         self, 
@@ -55,6 +57,26 @@ class ScanTaskManager:
         """获取任务日志"""
         with self._lock:
             return self.task_logs.get(task_id, [])
+
+    def request_cancel(self, db: Session, task_id: str) -> bool:
+        """请求取消任务：设置标记并记录日志"""
+        with self._lock:
+            self._cancelled.add(task_id)
+        try:
+            self.add_log(task_id, 'INFO', '收到取消请求，正在停止扫描…', db=db)
+        except Exception:
+            pass
+        return True
+
+    def _is_cancelled(self, task_id: str) -> bool:
+        with self._lock:
+            return task_id in self._cancelled
+
+    def _cleanup_task(self, task_id: str):
+        with self._lock:
+            self.active_tasks.pop(task_id, None)
+            self.task_logs.pop(task_id, None)
+            self._cancelled.discard(task_id)
     
     def add_log(
         self,
@@ -215,11 +237,28 @@ class ScanTaskManager:
         
         # 在后台线程中执行扫描
         def run_scan():
+            # 为后台线程创建独立的数据库会话，避免跨线程复用同一 Session 导致崩溃
+            db_thread = SessionLocal()
             try:
-                self._execute_cluster_scan(db, task, cluster, max_tables_per_db, strict_real)
+                # 重新获取 cluster 与 task，确保在该会话上下文中托管
+                cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster.id).first() if cluster else None
+                task_t = db_thread.query(ScanTask).filter(ScanTask.id == task.id).first() if task else None
+                if not cluster_t or not task_t:
+                    raise RuntimeError('Failed to load task/cluster in thread-local session')
+
+                self._execute_cluster_scan(db_thread, task_t, cluster_t, max_tables_per_db, strict_real)
             except Exception as e:
-                self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db)
-                self.complete_task(db, task.task_id, success=False, error_message=str(e))
+                try:
+                    self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db_thread)
+                finally:
+                    self.complete_task(db_thread, task.task_id, success=False, error_message=str(e))
+            finally:
+                try:
+                    db_thread.close()
+                except Exception:
+                    pass
+                # 清理内存引用，避免泄漏
+                self._cleanup_task(task.task_id)
         
         thread = threading.Thread(target=run_scan)
         thread.daemon = True
@@ -288,6 +327,11 @@ class ScanTaskManager:
             
             # 扫描每个数据库
             for i, database_name in enumerate(databases, 1):
+                # 支持随时取消
+                if self._is_cancelled(task.task_id):
+                    self.add_log(task.task_id, 'INFO', '⏹️ 用户取消，停止后续数据库扫描', db=db)
+                    self.complete_task(db, task.task_id, success=False, error_message='Task cancelled by user')
+                    return
                 db_scan_start = time.time()
                 self.safe_update_progress(
                     db, task.task_id, 

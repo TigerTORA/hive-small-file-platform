@@ -5,13 +5,14 @@ from typing import Dict, Any, List, Optional
 import asyncio
 import time
 from app.config.database import get_db
+import re
 from app.models.table_metric import TableMetric
 from app.models.cluster import Cluster
 from app.schemas.table_metric import TableMetricResponse, ScanRequest
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.services.scan_service import scan_task_manager
-from app.schemas.scan_task import ScanTaskResponse, ScanTaskProgress
+from app.schemas.scan_task import ScanTaskResponse, ScanTaskProgress, ScanTaskLog
 from app.utils.webhdfs_client import WebHDFSClient
 
 router = APIRouter()
@@ -895,22 +896,63 @@ async def get_scan_task_progress(
     db: Session = Depends(get_db)
 ):
     """获取扫描任务的实时进度"""
+    # 容错：有些来源（地址栏/手动复制）可能会带空格或不可见字符
+    task_id = re.sub(r"\s+", "", (task_id or "").strip())
+    # 优先从内存任务管理器读取（同进程内实时任务）
     task = scan_task_manager.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    logs = scan_task_manager.get_task_logs(task_id)
-    
-    return ScanTaskProgress(
-        task_id=task_id,
-        status=task.status,
-        progress_percentage=task.progress_percentage,
-        current_item=task.current_item,
-        completed_items=task.completed_items,
-        total_items=task.total_items,
-        estimated_remaining_seconds=task.estimated_remaining_seconds,
-        logs=logs
-    )
+    if task:
+        logs = scan_task_manager.get_task_logs(task_id)
+        return ScanTaskProgress(
+            task_id=task_id,
+            status=task.status,
+            progress_percentage=task.progress_percentage,
+            current_item=task.current_item,
+            completed_items=task.completed_items,
+            total_items=task.total_items,
+            estimated_remaining_seconds=task.estimated_remaining_seconds,
+            logs=logs
+        )
+
+    # 回退：内存中找不到任务（任务可能由其他进程创建，或服务重启），则从持久化记录返回
+    try:
+        from app.models.scan_task import ScanTask as ScanTaskModel
+        from app.models.scan_task_log import ScanTaskLogDB
+        db_task = db.query(ScanTaskModel).filter(ScanTaskModel.task_id == task_id).first()
+        if not db_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # 读取已持久化的日志（按时间升序）
+        rows = (
+            db.query(ScanTaskLogDB)
+            .filter(ScanTaskLogDB.scan_task_id == db_task.id)
+            .order_by(ScanTaskLogDB.timestamp.asc())
+            .all()
+        )
+        persisted_logs = [
+            ScanTaskLog(
+                timestamp=r.timestamp,
+                level=r.level,
+                message=r.message,
+                database_name=r.database_name,
+                table_name=r.table_name,
+            )
+            for r in rows
+        ]
+
+        return ScanTaskProgress(
+            task_id=task_id,
+            status=db_task.status or 'pending',
+            progress_percentage=db_task.progress_percentage,
+            current_item=db_task.current_item,
+            completed_items=db_task.completed_items or 0,
+            total_items=db_task.total_items or 0,
+            estimated_remaining_seconds=db_task.estimated_remaining_seconds,
+            logs=persisted_logs,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read task progress: {str(e)}")
 
 @router.get("/scan-progress/cluster/{cluster_id}")
 async def get_scan_progress(

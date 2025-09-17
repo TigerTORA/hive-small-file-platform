@@ -72,6 +72,9 @@ yarn-error.log*
 frontend/dist/
 frontend/.temp/
 frontend/.cache/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 
 # OS
 .DS_Store
@@ -92,6 +95,14 @@ dump.rdb
 # Temporary files
 *.tmp
 *.temp
+
+# Backend coverage artifacts
+backend/.coverage
+backend/coverage.xml
+backend/coverage/
+
+# Local databases
+backend/*.db
 
 # Local AI/dev workspace
 .claude/

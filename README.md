@@ -1,6 +1,6 @@
 # Hive/Impala 小文件治理平台
 
-![CI](https://github.com/your-username/hive-small-file-platform/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/TigerTORA/hive-small-file-platform/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status Report](https://img.shields.io/badge/Status-Project%20Report-blue)
 

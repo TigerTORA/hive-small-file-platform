@@ -7,6 +7,27 @@
     :close-on-press-escape="false"
   >
     <div class="scan-progress">
+      <!-- 顶部状态提示条 -->
+      <el-alert
+        v-if="progress"
+        :title="getStatusText(progress?.status)"
+        :type="getStatusType(progress?.status) || 'info'"
+        show-icon
+        :closable="false"
+        class="status-alert"
+      />
+      <div class="dialog-tools">
+        <div class="left">
+          <el-text size="small" type="info">任务ID：</el-text>
+          <el-text size="small" class="mono">{{ shortTaskId }}</el-text>
+          <el-button size="small" link @click="copyTaskId">复制</el-button>
+        </div>
+        <div class="right">
+          <el-button size="small" @click="toggleFollow">{{ autoFollow ? '暂停跟随' : '继续跟随' }}</el-button>
+          <el-button size="small" @click="copyLogs" :disabled="displayLogs.length === 0">复制日志</el-button>
+          <el-button size="small" @click="exportLogs" :disabled="displayLogs.length === 0">导出TXT</el-button>
+        </div>
+      </div>
       <!-- 进度概览 -->
       <div class="progress-overview">
         <el-row :gutter="20">
@@ -51,7 +72,7 @@
         </div>
       </div>
 
-      <!-- 统计信息 -->
+      <!-- 统计信息 / 骨架占位 -->
       <div class="stats-section" v-if="progress?.status === 'completed' || hasStats">
         <el-row :gutter="20">
           <el-col :span="8">
@@ -64,6 +85,9 @@
             <el-statistic title="小文件数" :value="scanStats.smallFiles" />
           </el-col>
         </el-row>
+      </div>
+      <div v-else class="stats-skeleton">
+        <el-skeleton animated :rows="2" />
       </div>
 
       <!-- 实时日志 -->
@@ -78,7 +102,7 @@
           <div 
             v-for="(log, index) in displayLogs" 
             :key="index"
-            :class="['log-entry', `log-${log.level.toLowerCase()}`]"
+            :class="['log-entry', levelClass(log.level)]"
           >
             <span class="log-time">{{ formatLogTime(log.timestamp) }}</span>
             <el-tag 
@@ -97,6 +121,7 @@
 
     <template #footer>
       <div class="dialog-footer">
+        <el-button v-if="progress?.status === 'running'" type="warning" @click="cancelTask" :loading="cancelling">取消任务</el-button>
         <el-button @click="handleClose" :disabled="progress?.status === 'running'">
           {{ progress?.status === 'running' ? '扫描中...' : '关闭' }}
         </el-button>
@@ -114,8 +139,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { scanTasksApi } from '@/api/scanTasks'
 
 interface ScanProgress {
   task_id: string
@@ -155,6 +181,8 @@ const progress = ref<ScanProgress | null>(null)
 const displayLogs = ref<ScanLog[]>([])
 const logsContainer = ref<HTMLElement>()
 let pollInterval: NodeJS.Timeout | null = null
+const autoFollow = ref(true)
+const cancelling = ref(false)
 
 const scanStats = computed(() => ({
   tables: progress.value?.logs?.filter(log => log.level === 'INFO' && log.message.includes('扫描完成')).length || 0,
@@ -197,16 +225,23 @@ const fetchProgress = async () => {
   if (!props.taskId) return
 
   try {
-    const data = await api.get(`/tables/scan-progress/${props.taskId}`)
-    progress.value = data
-    
-    if (data.logs) {
-      // 最新在前，更新后滚动贴底确保可见
-      displayLogs.value = [...data.logs].reverse()
-      await nextTick()
-      scrollLogsToBottom()
+    // 获取扫描任务基本信息
+    const taskData = await api.get(`/scan-tasks/${props.taskId}`)
+    progress.value = taskData
+
+    // 获取扫描任务日志
+    try {
+      const logsData = await api.get(`/scan-tasks/${props.taskId}/logs`)
+      if (logsData && Array.isArray(logsData)) {
+        // 最新在前，更新后滚动贴底确保可见
+        displayLogs.value = [...logsData].reverse()
+        await nextTick(); scrollLogsToBottom()
+      }
+    } catch (logsError) {
+      console.warn('Failed to fetch scan logs:', logsError)
+      // 日志获取失败不影响主要功能
     }
-    
+
     // 如果任务完成，停止轮询
     if (progress.value?.status === 'completed' || progress.value?.status === 'failed') {
       stopPolling()
@@ -226,7 +261,7 @@ const fetchProgress = async () => {
 }
 
 const scrollLogsToBottom = () => {
-  if (logsContainer.value) {
+  if (logsContainer.value && autoFollow.value) {
     logsContainer.value.scrollTop = logsContainer.value.scrollHeight
   }
 }
@@ -269,6 +304,8 @@ const getLogType = (level: string) => {
   }
 }
 
+const levelClass = (level: string) => `log-${(level || '').toLowerCase()}`
+
 const formatTime = (seconds?: number) => {
   if (!seconds || seconds <= 0) return '计算中...'
   if (seconds < 60) return `${Math.round(seconds)}秒`
@@ -300,15 +337,81 @@ const viewResults = () => {
   ElMessage.info('查看结果功能开发中...')
 }
 
+const copyTaskId = async () => {
+  if (!props.taskId) return
+  try { await navigator.clipboard.writeText(props.taskId) } catch {}
+  ElMessage.success('任务ID已复制')
+}
+
+const copyLogs = async () => {
+  if (displayLogs.value.length === 0) return
+  const text = displayLogs.value
+    .map(l => `${formatLogTime(l.timestamp)} [${l.level}] ${l.message}${l.database_name ? ' ['+l.database_name+']' : ''}`)
+    .join('\n')
+  try { await navigator.clipboard.writeText(text) } catch {}
+  ElMessage.success('日志已复制到剪贴板')
+}
+
+const toggleFollow = () => {
+  autoFollow.value = !autoFollow.value
+  if (autoFollow.value) scrollLogsToBottom()
+}
+
+const shortTaskId = computed(() => (props.taskId || '').slice(0, 8) + '…' + (props.taskId || '').slice(-6))
+
+const exportLogs = () => {
+  if (displayLogs.value.length === 0) return
+  const text = displayLogs.value
+    .map(l => `${formatLogTime(l.timestamp)} [${l.level}] ${l.message}${l.database_name ? ' ['+l.database_name+']' : ''}`)
+    .join('\n')
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `scan-logs-${(props.taskId || 'task')}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 onBeforeUnmount(() => {
   stopPolling()
 })
+
+const cancelTask = async () => {
+  if (!props.taskId) return
+  try {
+    await ElMessageBox.confirm('确定要取消当前扫描任务吗？', '确认取消', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    cancelling.value = true
+    await scanTasksApi.cancel(props.taskId)
+    ElMessage.success('已发送取消请求')
+  } catch (e) {
+    console.error('Cancel scan task failed:', e)
+  } finally {
+    cancelling.value = false
+  }
+}
 </script>
 
 <style scoped>
 .scan-progress {
   padding: 20px 0;
 }
+
+.status-alert { margin-bottom: 8px; }
+
+.dialog-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.dialog-tools .mono { font-family: Menlo, Monaco, monospace; }
 
 .progress-overview {
   margin-bottom: 24px;
@@ -428,6 +531,10 @@ onBeforeUnmount(() => {
 .log-error .log-message {
   color: #d9534f;
 }
+
+.log-info { background: rgba(255,255,255,0.02); }
+.log-warning { background: rgba(230,162,60,0.08); }
+.log-error { background: rgba(245,108,108,0.10); }
 
 .dialog-footer {
   text-align: right;

@@ -85,21 +85,48 @@
         </el-tab-pane>
 
         <el-tab-pane label="扫描任务" name="scan">
+          <div class="scan-toolbar">
+            <el-select v-model="scanClusterFilter" placeholder="全部集群" clearable style="width: 160px; margin-right: 8px;">
+              <el-option v-for="c in clusters" :key="c.id" :label="c.name" :value="c.id" />
+            </el-select>
+            <el-select v-model="scanStatusFilter" placeholder="全部状态" clearable style="width: 140px; margin-right: 8px;">
+              <el-option label="等待中" value="pending" />
+              <el-option label="运行中" value="running" />
+              <el-option label="已完成" value="completed" />
+              <el-option label="失败" value="failed" />
+            </el-select>
+            <el-select v-model="scanAutoRefresh" placeholder="刷新频率" style="width: 140px; margin-right: 8px;">
+              <el-option :value="0" label="手动刷新" />
+              <el-option :value="30" label="30秒" />
+              <el-option :value="60" label="60秒" />
+            </el-select>
+            <el-button @click="loadScanTasks">刷新</el-button>
+          </div>
+
           <el-table :data="scanTasks" stripe v-loading="loadingScan">
-            <el-table-column prop="task_id" label="任务ID" width="260" />
+            <el-table-column label="任务ID" min-width="260">
+              <template #default="{ row }">
+                <span class="mono">{{ shortId(row.task_id) }}</span>
+                <el-button size="small" link @click="copyId(row.task_id)">复制</el-button>
+              </template>
+            </el-table-column>
             <el-table-column prop="task_name" label="任务名称" min-width="200" />
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="进度" width="180">
+            <el-table-column label="进度" width="200">
               <template #default="{ row }">
-                <el-progress :percentage="row.progress_percentage || 0" :status="row.status === 'failed' ? 'exception' : undefined" />
+                <el-progress :percentage="row.progress_percentage || 0" :status="row.status === 'failed' ? 'exception' : undefined" style="width: 140px; margin-right: 6px;" />
+                <span style="font-size:12px; color:#909399;">{{ (row.progress_percentage || 0).toFixed(0) }}%</span>
               </template>
             </el-table-column>
             <el-table-column prop="start_time" label="开始时间" width="160">
               <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
+            </el-table-column>
+            <el-table-column prop="last_update" label="最近更新" width="160">
+              <template #default="{ row }">{{ formatTime(row.last_update || row.end_time || row.start_time) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="180">
               <template #default="{ row }">
@@ -337,6 +364,11 @@ const previewData = ref<any>(null)
 const previewLoading = ref(false)
 const previewingTask = ref<MergeTask | null>(null)
 const selectedScanTaskId = ref<string | null>(null)
+// 扫描任务筛选与刷新
+const scanClusterFilter = ref<number | null>(null)
+const scanStatusFilter = ref<string>('')
+const scanAutoRefresh = ref<number>(0)
+let scanRefreshTimer: NodeJS.Timeout | null = null
 
 // 分区相关数据
 const tableInfo = ref<any>(null)
@@ -378,7 +410,9 @@ const loadTasks = async () => {
 const loadScanTasks = async () => {
   loadingScan.value = true
   try {
-    scanTasks.value = await scanTasksApi.list()
+    const cid = scanClusterFilter.value || undefined
+    const status = scanStatusFilter.value || undefined
+    scanTasks.value = await scanTasksApi.list(cid as any, status)
   } catch (error) {
     console.error('Failed to load scan tasks:', error)
   } finally {
@@ -517,6 +551,16 @@ const formatBytes = (bytes: number): string => {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const copyId = async (id: string) => {
+  try { await navigator.clipboard.writeText(id) } catch {}
+  ElMessage.success('任务ID已复制')
+}
+
+const shortId = (id: string) => {
+  if (!id) return '-'
+  return id.slice(0, 10) + '…' + id.slice(-6)
 }
 
 const getStrategyName = (strategy: string): string => {
@@ -732,12 +776,26 @@ onMounted(() => {
   if (hasRunningTasks.value) {
     startPolling()
   }
+  setupScanAutoRefresh()
 })
 
 // 组件卸载时清理轮询
 onBeforeUnmount(() => {
   stopPolling()
+  if (scanRefreshTimer) { clearInterval(scanRefreshTimer); scanRefreshTimer = null }
 })
+
+const setupScanAutoRefresh = () => {
+  if (scanRefreshTimer) { clearInterval(scanRefreshTimer); scanRefreshTimer = null }
+  if (scanAutoRefresh.value > 0) {
+    scanRefreshTimer = setInterval(() => {
+      loadScanTasks()
+    }, scanAutoRefresh.value * 1000)
+  }
+}
+
+watch(scanAutoRefresh, setupScanAutoRefresh)
+watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
 </script>
 
 <style scoped>
@@ -745,6 +803,14 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.mono { font-family: Menlo, Monaco, monospace; }
+
+.scan-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .logs-container {

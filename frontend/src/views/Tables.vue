@@ -31,6 +31,13 @@
               <el-icon><Refresh /></el-icon>
               扫描
             </el-button>
+            <el-select v-model="maxPerDb" placeholder="每库表数" style="width: 120px; margin-left: 8px;">
+              <el-option :value="0" label="不限制" />
+              <el-option :value="10" label="10/库" />
+              <el-option :value="20" label="20/库" />
+              <el-option :value="50" label="50/库" />
+              <el-option :value="100" label="100/库" />
+            </el-select>
             <el-button type="success" @click="triggerClusterScan" style="margin-left: 8px;">
               <el-icon><Refresh /></el-icon>
               全库扫描(进度)
@@ -126,6 +133,7 @@ const loading = ref(false)
 const strictReal = ref(true)
 const showProgress = ref(false)
 const currentTaskId = ref<string | null>(null)
+const maxPerDb = ref<number>(20)
 
 // 方法
 const loadClusters = async () => {
@@ -186,7 +194,7 @@ const triggerScan = async () => {
 const triggerClusterScan = async () => {
   if (!selectedCluster.value) { ElMessage.warning('请先选择集群'); return }
   try {
-    const res = await tablesApi.scanAllDatabases(selectedCluster.value, strictReal.value)
+    const res = await tablesApi.scanAllDatabases(selectedCluster.value, strictReal.value, maxPerDb.value)
     if (res && res.task_id) {
       currentTaskId.value = res.task_id
       showProgress.value = true

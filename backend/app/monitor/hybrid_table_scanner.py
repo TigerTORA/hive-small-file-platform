@@ -142,14 +142,29 @@ class HybridTableScanner:
                     # 如果真实HDFS连接失败，尝试使用Mock模式
                     from app.monitor.mock_hdfs_scanner import MockHDFSScanner
                     self.hdfs_scanner.disconnect()
-                    self.hdfs_scanner = MockHDFSScanner()
+                    # 传入必要的参数以正确初始化 Mock 扫描器
+                    self.hdfs_scanner = MockHDFSScanner(
+                        self.cluster.hdfs_namenode_url,
+                        user=getattr(self.cluster, 'hdfs_user', 'hdfs') or 'hdfs',
+                    )
+                    try:
+                        self.hdfs_scanner.connect()
+                    except Exception:
+                        pass
                     hdfs_ok = True
             else:
                 # 如果没有HDFS扫描器，直接使用Mock模式
                 if strict_real:
                     raise Exception("未初始化HDFS扫描器，严格模式已开启，终止扫描")
                 from app.monitor.mock_hdfs_scanner import MockHDFSScanner
-                self.hdfs_scanner = MockHDFSScanner()
+                self.hdfs_scanner = MockHDFSScanner(
+                    self.cluster.hdfs_namenode_url,
+                    user=getattr(self.cluster, 'hdfs_user', 'hdfs') or 'hdfs',
+                )
+                try:
+                    self.hdfs_scanner.connect()
+                except Exception:
+                    pass
                 hdfs_ok = True
                 hdfs_mode = "mock"
         except Exception as e:
@@ -161,7 +176,14 @@ class HybridTableScanner:
             # 降级到Mock模式
             try:
                 from app.monitor.mock_hdfs_scanner import MockHDFSScanner
-                self.hdfs_scanner = MockHDFSScanner()
+                self.hdfs_scanner = MockHDFSScanner(
+                    self.cluster.hdfs_namenode_url,
+                    user=getattr(self.cluster, 'hdfs_user', 'hdfs') or 'hdfs',
+                )
+                try:
+                    self.hdfs_scanner.connect()
+                except Exception:
+                    pass
                 hdfs_ok = True
                 hdfs_mode = "mock"
             except Exception as mock_error:

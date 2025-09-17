@@ -118,9 +118,10 @@ export const tasksApi = {
     return api.post(`/tables/scan-all-databases/${clusterId}?max_tables_per_db=${maxTablesPerDb}`)
   },
 
-  // 获取扫描进度
-  getScanProgress(clusterId: number): Promise<any> {
-    return api.get(`/tables/scan-progress/cluster/${clusterId}`)
+  // 获取扫描任务列表（替代废弃的scan-progress API）
+  getScanTasks(clusterId?: number): Promise<any> {
+    const params = clusterId ? { cluster_id: clusterId } : {}
+    return api.get('/scan-tasks/', { params })
   },
 
   // 获取任务预览

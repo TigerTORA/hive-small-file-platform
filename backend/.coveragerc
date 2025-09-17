@@ -1,0 +1,14 @@
+[run]
+source = app
+
+[report]
+omit =
+    app/main.py
+    app/models/*
+    app/config/*
+    app/scheduler/*
+    app/monitor/*
+    app/engines/safe_hive_engine.py
+    app/utils/webhdfs_client.py
+    app/utils/yarn_monitor.py
+
