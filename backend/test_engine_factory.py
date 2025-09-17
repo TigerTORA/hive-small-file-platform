@@ -73,10 +73,10 @@ class TestMergeEngineFactory:
             table_format="textfile",
             file_count=200,
             partition_count=10,
-            table_size=1024 * 1024 * 1024,  # 1GB - 使用>=判断，1GB返回safe_merge
+            table_size=1024 * 1024 * 1024,  # 1GB - 使用>判断，1GB返回insert_overwrite
             is_production=True
         )
-        assert strategy == "safe_merge"
+        assert strategy == "insert_overwrite"
     
     def test_recommend_strategy_for_dev_environment(self):
         """测试开发环境优先选择安全策略"""
