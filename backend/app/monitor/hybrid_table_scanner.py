@@ -14,6 +14,7 @@ from app.models.table_metric import TableMetric
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.hive_connector import HiveMetastoreConnector
 from app.monitor.webhdfs_scanner import WebHDFSScanner
+from app.monitor.cold_data_scanner import SimpleColdDataScanner
 
 
 class HybridTableScanner:
@@ -364,3 +365,99 @@ class HybridTableScanner:
             "scan_time": None,
             "scan_duration": round(time.time() - start, 2),
         }
+
+    def scan_table_with_coldness_check(self, db: Any, database_name: str, table_info: Dict[str, Any], strict_real: bool = False, cold_threshold_days: int = 90) -> Dict[str, Any]:
+        """
+        在现有表扫描中同时检查冷数据
+        Args:
+            db: 数据库会话
+            database_name: 数据库名
+            table_info: 表信息字典
+            strict_real: 严格实连模式
+            cold_threshold_days: 冷数据天数阈值
+        Returns:
+            包含冷数据信息的扫描结果
+        """
+        # 1. 执行原有的小文件扫描
+        result = self.scan_table(db, database_name, table_info, strict_real)
+
+        # 2. 新增：冷数据检查
+        try:
+            coldness_info = self._check_table_coldness(database_name, table_info['table_name'], cold_threshold_days)
+
+            # 将冷数据信息添加到结果中
+            result.update({
+                'last_access_time': coldness_info['last_access_time'],
+                'days_since_access': coldness_info['days_since_access'],
+                'is_cold_data': coldness_info['is_cold'],
+                'cold_threshold_days': cold_threshold_days
+            })
+
+        except Exception as e:
+            # 冷数据检查失败时记录错误，但不影响主扫描结果
+            result.update({
+                'last_access_time': None,
+                'days_since_access': None,
+                'is_cold_data': False,
+                'cold_data_error': str(e)
+            })
+
+        return result
+
+    def _check_table_coldness(self, database_name: str, table_name: str, cold_threshold_days: int = 90) -> Dict[str, Any]:
+        """
+        检查单个表的冷热程度
+        Args:
+            database_name: 数据库名
+            table_name: 表名
+            cold_threshold_days: 冷数据天数阈值
+        Returns:
+            冷数据检查结果
+        """
+        from datetime import datetime
+
+        try:
+            # 获取表的最后访问时间
+            last_access_time = None
+            if hasattr(self.hive_connector, 'get_table_last_access_time'):
+                last_access_time = self.hive_connector.get_table_last_access_time(database_name, table_name)
+
+            current_time = datetime.now()
+
+            if last_access_time:
+                days_since_access = (current_time - last_access_time).days
+            else:
+                # 如果没有访问时间记录，标记为很久未访问
+                days_since_access = 999
+
+            is_cold = days_since_access > cold_threshold_days
+
+            return {
+                'last_access_time': last_access_time.isoformat() if last_access_time else None,
+                'days_since_access': days_since_access,
+                'is_cold': is_cold
+            }
+
+        except Exception as e:
+            raise Exception(f"冷数据检查失败: {str(e)}")
+
+    def scan_cold_data_for_cluster(self, db: Any, cold_threshold_days: int = 90) -> Dict[str, Any]:
+        """
+        为整个集群执行冷数据扫描
+        Args:
+            db: 数据库会话
+            cold_threshold_days: 冷数据天数阈值
+        Returns:
+            集群冷数据扫描结果
+        """
+        try:
+            cold_scanner = SimpleColdDataScanner(self.cluster, cold_threshold_days)
+            return cold_scanner.scan_cold_tables(db)
+
+        except Exception as e:
+            return {
+                'error': f'集群冷数据扫描失败: {str(e)}',
+                'cluster_id': getattr(self.cluster, 'id', None),
+                'cluster_name': getattr(self.cluster, 'name', 'Unknown'),
+                'scan_timestamp': time.time()
+            }

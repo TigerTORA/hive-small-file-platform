@@ -14,6 +14,8 @@ from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.services.scan_service import scan_task_manager
 from app.schemas.scan_task import ScanTaskResponse, ScanTaskProgress, ScanTaskLog
 from app.utils.webhdfs_client import WebHDFSClient
+from app.monitor.cold_data_scanner import SimpleColdDataScanner
+from app.monitor.simple_archive_engine import SimpleArchiveEngine
 
 router = APIRouter()
 
@@ -890,6 +892,110 @@ async def scan_all_databases(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch scan failed: {str(e)}")
 
+@router.post("/scan-cold-data/{cluster_id}")
+async def scan_cold_data(
+    cluster_id: int,
+    cold_days_threshold: int = Query(90, description="冷数据天数阈值"),
+    database_name: str = Query(None, description="指定数据库，为空则扫描所有"),
+    db: Session = Depends(get_db)
+):
+    """扫描识别冷数据表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        scanner = SimpleColdDataScanner(cluster, cold_days_threshold)
+        result = scanner.scan_cold_tables(db, database_name)
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "scan_result": result,
+            "status": "completed"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cold data scan failed: {str(e)}")
+
+@router.get("/cold-data-summary/{cluster_id}")
+async def get_cold_data_summary(
+    cluster_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取冷数据统计摘要"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        scanner = SimpleColdDataScanner(cluster)
+        summary = scanner.get_cold_data_summary(db)
+
+        return summary
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cold data summary: {str(e)}")
+
+@router.get("/cold-data-list/{cluster_id}")
+async def get_cold_data_list(
+    cluster_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """获取冷数据表列表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        offset = (page - 1) * page_size
+
+        # 查询冷数据表
+        cold_tables = db.query(TableMetric).filter(
+            TableMetric.cluster_id == cluster_id,
+            TableMetric.is_cold_data == 1
+        ).order_by(
+            TableMetric.days_since_last_access.desc()
+        ).offset(offset).limit(page_size).all()
+
+        # 统计总数
+        total = db.query(TableMetric).filter(
+            TableMetric.cluster_id == cluster_id,
+            TableMetric.is_cold_data == 1
+        ).count()
+
+        cold_table_list = [
+            {
+                'id': t.id,
+                'database_name': t.database_name,
+                'table_name': t.table_name,
+                'table_path': t.table_path,
+                'days_since_access': t.days_since_last_access,
+                'last_access_time': t.last_access_time.isoformat() if t.last_access_time else None,
+                'total_size': t.total_size,
+                'total_files': t.total_files,
+                'small_files': t.small_files,
+                'archive_status': t.archive_status,
+                'scan_time': t.scan_time.isoformat() if t.scan_time else None
+            }
+            for t in cold_tables
+        ]
+
+        return {
+            'cluster_id': cluster_id,
+            'cluster_name': cluster.name,
+            'cold_tables': cold_table_list,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'has_next': offset + page_size < total
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cold data list: {str(e)}")
+
 @router.get("/scan-progress/{task_id}", response_model=ScanTaskProgress)
 async def get_scan_task_progress(
     task_id: str,
@@ -1004,3 +1110,121 @@ async def get_scan_progress(
         "database_progress": database_stats,
         "status": "idle" if total_tables > 0 else "no_data"
     }
+
+@router.post("/archive-table/{cluster_id}/{database_name}/{table_name}")
+async def archive_table(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    force: bool = Query(False, description="是否强制归档"),
+    archive_root_path: str = Query("/archive", description="归档根目录"),
+    db: Session = Depends(get_db)
+):
+    """归档指定表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        engine = SimpleArchiveEngine(cluster, archive_root_path)
+        result = engine.archive_table(db, database_name, table_name, force)
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "archive_result": result,
+            "status": "completed"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Archive failed: {str(e)}")
+
+@router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")
+async def restore_table(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db)
+):
+    """恢复归档表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        engine = SimpleArchiveEngine(cluster)
+        result = engine.restore_table(db, database_name, table_name)
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "restore_result": result,
+            "status": "completed"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+
+@router.get("/archive-status/{cluster_id}/{database_name}/{table_name}")
+async def get_archive_status(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db)
+):
+    """获取表的归档状态"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        engine = SimpleArchiveEngine(cluster)
+        status = engine.get_archive_status(db, database_name, table_name)
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "table_status": status
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get archive status: {str(e)}")
+
+@router.get("/archived-tables/{cluster_id}")
+async def list_archived_tables(
+    cluster_id: int,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """列出集群中所有已归档的表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        engine = SimpleArchiveEngine(cluster)
+        result = engine.list_archived_tables(db, limit)
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list archived tables: {str(e)}")
+
+@router.get("/archive-statistics/{cluster_id}")
+async def get_archive_statistics(
+    cluster_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取集群的归档统计信息"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        engine = SimpleArchiveEngine(cluster)
+        stats = engine.get_archive_statistics(db)
+
+        return stats
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get archive statistics: {str(e)}")
