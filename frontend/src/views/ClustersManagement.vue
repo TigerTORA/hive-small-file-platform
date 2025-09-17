@@ -51,11 +51,18 @@
         :class="{ 'cluster-online': cluster.status === 'active' }"
       >
         <div class="cluster-header">
-          <div class="cluster-title">
-            <h3>{{ cluster.name }}</h3>
-            <span class="cloudera-tag" :class="getStatusType(cluster.status)">
-              {{ cluster.status === 'active' ? '正常' : '异常' }}
-            </span>
+          <div class="cluster-title-section">
+            <div class="cluster-name-row">
+              <h3 class="cluster-name">{{ cluster.name }}</h3>
+              <ConnectionStatusIndicator
+                :hiveserver-status="getConnectionStatus(cluster.id, 'hiveserver')"
+                :hdfs-status="getConnectionStatus(cluster.id, 'hdfs')"
+                :metastore-status="getConnectionStatus(cluster.id, 'metastore')"
+                :loading="isLoadingConnectionStatus(cluster.id)"
+                @test-connection="(service) => testSpecificConnection(cluster.id, service)"
+              />
+            </div>
+            <p class="cluster-description">{{ cluster.description || 'Cloudera Data Platform 集群' }}</p>
           </div>
           <div class="cluster-actions" @click.stop>
             <el-tooltip content="进入集群详情" placement="top">
@@ -67,56 +74,56 @@
         </div>
         
         <div class="cluster-content">
-          <div class="cluster-info">
-            <p class="cluster-description">{{ cluster.description || '暂无描述' }}</p>
+          <div class="cluster-info-compact">
             <div class="cluster-details">
               <div class="detail-item">
                 <el-icon><Monitor /></el-icon>
                 <span>{{ cluster.hive_host }}:{{ cluster.hive_port }}</span>
               </div>
-              <div class="detail-item">
-                <el-icon><Clock /></el-icon>
-                <span>{{ formatTime(cluster.created_time) }}</span>
-              </div>
             </div>
           </div>
 
-          <div class="cluster-stats">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <div class="stat-item">
-                  <div class="stat-value">{{ getClusterStat(cluster.id, 'databases') }}</div>
-                  <div class="stat-label">数据库</div>
-                </div>
-              </el-col>
-              <el-col :span="8">
-                <div class="stat-item">
-                  <div class="stat-value">{{ getClusterStat(cluster.id, 'tables') }}</div>
-                  <div class="stat-label">表数量</div>
-                </div>
-              </el-col>
-              <el-col :span="8">
-                <div class="stat-item">
-                  <div class="stat-value">{{ getClusterStat(cluster.id, 'small_files') }}</div>
-                  <div class="stat-label">小文件</div>
-                </div>
-              </el-col>
-            </el-row>
+          <div class="cluster-stats-compact">
+            <div class="stats-row">
+              <div class="stat-item">
+                <span class="stat-value">{{ getClusterStat(cluster.id, 'databases') }}</span>
+                <span class="stat-label">数据库</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-value">{{ getClusterStat(cluster.id, 'tables') }}</span>
+                <span class="stat-label">表数量</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-value">{{ getClusterStat(cluster.id, 'small_files') }}</span>
+                <span class="stat-label">小文件</span>
+              </div>
+            </div>
           </div>
 
           <div class="cluster-operations" @click.stop>
             <el-button size="small" @click="testConnection(cluster, 'mock')" class="cloudera-btn secondary">
               <el-icon><Connection /></el-icon>
-              快速测试
+              连接测试
             </el-button>
             <el-button size="small" @click="editCluster(cluster)" class="cloudera-btn secondary">
               <el-icon><Edit /></el-icon>
               编辑
             </el-button>
-            <el-button size="small" @click="deleteCluster(cluster)" class="cloudera-btn danger">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
+            <el-dropdown @command="(command) => handleClusterAction(command, cluster)" trigger="click">
+              <el-button size="small" class="cloudera-btn secondary">
+                <el-icon><MoreFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="delete" class="danger-item">
+                    <el-icon><Delete /></el-icon>
+                    删除集群
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </div>
@@ -258,16 +265,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { 
-  CaretBottom, Plus, Monitor, CircleCheckFilled, Grid, Clock, 
-  Search, Refresh, Right, Connection, Edit, Delete
+import {
+  CaretBottom, Plus, Monitor, CircleCheckFilled, Grid, Clock,
+  Search, Refresh, Right, Connection, Edit, Delete, MoreFilled
 } from '@element-plus/icons-vue'
 import { clustersApi, type Cluster, type ClusterCreate } from '@/api/clusters'
 import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
 import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator.vue'
 import { tablesApi } from '@/api/tables'
 import dayjs from 'dayjs'
 
@@ -288,6 +296,18 @@ const statusFilter = ref('')
 
 // 集群统计数据
 const clusterStats = ref<Record<number, any>>({})
+
+// 连接状态数据
+const connectionStatus = ref<Record<number, {
+  hiveserver?: { status: 'success' | 'error' | 'unknown' | 'testing', message?: string, mode?: string }
+  hdfs?: { status: 'success' | 'error' | 'unknown' | 'testing', message?: string, mode?: string }
+  metastore?: { status: 'success' | 'error' | 'unknown' | 'testing', message?: string, mode?: string }
+  loading?: boolean
+  lastChecked?: Date
+}>>({})
+
+// 状态检查定时器
+let statusCheckInterval: NodeJS.Timeout | null = null
 
 // 连接测试相关
 const showTestDialog = ref(false)
@@ -621,6 +641,12 @@ const handleTemplate = (command: string) => {
   showCreateDialog.value = true
 }
 
+const handleClusterAction = (command: string, cluster: any) => {
+  if (command === 'delete') {
+    deleteCluster(cluster)
+  }
+}
+
 const resetForm = () => {
   editingCluster.value = null
   selectedTemplate.value = ''
@@ -640,6 +666,114 @@ const resetForm = () => {
     yarn_resource_manager_url: '',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true
+  }
+}
+
+// 连接状态管理函数
+const getConnectionStatus = (clusterId: number, service: string) => {
+  const status = connectionStatus.value[clusterId]
+  if (!status) return { status: 'unknown' }
+
+  switch (service) {
+    case 'hiveserver':
+      return status.hiveserver || { status: 'unknown' }
+    case 'hdfs':
+      return status.hdfs || { status: 'unknown' }
+    case 'metastore':
+      return status.metastore || { status: 'unknown' }
+    default:
+      return { status: 'unknown' }
+  }
+}
+
+const isLoadingConnectionStatus = (clusterId: number) => {
+  return connectionStatus.value[clusterId]?.loading || false
+}
+
+const updateConnectionStatus = async (clusterId: number) => {
+  if (!connectionStatus.value[clusterId]) {
+    connectionStatus.value[clusterId] = {}
+  }
+
+  connectionStatus.value[clusterId].loading = true
+
+  try {
+    const result = await clustersApi.testConnection(clusterId, 'mock')
+    const tests = result.tests || {}
+
+    connectionStatus.value[clusterId] = {
+      hiveserver: {
+        // HiveServer2状态暂时使用metastore状态作为参考
+        status: tests.metastore?.status === 'success' ? 'success' : 'error',
+        message: tests.metastore?.message || '基于MetaStore连接状态推测',
+        mode: tests.metastore?.mode || 'mock'
+      },
+      hdfs: {
+        status: tests.hdfs?.status === 'success' ? 'success' : 'error',
+        message: tests.hdfs?.message || '',
+        mode: tests.hdfs?.mode || 'mock'
+      },
+      metastore: {
+        status: tests.metastore?.status === 'success' ? 'success' : 'error',
+        message: tests.metastore?.message || '',
+        mode: tests.metastore?.mode || 'mock'
+      },
+      loading: false,
+      lastChecked: new Date()
+    }
+  } catch (error) {
+    console.error(`Failed to check connection status for cluster ${clusterId}:`, error)
+    connectionStatus.value[clusterId] = {
+      hiveserver: { status: 'error', message: '连接测试失败' },
+      hdfs: { status: 'error', message: '连接测试失败' },
+      metastore: { status: 'error', message: '连接测试失败' },
+      loading: false,
+      lastChecked: new Date()
+    }
+  }
+}
+
+const testSpecificConnection = async (clusterId: number, service: string) => {
+  // 设置特定服务为测试中状态
+  if (!connectionStatus.value[clusterId]) {
+    connectionStatus.value[clusterId] = {}
+  }
+
+  const currentStatus = connectionStatus.value[clusterId]
+  switch (service) {
+    case 'hiveserver':
+      currentStatus.hiveserver = { status: 'testing', message: '正在测试连接...' }
+      break
+    case 'hdfs':
+      currentStatus.hdfs = { status: 'testing', message: '正在测试连接...' }
+      break
+    case 'metastore':
+      currentStatus.metastore = { status: 'testing', message: '正在测试连接...' }
+      break
+  }
+
+  // 延迟后更新状态
+  setTimeout(() => {
+    updateConnectionStatus(clusterId)
+  }, 1000)
+}
+
+const checkAllConnectionStatus = async () => {
+  const promises = clusters.value.map(cluster => updateConnectionStatus(cluster.id))
+  await Promise.allSettled(promises)
+}
+
+const startStatusCheckInterval = () => {
+  // 每30秒检查一次连接状态
+  statusCheckInterval = setInterval(() => {
+    checkAllConnectionStatus()
+  }, 30000)
+}
+
+const stopStatusCheckInterval = () => {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+    statusCheckInterval = null
   }
 }
 
@@ -698,8 +832,17 @@ const formatTime = (time: string): string => {
   return dayjs(time).format('YYYY-MM-DD HH:mm')
 }
 
-onMounted(() => {
-  loadClusters()
+onMounted(async () => {
+  await loadClusters()
+  // 加载完集群后检查连接状态
+  await checkAllConnectionStatus()
+  // 启动定时检查
+  startStatusCheckInterval()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  stopStatusCheckInterval()
 })
 </script>
 
@@ -786,7 +929,7 @@ onMounted(() => {
 .cluster-card {
   cursor: pointer;
   padding: var(--space-6);
-  min-height: 300px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
 }
@@ -804,15 +947,32 @@ onMounted(() => {
   border-bottom: 1px solid var(--gray-200);
 }
 
-.cluster-title {
+/* 新的标题区域样式 */
+.cluster-title-section {
   flex: 1;
 }
 
-.cluster-title h3 {
-  margin: 0 0 var(--space-2) 0;
+.cluster-name-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: var(--space-2) !important;
+}
+
+.cluster-name {
+  margin: 0;
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
   color: var(--gray-900);
+  flex: 1;
+  margin-right: var(--space-3);
+}
+
+.cluster-title-section .cluster-description {
+  color: var(--gray-600);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 
 .cluster-actions {
@@ -828,11 +988,14 @@ onMounted(() => {
   gap: var(--space-4);
 }
 
-.cluster-description {
-  color: var(--gray-600);
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
+/* 压缩的信息区域 */
+.cluster-info-compact {
+  margin-bottom: var(--space-3);
+}
+
+.cluster-info-compact .cluster-details {
+  display: flex;
+  gap: var(--space-4);
 }
 
 .cluster-details {
@@ -853,12 +1016,47 @@ onMounted(() => {
   color: var(--primary-500);
 }
 
-.cluster-stats {
-  padding: var(--space-4);
-  background: var(--gray-50);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--gray-200);
-  flex: 1;
+/* 紧凑的统计样式 */
+.cluster-stats-compact {
+  margin-bottom: var(--space-4);
+}
+
+.stats-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: var(--space-3) var(--space-4) !important;
+  background: var(--gray-50) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--gray-200) !important;
+}
+
+.stats-row .stat-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  flex: 1 !important;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--gray-300);
+  margin: 0 var(--space-2);
+}
+
+.stats-row .stat-value {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--primary-600);
+  margin-bottom: 2px;
+}
+
+.stats-row .stat-label {
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+  font-weight: var(--font-medium);
 }
 
 .stat-item {
@@ -880,11 +1078,20 @@ onMounted(() => {
 
 .cluster-operations {
   display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
   margin-top: auto;
   padding-top: var(--space-4);
   border-top: 1px solid var(--gray-200);
+}
+
+/* 危险操作样式 */
+.danger-item {
+  color: var(--danger-500) !important;
+}
+
+.danger-item .el-icon {
+  color: var(--danger-500) !important;
 }
 
 .empty-state {
