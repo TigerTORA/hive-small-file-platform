@@ -20,10 +20,10 @@ class TestClusterModel:
             "description": "Test cluster",
             "hive_host": "localhost",
             "hive_port": 10000,
-            "metastore_url": "mysql://user:pass@localhost:3306/hive",
-            "hdfs_namenode": "hdfs://localhost:9000",
+            "hive_metastore_url": "mysql://user:pass@localhost:3306/hive",
+            "hdfs_namenode_url": "hdfs://localhost:9000",
             "small_file_threshold": 134217728,
-            "is_active": True
+            "status": "active"
         }
         
         cluster = Cluster(**cluster_data)

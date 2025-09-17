@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Floa
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.config.database import Base
-from . import task_log as _task_log  # noqa: F401  # 确保 TaskLog 注册，避免关系解析失败
 
 class MergeTask(Base):
     __tablename__ = "merge_tasks"

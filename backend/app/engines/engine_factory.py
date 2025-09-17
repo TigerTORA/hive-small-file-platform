@@ -67,8 +67,8 @@ class MergeEngineFactory:
             推荐的合并策略
         """
         # 生产环境优先使用安全合并策略
-        # 大表优先选择零停机安全合并：生产环境 ≥1GB 直接使用 safe_merge
-        if is_production and table_size >= 1024 * 1024 * 1024:  # 大于等于1GB
+        # 大表优先选择零停机安全合并：生产环境 >1GB 直接使用 safe_merge
+        if is_production and table_size > 1024 * 1024 * 1024:  # 大于1GB
             return 'safe_merge'
         
         # 基于表格式和文件数量推荐策略
