@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from app.api import clusters, tables, tasks, errors, dashboard
+from app.api import clusters, tables, tasks, errors, dashboard, websocket
 from app.api import scan_tasks as scan_tasks_api
 from app.config.database import engine, Base
 from app.config.settings import settings
 from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog, ScanTask, ScanTaskLogDB
+from app.models.cluster_status_history import ClusterStatusHistory
 
 # Initialize Sentry
 if settings.SENTRY_DSN and settings.SENTRY_DSN.startswith('http'):
@@ -44,6 +45,7 @@ app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(errors.router, prefix="/api/v1/errors", tags=["errors"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(scan_tasks_api.router, prefix="/api/v1/scan-tasks", tags=["scan-tasks"])
+app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 
 @app.get("/")
 async def root():

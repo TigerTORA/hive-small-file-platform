@@ -20,10 +20,10 @@ class TestClusterModel:
             "description": "Test cluster",
             "hive_host": "localhost",
             "hive_port": 10000,
-            "metastore_url": "mysql://user:pass@localhost:3306/hive",
-            "hdfs_namenode": "hdfs://localhost:9000",
+            "hive_metastore_url": "mysql://user:pass@localhost:3306/hive",
+            "hdfs_namenode_url": "hdfs://localhost:9000",
             "small_file_threshold": 134217728,
-            "is_active": True
+            "status": "active"
         }
         
         cluster = Cluster(**cluster_data)
@@ -34,7 +34,7 @@ class TestClusterModel:
         assert cluster.id is not None
         assert cluster.name == "test-cluster"
         assert cluster.hive_port == 10000
-        assert cluster.is_active is True
+        assert cluster.status == "active"
         assert cluster.created_at is not None
         assert cluster.updated_at is not None
     
@@ -49,7 +49,7 @@ class TestClusterModel:
         assert cluster.name.startswith("cluster-")
         assert cluster.hive_host == "localhost"
         assert cluster.small_file_threshold == 134217728
-        assert cluster.is_active is True
+        assert cluster.status == "active"
     
     @pytest.mark.unit 
     def test_cluster_name_unique(self, db_session):
@@ -148,7 +148,7 @@ class TestClusterModel:
         db_session.add(cluster)
         db_session.commit()
         
-        assert cluster.is_active is True
+        assert cluster.status == "active"
         
         # Toggle active status
         cluster.is_active = False

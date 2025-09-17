@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
+from typing import List
 from app.config.database import get_db
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.schemas.cluster import ClusterCreate, ClusterResponse, ClusterUpdate
 from app.monitor.hybrid_table_scanner import HybridTableScanner
+from app.services.cluster_status_service import cluster_status_service
+from app.services.enhanced_connection_service import enhanced_connection_service
 
 router = APIRouter()
 
@@ -113,6 +116,43 @@ async def create_cluster(cluster: ClusterCreate, validate_connection: bool = Fal
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Failed to create cluster: {str(e)}")
 
+@router.get("/health-metrics")
+async def get_health_metrics(
+    days: int = Query(7, ge=1, le=90),
+    db: Session = Depends(get_db)
+):
+    """获取集群健康指标统计"""
+    try:
+        metrics = cluster_status_service.get_cluster_health_metrics(db, days)
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get health metrics: {str(e)}")
+
+@router.post("/batch-health-check")
+async def batch_health_check(
+    cluster_ids: List[int] = None,
+    parallel_limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db)
+):
+    """批量健康检查"""
+    try:
+        results = await cluster_status_service.batch_health_check(
+            db, cluster_ids, parallel_limit
+        )
+
+        successful_checks = sum(1 for r in results.values() if r.get('overall_status') != 'error')
+        total_checks = len(results)
+
+        return {
+            "total_clusters": total_checks,
+            "successful_checks": successful_checks,
+            "failed_checks": total_checks - successful_checks,
+            "parallel_limit": parallel_limit,
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch health check failed: {str(e)}")
+
 @router.get("/{cluster_id}", response_model=ClusterResponse)
 async def get_cluster(cluster_id: int, db: Session = Depends(get_db)):
     """Get cluster by ID"""
@@ -213,44 +253,57 @@ async def update_cluster(cluster_id: int, cluster_update: ClusterUpdate, db: Ses
 @router.delete("/{cluster_id}")
 async def delete_cluster(cluster_id: int, db: Session = Depends(get_db)):
     """Delete cluster and all related data"""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
+    # 首先检查集群是否存在，但不加载关系
+    cluster_result = db.execute("SELECT name FROM clusters WHERE id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
+    if not cluster_result:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    
+
+    cluster_name = cluster_result[0]
+
     try:
-        # 检查是否有关联的表指标数据
-        from app.models.table_metric import TableMetric
-        table_count = db.query(TableMetric).filter(TableMetric.cluster_id == cluster_id).count()
-        
-        if table_count > 0:
-            # 可以选择级联删除或者拒绝删除
-            # 这里选择级联删除所有相关数据
-            db.query(TableMetric).filter(TableMetric.cluster_id == cluster_id).delete()
-        
-        # 删除集群
-        db.delete(cluster)
+        # 检查关联数据数量
+        table_count_result = db.execute("SELECT COUNT(*) FROM table_metrics WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
+        scan_task_count_result = db.execute("SELECT COUNT(*) FROM scan_tasks WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
+
+        table_count = table_count_result[0] if table_count_result else 0
+        scan_task_count = scan_task_count_result[0] if scan_task_count_result else 0
+
+        # 使用原生SQL进行级联删除，避免SQLAlchemy的关系管理干扰
+        db.execute("DELETE FROM scan_tasks WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id})
+        db.execute("DELETE FROM table_metrics WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id})
+        db.execute("DELETE FROM clusters WHERE id = :cluster_id", {"cluster_id": cluster_id})
+
         db.commit()
-        
-        return {"message": f"Cluster '{cluster.name}' and {table_count} related records deleted successfully"}
+
+        total_deleted = table_count + scan_task_count
+        return {"message": f"Cluster '{cluster_name}' and {total_deleted} related records deleted successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Failed to delete cluster: {str(e)}")
 
 @router.post("/{cluster_id}/test")
-async def test_cluster_connection(cluster_id: int, mode: str = "mock", db: Session = Depends(get_db)):
-    """Test cluster connections with detailed diagnostics
+async def test_cluster_connection(
+    cluster_id: int,
+    mode: str = "mock",
+    force_refresh: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Test cluster connections with detailed diagnostics and caching
     Args:
         mode: 'mock' for mock testing, 'real' for real connection testing
+        force_refresh: If True, bypass cache and perform fresh test
     """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    
+
     try:
         if mode == "real":
-            # 使用混合扫描器进行详细连接测试
-            scanner = HybridTableScanner(cluster)
-            results = scanner.test_connections()
+            # 使用状态管理服务进行连接测试（支持缓存）
+            results = await cluster_status_service.test_cluster_connections(
+                db, cluster_id, force_refresh=force_refresh
+            )
+
             return {
                 "cluster_id": cluster_id,
                 "cluster_name": cluster.name,
@@ -260,27 +313,39 @@ async def test_cluster_connection(cluster_id: int, mode: str = "mock", db: Sessi
                 "tests": results.get("tests", {}),
                 "logs": results.get("logs", []),
                 "suggestions": results.get("suggestions", []),
+                "cached": results.get("cached", False),
                 "connections": results  # 保持向后兼容
             }
         else:
-            # 使用Mock扫描器
-            scanner = HybridTableScanner(cluster)
-            results = scanner.test_connections()
-            return {
-                "cluster_id": cluster_id,
-                "cluster_name": cluster.name,
-                "test_mode": "mock",
+            # Mock模式
+            mock_results = {
                 "overall_status": "success",
                 "test_time": datetime.now().isoformat(),
                 "tests": {
                     "metastore": {"status": "success", "mode": "mock"},
-                    "hdfs": {"status": "success", "mode": "mock"}
+                    "hdfs": {"status": "success", "mode": "mock"},
+                    "hiveserver2": {"status": "success", "mode": "mock"}
                 },
                 "logs": [{"level": "INFO", "message": "Mock test completed successfully"}],
                 "suggestions": [],
-                "connections": results  # 保持向后兼容
+                "cached": False
+            }
+
+            return {
+                "cluster_id": cluster_id,
+                "cluster_name": cluster.name,
+                "test_mode": "mock",
+                **mock_results,
+                "connections": mock_results  # 保持向后兼容
             }
     except Exception as e:
+        # 记录测试失败状态
+        cluster_status_service.record_status_change(
+            db, cluster_id, cluster.status,
+            reason="connection_test_failed",
+            message=f"Connection test failed: {str(e)}"
+        )
+
         return {
             "cluster_id": cluster_id,
             "cluster_name": cluster.name,
@@ -296,6 +361,7 @@ async def test_cluster_connection(cluster_id: int, mode: str = "mock", db: Sessi
                 "确认网络连接正常",
                 "验证用户权限设置"
             ],
+            "cached": False,
             "error": str(e)
         }
 
@@ -529,7 +595,7 @@ async def scan_all_cluster_tables(
         })
         
         return scan_results
-        
+
     except Exception as e:
         return {
             "cluster_id": cluster_id,
@@ -543,3 +609,187 @@ async def scan_all_cluster_tables(
             "databases": [],
             "errors": [str(e)]
         }
+
+@router.get("/{cluster_id}/status")
+async def get_cluster_status(cluster_id: int, db: Session = Depends(get_db)):
+    """获取集群状态信息"""
+    try:
+        status_info = cluster_status_service.get_cluster_connection_summary(db, cluster_id)
+        return status_info
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cluster status: {str(e)}")
+
+@router.get("/{cluster_id}/status-history")
+async def get_cluster_status_history(
+    cluster_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """获取集群状态变更历史"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        history = cluster_status_service.get_cluster_status_history(db, cluster_id, limit)
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "total_records": len(history),
+            "history": [
+                {
+                    "id": record.id,
+                    "from_status": record.from_status,
+                    "to_status": record.to_status,
+                    "reason": record.reason,
+                    "message": record.message,
+                    "created_at": record.created_at.isoformat(),
+                    "connection_test_result": record.connection_test_result
+                }
+                for record in history
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get status history: {str(e)}")
+
+@router.post("/{cluster_id}/status")
+async def update_cluster_status(
+    cluster_id: int,
+    new_status: str,
+    reason: str = None,
+    message: str = None,
+    db: Session = Depends(get_db)
+):
+    """手动更新集群状态"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # 验证状态值
+    valid_statuses = ['active', 'inactive', 'error', 'testing', 'maintenance']
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+        )
+
+    try:
+        history_record = cluster_status_service.record_status_change(
+            db, cluster_id, new_status, reason or "manual", message
+        )
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "old_status": history_record.from_status,
+            "new_status": history_record.to_status,
+            "reason": history_record.reason,
+            "message": history_record.message,
+            "updated_at": history_record.created_at.isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update cluster status: {str(e)}")
+
+@router.delete("/{cluster_id}/cache")
+async def clear_cluster_cache(cluster_id: int, db: Session = Depends(get_db)):
+    """清除集群连接状态缓存"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    cluster_status_service.clear_connection_cache(cluster_id)
+
+    return {
+        "cluster_id": cluster_id,
+        "cluster_name": cluster.name,
+        "message": "Connection cache cleared successfully"
+    }
+
+@router.get("/{cluster_id}/connection-history")
+async def get_connection_history(
+    cluster_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """获取集群连接历史记录"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        history = enhanced_connection_service.get_connection_history(cluster_id, limit)
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "total_records": len(history),
+            "history": history
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get connection history: {str(e)}")
+
+@router.get("/{cluster_id}/connection-statistics")
+async def get_connection_statistics(
+    cluster_id: int,
+    hours: int = Query(24, ge=1, le=168),  # 最多7天
+    db: Session = Depends(get_db)
+):
+    """获取集群连接统计信息"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        statistics = enhanced_connection_service.get_connection_statistics(cluster_id, hours)
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            **statistics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get connection statistics: {str(e)}")
+
+@router.post("/{cluster_id}/test-enhanced")
+async def test_cluster_connection_enhanced(
+    cluster_id: int,
+    connection_types: List[str] = Query(
+        default=None,
+        description="Connection types to test: metastore, hdfs, hiveserver2"
+    ),
+    force_refresh: bool = Query(False, description="Force refresh, bypass cache"),
+    db: Session = Depends(get_db)
+):
+    """增强的集群连接测试，支持指定连接类型和详细诊断"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # 验证连接类型参数
+    valid_types = ['metastore', 'hdfs', 'hiveserver2']
+    if connection_types:
+        invalid_types = [t for t in connection_types if t not in valid_types]
+        if invalid_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid connection types: {invalid_types}. Valid types: {valid_types}"
+            )
+
+    try:
+        results = await cluster_status_service.test_cluster_connections(
+            db, cluster_id, force_refresh, connection_types
+        )
+
+        return {
+            "cluster_id": cluster_id,
+            "cluster_name": cluster.name,
+            "test_mode": "enhanced",
+            "force_refresh": force_refresh,
+            "requested_types": connection_types or valid_types,
+            **results
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enhanced connection test failed: {str(e)}")
+

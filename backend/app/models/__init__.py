@@ -5,6 +5,7 @@ from .merge_task import MergeTask
 from .task_log import TaskLog
 from .scan_task import ScanTask
 from .scan_task_log import ScanTaskLogDB
+from .cluster_status_history import ClusterStatusHistory
 
 __all__ = [
     "Cluster",
@@ -14,4 +15,5 @@ __all__ = [
     "TaskLog",
     "ScanTask",
     "ScanTaskLogDB",
+    "ClusterStatusHistory",
 ]
