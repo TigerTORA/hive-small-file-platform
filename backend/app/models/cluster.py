@@ -44,6 +44,13 @@ class Cluster(Base):
     # Configuration
     small_file_threshold = Column(Integer, default=128*1024*1024)  # 128MB
     scan_enabled = Column(Boolean, default=True)
+
+    # Archive configuration
+    archive_enabled = Column(Boolean, default=False)  # 是否启用归档功能
+    archive_root_path = Column(String(500), default="/archive")  # 归档根目录路径
+    cold_data_threshold_days = Column(Integer, default=90)  # 冷数据天数阈值
+    auto_archive_enabled = Column(Boolean, default=False)  # 是否启用自动归档
+    archive_compression_enabled = Column(Boolean, default=True)  # 归档时是否压缩
     
     # Relationships
     table_metrics = relationship("TableMetric", back_populates="cluster")

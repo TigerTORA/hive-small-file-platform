@@ -42,6 +42,10 @@
               <el-icon><Refresh /></el-icon>
               全库扫描(进度)
             </el-button>
+            <el-button type="warning" @click="triggerColdDataScan" style="margin-left: 8px;">
+              <el-icon><Snowflake /></el-icon>
+              冷数据扫描
+            </el-button>
           </div>
         </div>
       </template>
@@ -98,10 +102,51 @@
             {{ formatTime(row.scan_time) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="冷数据状态" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.is_cold_data" type="warning" size="small" effect="dark">
+              <el-icon><Snowflake /></el-icon>
+              冷数据
+            </el-tag>
+            <el-tag v-else-if="row.days_since_last_access > 0" type="success" size="small">
+              {{ row.days_since_last_access }}天前
+            </el-tag>
+            <el-tag v-else type="info" size="small">活跃</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="归档状态" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.archive_status === 'archived'" type="danger" size="small">
+              <el-icon><FolderRemove /></el-icon>
+              已归档
+            </el-tag>
+            <el-tag v-else type="primary" size="small">活跃中</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="280">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="createMergeTask(row)">
               创建合并任务
+            </el-button>
+            <el-button
+              v-if="row.is_cold_data && row.archive_status !== 'archived'"
+              type="warning"
+              size="small"
+              @click="archiveTable(row)"
+              :loading="row.archiving"
+            >
+              <el-icon><FolderAdd /></el-icon>
+              归档
+            </el-button>
+            <el-button
+              v-if="row.archive_status === 'archived'"
+              type="success"
+              size="small"
+              @click="restoreTable(row)"
+              :loading="row.restoring"
+            >
+              <el-icon><FolderOpened /></el-icon>
+              恢复
             </el-button>
           </template>
         </el-table-column>
@@ -117,7 +162,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { tablesApi, type TableMetric } from '@/api/tables'
 import { clustersApi, type Cluster } from '@/api/clusters'
 import dayjs from 'dayjs'
@@ -215,6 +260,104 @@ const onClusterScanCompleted = () => {
 const createMergeTask = (table: TableMetric) => {
   // TODO: 实现创建合并任务的逻辑
   ElMessage.info(`准备为表 ${table.database_name}.${table.table_name} 创建合并任务`)
+}
+
+// 归档表
+const archiveTable = async (table: TableMetric) => {
+  try {
+    // 确认对话框
+    await ElMessageBox.confirm(
+      `确定要归档表 ${table.database_name}.${table.table_name} 吗？这将把表数据移动到归档存储区。`,
+      '归档确认',
+      {
+        confirmButtonText: '确定归档',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    table.archiving = true
+    const response = await tablesApi.archiveTable(selectedCluster.value, table.database_name, table.table_name, true)
+
+    ElMessage.success(`表 ${table.database_name}.${table.table_name} 归档成功`)
+
+    // 更新表状态
+    table.archive_status = 'archived'
+    table.archive_location = response.archive_result.archive_location
+    table.archived_at = response.archive_result.archived_at
+
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('归档表失败:', error)
+      ElMessage.error('归档表失败: ' + (error.message || error))
+    }
+  } finally {
+    table.archiving = false
+  }
+}
+
+// 恢复表
+const restoreTable = async (table: TableMetric) => {
+  try {
+    // 确认对话框
+    await ElMessageBox.confirm(
+      `确定要恢复表 ${table.database_name}.${table.table_name} 吗？这将把归档的数据移回原始存储位置。`,
+      '恢复确认',
+      {
+        confirmButtonText: '确定恢复',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+
+    table.restoring = true
+    const response = await tablesApi.restoreTable(selectedCluster.value, table.database_name, table.table_name)
+
+    ElMessage.success(`表 ${table.database_name}.${table.table_name} 恢复成功`)
+
+    // 更新表状态
+    table.archive_status = 'active'
+    table.archive_location = null
+    table.archived_at = null
+
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('恢复表失败:', error)
+      ElMessage.error('恢复表失败: ' + (error.message || error))
+    }
+  } finally {
+    table.restoring = false
+  }
+}
+
+// 触发冷数据扫描
+const triggerColdDataScan = async () => {
+  if (!selectedCluster.value) {
+    ElMessage.warning('请先选择集群')
+    return
+  }
+
+  try {
+    loading.value = true
+    ElMessage.info('正在扫描冷数据...')
+
+    const response = await tablesApi.scanColdData(
+      selectedCluster.value,
+      90, // 默认90天阈值
+      selectedDatabase.value || undefined
+    )
+
+    ElMessage.success(`冷数据扫描完成！发现 ${response.scan_result?.cold_tables_found || 0} 个冷数据表`)
+
+    // 刷新表格数据
+    await loadTableMetrics()
+
+  } catch (error) {
+    console.error('冷数据扫描失败:', error)
+    ElMessage.error('冷数据扫描失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const formatSize = (bytes: number): string => {
