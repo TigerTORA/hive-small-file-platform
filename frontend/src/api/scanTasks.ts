@@ -35,6 +35,9 @@ export const scanTasksApi = {
 
   getLogs(taskId: string): Promise<any[]> {
     return api.get(`/scan-tasks/${taskId}/logs`)
+  },
+
+  cancel(taskId: string): Promise<any> {
+    return api.post(`/scan-tasks/${taskId}/cancel`)
   }
 }
-

@@ -17,13 +17,22 @@ api.interceptors.request.use(
 )
 
 // 响应拦截器
+// 去重的错误提示（3 秒内相同文案仅提示一次）
+let __lastToastMsg = ''
+let __lastToastAt = 0
+
 api.interceptors.response.use(
   (response) => {
     return response.data
   },
   (error) => {
-    const message = error.response?.data?.detail || error.message || '请求失败'
-    ElMessage.error(message)
+    const message = error?.response?.data?.detail || error?.message || '请求失败'
+    const now = Date.now()
+    if (!(message === __lastToastMsg && now - __lastToastAt < 3000)) {
+      ElMessage.error(message)
+      __lastToastMsg = message
+      __lastToastAt = now
+    }
     return Promise.reject(error)
   }
 )

@@ -53,6 +53,8 @@ class ScanTaskResponse(BaseModel):
     # 错误信息
     error_message: Optional[str] = None
     warnings: Optional[str] = None
+    # 最近更新时间（派生：取最新日志时间，若无则 end_time 或 start_time）
+    last_update: Optional[datetime] = None
     
     class Config:
         from_attributes = True

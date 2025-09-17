@@ -19,6 +19,7 @@ class ScanTaskManager:
         self.active_tasks: Dict[str, ScanTask] = {}
         self.task_logs: Dict[str, List[ScanTaskLog]] = {}
         self._lock = threading.Lock()
+        self._cancelled: set[str] = set()
     
     def create_scan_task(
         self, 
@@ -56,6 +57,26 @@ class ScanTaskManager:
         """获取任务日志"""
         with self._lock:
             return self.task_logs.get(task_id, [])
+
+    def request_cancel(self, db: Session, task_id: str) -> bool:
+        """请求取消任务：设置标记并记录日志"""
+        with self._lock:
+            self._cancelled.add(task_id)
+        try:
+            self.add_log(task_id, 'INFO', '收到取消请求，正在停止扫描…', db=db)
+        except Exception:
+            pass
+        return True
+
+    def _is_cancelled(self, task_id: str) -> bool:
+        with self._lock:
+            return task_id in self._cancelled
+
+    def _cleanup_task(self, task_id: str):
+        with self._lock:
+            self.active_tasks.pop(task_id, None)
+            self.task_logs.pop(task_id, None)
+            self._cancelled.discard(task_id)
     
     def add_log(
         self,
@@ -236,6 +257,8 @@ class ScanTaskManager:
                     db_thread.close()
                 except Exception:
                     pass
+                # 清理内存引用，避免泄漏
+                self._cleanup_task(task.task_id)
         
         thread = threading.Thread(target=run_scan)
         thread.daemon = True
@@ -304,6 +327,11 @@ class ScanTaskManager:
             
             # 扫描每个数据库
             for i, database_name in enumerate(databases, 1):
+                # 支持随时取消
+                if self._is_cancelled(task.task_id):
+                    self.add_log(task.task_id, 'INFO', '⏹️ 用户取消，停止后续数据库扫描', db=db)
+                    self.complete_task(db, task.task_id, success=False, error_message='Task cancelled by user')
+                    return
                 db_scan_start = time.time()
                 self.safe_update_progress(
                     db, task.task_id, 
