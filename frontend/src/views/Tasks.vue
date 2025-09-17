@@ -1080,7 +1080,6 @@ watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
 }
 
 .mono { font-family: Menlo, Monaco, monospace; }
-
 .logs-container {
   max-height: 400px;
   overflow-y: auto;

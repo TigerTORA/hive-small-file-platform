@@ -569,6 +569,10 @@ const cancelTask = async () => {
   background: rgba(239, 68, 68, 0.05);
 }
 
+.log-info { background: rgba(255,255,255,0.02); }
+.log-warning { background: rgba(230,162,60,0.08); }
+.log-error { background: rgba(245,108,108,0.10); }
+
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
