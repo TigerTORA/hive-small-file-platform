@@ -46,6 +46,7 @@ jobs:
             tests/unit/services/test_path_resolver.py \
             tests/unit/services/test_websocket_service.py \
             tests/unit/services/test_enhanced_connection_service_helpers.py \
+            tests/unit/services/test_cluster_status_service.py \
             tests/unit/api/test_websocket_api_unit.py \
             tests/unit/engines/test_base_engine_helpers.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
