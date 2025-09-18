@@ -43,11 +43,16 @@ jobs:
             test_scanner.py \
             tests/unit/test_engine_factory_extra.py \
             tests/unit/utils/test_encryption.py \
+            tests/unit/utils/test_encryption_extra.py \
             tests/unit/services/test_path_resolver.py \
             tests/unit/services/test_websocket_service.py \
             tests/unit/services/test_enhanced_connection_service_helpers.py \
             tests/unit/services/test_cluster_status_service.py \
+            tests/unit/services/test_cluster_status_service_metrics.py \
             tests/unit/api/test_websocket_api_unit.py \
+            tests/unit/api/test_websocket_api_endpoints.py \
+            tests/unit/api/test_main_health.py \
+            tests/unit/api/test_errors_api.py \
             tests/unit/engines/test_base_engine_helpers.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
             tests/unit/monitor/test_mysql_hive_connector.py \
