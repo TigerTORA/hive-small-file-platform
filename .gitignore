@@ -103,6 +103,8 @@ backend/coverage/
 
 # Local databases
 backend/*.db
+# Local database dir (engineered path)
+backend/var/data/
 
 # Local AI/dev workspace
 .claude/
