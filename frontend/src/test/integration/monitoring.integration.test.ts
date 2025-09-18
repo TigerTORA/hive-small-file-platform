@@ -213,7 +213,8 @@ describe('Monitoring Store Integration Tests', () => {
         chartColors: ['#FF0000']
       }
 
-      const mockGetItem = vi.spyOn(Storage.prototype, 'getItem')
+      const mockGetItem = vi
+        .spyOn(Storage.prototype, 'getItem')
         .mockReturnValue(JSON.stringify(savedSettings))
 
       store.loadSettings()
@@ -224,7 +225,6 @@ describe('Monitoring Store Integration Tests', () => {
       expect(store.settings.theme).toBe('dark')
       expect(store.settings.chartColors).toEqual(['#FF0000'])
     })
-
   })
 
   describe('集成场景测试', () => {

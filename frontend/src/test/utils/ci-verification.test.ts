@@ -197,7 +197,9 @@ describe('CI流水线验证测试', () => {
 
       expect(mockApiResponse.success).toBe(true)
       expect(mockApiResponse.data.clusters).toBeGreaterThan(0)
-      expect(mockApiResponse.data.problemTables).toBeLessThanOrEqual(mockApiResponse.data.totalTables)
+      expect(mockApiResponse.data.problemTables).toBeLessThanOrEqual(
+        mockApiResponse.data.totalTables
+      )
       expect(mockApiResponse.message).toContain('success')
     })
   })

@@ -60,12 +60,7 @@ export default defineConfig({
         '!src/**/*.test.*',
         '!src/**/*.spec.*'
       ],
-      exclude: [
-        'src/test/**',
-        'src/**/*.d.ts',
-        'src/main.ts',
-        'src/env.d.ts'
-      ],
+      exclude: ['src/test/**', 'src/**/*.d.ts', 'src/main.ts', 'src/env.d.ts'],
       thresholds: {
         global: {
           branches: 70,
@@ -90,9 +85,7 @@ export default defineConfig({
     },
 
     // 设置文件
-    setupFiles: [
-      './src/test/setup/integration.setup.ts'
-    ],
+    setupFiles: ['./src/test/setup/integration.setup.ts'],
 
     // 环境变量
     env: {
@@ -113,11 +106,7 @@ export default defineConfig({
     },
 
     // 报告器配置
-    reporter: [
-      'default',
-      'json',
-      'html'
-    ],
+    reporter: ['default', 'json', 'html'],
 
     // 输出目录
     outputFile: {

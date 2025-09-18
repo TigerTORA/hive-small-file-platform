@@ -189,11 +189,7 @@ describe('API Integration - 简化版本', () => {
     })
 
     it('应该验证时间戳格式', () => {
-      const timestamps = [
-        '2024-01-15T10:30:00Z',
-        '2024-01-15T09:00:00Z',
-        '2024-01-15T10:00:00Z'
-      ]
+      const timestamps = ['2024-01-15T10:30:00Z', '2024-01-15T09:00:00Z', '2024-01-15T10:00:00Z']
 
       timestamps.forEach(timestamp => {
         const date = new Date(timestamp)

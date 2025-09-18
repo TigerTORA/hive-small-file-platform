@@ -2,16 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export interface GridItemLayout {
-  i: string      // 唯一标识
-  x: number      // X坐标（网格单位）
-  y: number      // Y坐标（网格单位） 
-  w: number      // 宽度（网格单位）
-  h: number      // 高度（网格单位）
+  i: string // 唯一标识
+  x: number // X坐标（网格单位）
+  y: number // Y坐标（网格单位）
+  w: number // 宽度（网格单位）
+  h: number // 高度（网格单位）
   static?: boolean // 是否静态（不可拖拽和调整）
-  minW?: number    // 最小宽度
-  minH?: number    // 最小高度
-  maxW?: number    // 最大宽度
-  maxH?: number    // 最大高度
+  minW?: number // 最小宽度
+  minH?: number // 最小高度
+  maxW?: number // 最大宽度
+  maxH?: number // 最大高度
 }
 
 export interface CardConfig {
@@ -154,9 +154,9 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
   function saveAsCustomLayout(name: string, description?: string): string {
     const layoutId = generateLayoutId()
     const layoutCopy = [...currentLayout.value]
-    
+
     customLayouts.value[layoutId] = layoutCopy
-    
+
     // 也可以扩展为保存带名称和描述的自定义预设
     const customPreset: LayoutPreset = {
       id: layoutId,
@@ -164,7 +164,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
       description: description || '用户自定义布局',
       layout: layoutCopy
     }
-    
+
     // 这里可以扩展为支持动态添加到 layoutPresets
     saveLayoutToStorage()
     return layoutId
@@ -187,7 +187,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
       customLayouts: customLayouts.value,
       timestamp: Date.now()
     }
-    
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(layoutData))
     } catch (error) {
@@ -200,28 +200,28 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const layoutData = JSON.parse(stored)
-        
+
         if (layoutData.currentLayout && Array.isArray(layoutData.currentLayout)) {
           currentLayout.value = layoutData.currentLayout
         } else {
           // 如果没有有效的存储布局，使用默认布局
           currentLayout.value = getPresetLayout('default')
         }
-        
+
         if (layoutData.activePreset) {
           activePreset.value = layoutData.activePreset
         }
-        
+
         if (layoutData.customLayouts && typeof layoutData.customLayouts === 'object') {
           customLayouts.value = layoutData.customLayouts
         }
-        
+
         return true
       }
     } catch (error) {
       console.warn('Failed to load layout from localStorage:', error)
     }
-    
+
     // 如果加载失败，使用默认布局
     currentLayout.value = getPresetLayout('default')
     activePreset.value = 'default'
@@ -252,7 +252,7 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
   function importLayout(jsonData: string): boolean {
     try {
       const importData = JSON.parse(jsonData)
-      
+
       if (importData.layout && Array.isArray(importData.layout)) {
         currentLayout.value = importData.layout
         activePreset.value = importData.preset || null
@@ -279,12 +279,12 @@ export const useDashboardLayoutStore = defineStore('dashboardLayout', () => {
     currentLayout: getCurrentLayout,
     activePreset,
     customLayouts,
-    
+
     // 计算属性
     cards,
     presets,
     hasCustomLayout,
-    
+
     // Actions
     setEditMode,
     updateLayout,

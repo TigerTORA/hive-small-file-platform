@@ -327,9 +327,15 @@ describe('Dashboard Store Integration Tests', () => {
       store.summary.total_clusters = 10
       store.trends = [{ date: '2023-12-01', small_files: 1000, total_size: 100 }]
       store.fileDistribution = [{ range: '0-10MB', count: 5000, percentage: 50 }]
-      store.topTables = [{ table: 'test.table', small_files: 100, total_files: 200, cluster: 'test' }]
-      store.recentTasks = [{ task_id: 1, task_name: 'test', status: 'completed', created_at: '2023-12-01' }]
-      store.clusterStats = [{ cluster_id: 1, cluster_name: 'test', table_count: 10, file_count: 1000 }]
+      store.topTables = [
+        { table: 'test.table', small_files: 100, total_files: 200, cluster: 'test' }
+      ]
+      store.recentTasks = [
+        { task_id: 1, task_name: 'test', status: 'completed', created_at: '2023-12-01' }
+      ]
+      store.clusterStats = [
+        { cluster_id: 1, cluster_name: 'test', table_count: 10, file_count: 1000 }
+      ]
       store.errors.summary = 'Test error'
 
       store.reset()
@@ -351,12 +357,28 @@ describe('Dashboard Store Integration Tests', () => {
 
       // 模拟一个完整的数据加载场景
       const mockData = {
-        summary: { total_clusters: 5, active_clusters: 3, total_tables: 100, monitored_tables: 80, total_files: 10000, total_small_files: 3000, small_file_ratio: 30, total_size_gb: 500, small_file_size_gb: 50 },
+        summary: {
+          total_clusters: 5,
+          active_clusters: 3,
+          total_tables: 100,
+          monitored_tables: 80,
+          total_files: 10000,
+          total_small_files: 3000,
+          small_file_ratio: 30,
+          total_size_gb: 500,
+          small_file_size_gb: 50
+        },
         trends: [{ date: '2023-12-01', small_files: 1000, total_size: 100 }],
         distribution: [{ range: '0-10MB', count: 5000, percentage: 50 }],
-        topTables: [{ table: 'db1.table1', small_files: 500, total_files: 1000, cluster: 'cluster1' }],
-        recentTasks: [{ task_id: 1, task_name: 'merge_task', status: 'completed', created_at: '2023-12-01' }],
-        clusterStats: { clusters: [{ cluster_id: 1, cluster_name: 'cluster1', table_count: 50, file_count: 5000 }] }
+        topTables: [
+          { table: 'db1.table1', small_files: 500, total_files: 1000, cluster: 'cluster1' }
+        ],
+        recentTasks: [
+          { task_id: 1, task_name: 'merge_task', status: 'completed', created_at: '2023-12-01' }
+        ],
+        clusterStats: {
+          clusters: [{ cluster_id: 1, cluster_name: 'cluster1', table_count: 50, file_count: 5000 }]
+        }
       }
 
       ;(dashboardApi.getSummary as any).mockResolvedValue(mockData.summary)
@@ -389,7 +411,17 @@ describe('Dashboard Store Integration Tests', () => {
       const { dashboardApi } = await import('@/api/dashboard')
 
       // 部分成功，部分失败
-      ;(dashboardApi.getSummary as any).mockResolvedValue({ total_clusters: 5, active_clusters: 3, total_tables: 100, monitored_tables: 80, total_files: 10000, total_small_files: 3000, small_file_ratio: 30, total_size_gb: 500, small_file_size_gb: 50 })
+      ;(dashboardApi.getSummary as any).mockResolvedValue({
+        total_clusters: 5,
+        active_clusters: 3,
+        total_tables: 100,
+        monitored_tables: 80,
+        total_files: 10000,
+        total_small_files: 3000,
+        small_file_ratio: 30,
+        total_size_gb: 500,
+        small_file_size_gb: 50
+      })
       ;(dashboardApi.getTrends as any).mockRejectedValue(new Error('Trends API failed'))
       ;(dashboardApi.getFileDistribution as any).mockResolvedValue([])
       ;(dashboardApi.getTopTables as any).mockRejectedValue(new Error('TopTables API failed'))

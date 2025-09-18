@@ -6,7 +6,7 @@ export interface TableMetric {
   database_name: string
   table_name: string
   table_path: string
-  
+
   // Enhanced metadata fields
   table_type?: string
   storage_format?: string
@@ -16,17 +16,17 @@ export interface TableMetric {
   table_owner?: string
   table_create_time?: string
   partition_columns?: string
-  
+
   // File metrics
   total_files: number
   small_files: number
   total_size: number
   avg_file_size: number
-  
+
   // Partition info
   is_partitioned: boolean
   partition_count: number
-  
+
   // Scan metadata
   scan_time: string
   scan_duration: number
@@ -59,7 +59,7 @@ export const tablesApi = {
     page?: number
     page_size?: number
     database_name?: string
-  }): Promise<{ items: TableMetric[], total: number }> {
+  }): Promise<{ items: TableMetric[]; total: number }> {
     return api.get('/tables/metrics', { params })
   },
 
@@ -71,13 +71,13 @@ export const tablesApi = {
     page = 1,
     pageSize = 50,
     concurrency = 5
-  ): Promise<{ items: any[], total: number, page: number, page_size: number }>{
+  ): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
     return api.get('/tables/partition-metrics', {
-      params: { 
-        cluster_id: clusterId, 
-        database_name: databaseName, 
-        table_name: tableName, 
-        page, 
+      params: {
+        cluster_id: clusterId,
+        database_name: databaseName,
+        table_name: tableName,
+        page,
         page_size: pageSize,
         concurrency
       }
@@ -124,18 +124,20 @@ export const tablesApi = {
     table_details: any[]
   }> {
     // 使用实际可用的API端点
-    return api.get('/tables/small-files', {
-      params: { cluster_id: clusterId }
-    }).then(response => {
-      // 转换数据格式以匹配前端期望的结构
-      return {
-        total_tables: response.total_tables,
-        affected_tables: Math.round(response.total_tables * response.small_file_ratio / 100),
-        total_small_files: response.total_small_files,
-        potential_savings: Math.round(response.total_small_files * 128 * 1024), // 假设每个小文件平均节省128KB
-        table_details: [] // 暂时返回空数组，等后端提供详细接口
-      }
-    })
+    return api
+      .get('/tables/small-files', {
+        params: { cluster_id: clusterId }
+      })
+      .then(response => {
+        // 转换数据格式以匹配前端期望的结构
+        return {
+          total_tables: response.total_tables,
+          affected_tables: Math.round((response.total_tables * response.small_file_ratio) / 100),
+          total_small_files: response.total_small_files,
+          potential_savings: Math.round(response.total_small_files * 128 * 1024), // 假设每个小文件平均节省128KB
+          table_details: [] // 暂时返回空数组，等后端提供详细接口
+        }
+      })
   },
 
   // 扫描所有数据库（带严格实连与每库表数上限）
@@ -158,7 +160,12 @@ export const tablesApi = {
   },
 
   // 扫描单个表
-  scanTable(clusterId: number, databaseName: string, tableName: string, strictReal: boolean = true): Promise<any> {
+  scanTable(
+    clusterId: number,
+    databaseName: string,
+    tableName: string,
+    strictReal: boolean = true
+  ): Promise<any> {
     // 当前端点不接受 strict_real 参数；如需严格模式，建议使用统一入口 triggerScan
     return api.post(`/tables/scan-table/${clusterId}/${databaseName}/${tableName}`)
   },
@@ -200,9 +207,16 @@ export const tablesApi = {
   },
 
   // 归档表
-  archiveTable(clusterId: number, databaseName: string, tableName: string, force = false): Promise<any> {
+  archiveTable(
+    clusterId: number,
+    databaseName: string,
+    tableName: string,
+    force = false
+  ): Promise<any> {
     const params: any = { force }
-    return api.post(`/tables/archive-table/${clusterId}/${databaseName}/${tableName}`, null, { params })
+    return api.post(`/tables/archive-table/${clusterId}/${databaseName}/${tableName}`, null, {
+      params
+    })
   },
 
   // 恢复表

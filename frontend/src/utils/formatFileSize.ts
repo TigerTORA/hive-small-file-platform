@@ -1,7 +1,7 @@
 /**
  * 文件大小格式化工具函数
  * 将字节数转换为人类可读的文件大小格式
- * 
+ *
  * TDD实现：最小化实现通过所有测试用例
  */
 export function formatFileSize(bytes: number): string {

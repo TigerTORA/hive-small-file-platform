@@ -7,11 +7,17 @@
         <p>配置和管理您的DataNova平台系统参数</p>
       </div>
       <div class="actions-section">
-        <el-button @click="checkSystemHealth" class="cloudera-btn secondary">
+        <el-button
+          @click="checkSystemHealth"
+          class="cloudera-btn secondary"
+        >
           <el-icon><Refresh /></el-icon>
           刷新状态
         </el-button>
-        <el-button @click="saveSettings" class="cloudera-btn primary">
+        <el-button
+          @click="saveSettings"
+          class="cloudera-btn primary"
+        >
           <el-icon><Check /></el-icon>
           保存设置
         </el-button>
@@ -20,20 +26,29 @@
 
     <!-- Cloudera风格系统状态概览 -->
     <div class="cloudera-metrics-grid stagger-animation">
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.1s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.1s"
+      >
         <div class="metric-header">
           <div class="metric-icon info">
             <el-icon><Monitor /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.db_connected ? 'success' : 'danger'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.db_connected ? 'success' : 'danger'"
+            ></div>
           </div>
         </div>
         <div class="metric-value">{{ systemInfo.version }}</div>
         <div class="metric-label">系统版本</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.2s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.2s"
+      >
         <div class="metric-header">
           <div class="metric-icon success">
             <el-icon><Timer /></el-icon>
@@ -43,26 +58,44 @@
         <div class="metric-label">运行时间</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.3s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.3s"
+      >
         <div class="metric-header">
-          <div class="metric-icon" :class="systemInfo.db_connected ? 'success' : 'danger'">
+          <div
+            class="metric-icon"
+            :class="systemInfo.db_connected ? 'success' : 'danger'"
+          >
             <el-icon><Connection /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.db_connected ? 'success' : 'danger'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.db_connected ? 'success' : 'danger'"
+            ></div>
           </div>
         </div>
         <div class="metric-value">{{ systemInfo.db_connected ? '正常' : '异常' }}</div>
         <div class="metric-label">数据库连接</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.4s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.4s"
+      >
         <div class="metric-header">
-          <div class="metric-icon" :class="systemInfo.celery_active ? 'warning' : 'danger'">
+          <div
+            class="metric-icon"
+            :class="systemInfo.celery_active ? 'warning' : 'danger'"
+          >
             <el-icon><Operation /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.celery_active ? 'success' : 'warning'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.celery_active ? 'success' : 'warning'"
+            ></div>
           </div>
         </div>
         <div class="metric-value">{{ systemInfo.celery_active ? '运行中' : '未启动' }}</div>
@@ -86,14 +119,21 @@
 
       <div class="tab-content">
         <!-- 扫描配置标签页 -->
-        <div v-show="activeTab === 'scan'" class="tab-pane">
+        <div
+          v-show="activeTab === 'scan'"
+          class="tab-pane"
+        >
           <div class="cloudera-form-panel">
             <div class="panel-header">
               <h3>扫描配置</h3>
               <p>配置集群扫描的默认参数和行为</p>
             </div>
 
-            <el-form :model="scanSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="scanSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="默认扫描间隔">
                 <el-input-number
                   v-model="scanSettings.scan_interval"
@@ -133,19 +173,41 @@
         </div>
 
         <!-- 合并配置标签页 -->
-        <div v-show="activeTab === 'merge'" class="tab-pane">
+        <div
+          v-show="activeTab === 'merge'"
+          class="tab-pane"
+        >
           <div class="cloudera-form-panel">
             <div class="panel-header">
               <h3>合并配置</h3>
               <p>配置小文件合并任务的默认策略和参数</p>
             </div>
 
-            <el-form :model="mergeSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="mergeSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="默认合并策略">
-                <el-radio-group v-model="mergeSettings.default_strategy" class="cloudera-radio-group">
-                  <el-radio label="safe_merge" class="cloudera-radio">安全合并 (推荐)</el-radio>
-                  <el-radio label="concatenate" class="cloudera-radio">文件合并 (CONCATENATE)</el-radio>
-                  <el-radio label="insert_overwrite" class="cloudera-radio">重写插入 (INSERT OVERWRITE)</el-radio>
+                <el-radio-group
+                  v-model="mergeSettings.default_strategy"
+                  class="cloudera-radio-group"
+                >
+                  <el-radio
+                    label="safe_merge"
+                    class="cloudera-radio"
+                    >安全合并 (推荐)</el-radio
+                  >
+                  <el-radio
+                    label="concatenate"
+                    class="cloudera-radio"
+                    >文件合并 (CONCATENATE)</el-radio
+                  >
+                  <el-radio
+                    label="insert_overwrite"
+                    class="cloudera-radio"
+                    >重写插入 (INSERT OVERWRITE)</el-radio
+                  >
                 </el-radio-group>
                 <div class="form-help">新建任务时的默认合并策略</div>
               </el-form-item>
@@ -177,14 +239,21 @@
         </div>
 
         <!-- 告警配置标签页 -->
-        <div v-show="activeTab === 'alert'" class="tab-pane">
+        <div
+          v-show="activeTab === 'alert'"
+          class="tab-pane"
+        >
           <div class="cloudera-form-panel">
             <div class="panel-header">
               <h3>告警配置</h3>
               <p>配置小文件告警的阈值和通知方式</p>
             </div>
 
-            <el-form :model="alertSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="alertSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="小文件告警阈值">
                 <el-input-number
                   v-model="alertSettings.small_file_threshold"
@@ -218,7 +287,10 @@
                 <div class="form-help">开启后会向指定邮箱发送告警通知</div>
               </el-form-item>
 
-              <el-form-item v-if="alertSettings.email_enabled" label="收件人列表">
+              <el-form-item
+                v-if="alertSettings.email_enabled"
+                label="收件人列表"
+              >
                 <el-input
                   v-model="alertSettings.email_recipients"
                   type="textarea"
@@ -233,7 +305,10 @@
         </div>
 
         <!-- 系统信息标签页 -->
-        <div v-show="activeTab === 'system'" class="tab-pane">
+        <div
+          v-show="activeTab === 'system'"
+          class="tab-pane"
+        >
           <div class="cloudera-form-panel">
             <div class="panel-header">
               <h3>系统信息</h3>
@@ -247,37 +322,61 @@
               class="cloudera-descriptions"
             >
               <el-descriptions-item label="系统版本">
-                <el-tag type="info" class="cloudera-tag">{{ systemInfo.version }}</el-tag>
+                <el-tag
+                  type="info"
+                  class="cloudera-tag"
+                  >{{ systemInfo.version }}</el-tag
+                >
               </el-descriptions-item>
               <el-descriptions-item label="运行时间">{{ systemInfo.uptime }}</el-descriptions-item>
-              <el-descriptions-item label="Python 版本">{{ systemInfo.python_version }}</el-descriptions-item>
+              <el-descriptions-item label="Python 版本">{{
+                systemInfo.python_version
+              }}</el-descriptions-item>
               <el-descriptions-item label="数据库连接">
-                <el-tag :type="systemInfo.db_connected ? 'success' : 'danger'" class="cloudera-tag">
+                <el-tag
+                  :type="systemInfo.db_connected ? 'success' : 'danger'"
+                  class="cloudera-tag"
+                >
                   {{ systemInfo.db_connected ? '正常' : '异常' }}
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="Redis 连接">
-                <el-tag :type="systemInfo.redis_connected ? 'success' : 'danger'" class="cloudera-tag">
+                <el-tag
+                  :type="systemInfo.redis_connected ? 'success' : 'danger'"
+                  class="cloudera-tag"
+                >
                   {{ systemInfo.redis_connected ? '正常' : '异常' }}
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="Celery 状态">
-                <el-tag :type="systemInfo.celery_active ? 'success' : 'warning'" class="cloudera-tag">
+                <el-tag
+                  :type="systemInfo.celery_active ? 'success' : 'warning'"
+                  class="cloudera-tag"
+                >
                   {{ systemInfo.celery_active ? '运行中' : '未启动' }}
                 </el-tag>
               </el-descriptions-item>
             </el-descriptions>
 
             <div class="system-actions">
-              <el-button @click="checkSystemHealth" class="cloudera-btn primary">
+              <el-button
+                @click="checkSystemHealth"
+                class="cloudera-btn primary"
+              >
                 <el-icon><Refresh /></el-icon>
                 刷新系统状态
               </el-button>
-              <el-button @click="exportConfig" class="cloudera-btn success">
+              <el-button
+                @click="exportConfig"
+                class="cloudera-btn success"
+              >
                 <el-icon><Download /></el-icon>
                 导出配置
               </el-button>
-              <el-button @click="clearCache" class="cloudera-btn warning">
+              <el-button
+                @click="clearCache"
+                class="cloudera-btn warning"
+              >
                 <el-icon><Delete /></el-icon>
                 清理缓存
               </el-button>
@@ -289,11 +388,17 @@
 
     <!-- Cloudera风格操作按钮 -->
     <div class="settings-footer">
-      <el-button @click="resetSettings" class="cloudera-btn secondary">
+      <el-button
+        @click="resetSettings"
+        class="cloudera-btn secondary"
+      >
         <el-icon><RefreshLeft /></el-icon>
         重置设置
       </el-button>
-      <el-button @click="saveSettings" class="cloudera-btn primary">
+      <el-button
+        @click="saveSettings"
+        class="cloudera-btn primary"
+      >
         <el-icon><Check /></el-icon>
         保存所有设置
       </el-button>
@@ -302,424 +407,431 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  Check, Refresh, Monitor, Timer, Connection, Operation,
-  Download, Delete, RefreshLeft
-} from '@element-plus/icons-vue'
+  import { ref, onMounted } from 'vue'
+  import { ElMessage } from 'element-plus'
+  import {
+    Check,
+    Refresh,
+    Monitor,
+    Timer,
+    Connection,
+    Operation,
+    Download,
+    Delete,
+    RefreshLeft
+  } from '@element-plus/icons-vue'
 
-const activeTab = ref('scan')
+  const activeTab = ref('scan')
 
-// 标签页配置
-const tabs = [
-  { key: 'scan', label: '扫描配置', icon: 'Monitor' },
-  { key: 'merge', label: '合并配置', icon: 'Operation' },
-  { key: 'alert', label: '告警配置', icon: 'Bell' },
-  { key: 'system', label: '系统信息', icon: 'InfoFilled' }
-]
+  // 标签页配置
+  const tabs = [
+    { key: 'scan', label: '扫描配置', icon: 'Monitor' },
+    { key: 'merge', label: '合并配置', icon: 'Operation' },
+    { key: 'alert', label: '告警配置', icon: 'Bell' },
+    { key: 'system', label: '系统信息', icon: 'InfoFilled' }
+  ]
 
-// 设置数据
-const scanSettings = ref({
-  scan_interval: 6,
-  max_workers: 4,
-  scan_timeout: 300
-})
-
-const mergeSettings = ref({
-  default_strategy: 'safe_merge',
-  target_file_size: 256,
-  max_files_per_task: 1000
-})
-
-const alertSettings = ref({
-  small_file_threshold: 1000,
-  small_file_ratio_threshold: 80,
-  email_enabled: false,
-  email_recipients: ''
-})
-
-const systemInfo = ref({
-  version: '1.0.0',
-  uptime: '2 天 3 小时',
-  python_version: '3.9.0',
-  db_connected: true,
-  redis_connected: true,
-  celery_active: true
-})
-
-// 方法
-const saveSettings = () => {
-  // TODO: 保存设置到后端
-  ElMessage.success('所有设置已保存成功')
-}
-
-const resetSettings = () => {
-  // TODO: 重置为默认值
-  scanSettings.value = {
+  // 设置数据
+  const scanSettings = ref({
     scan_interval: 6,
     max_workers: 4,
     scan_timeout: 300
-  }
-  mergeSettings.value = {
+  })
+
+  const mergeSettings = ref({
     default_strategy: 'safe_merge',
     target_file_size: 256,
     max_files_per_task: 1000
-  }
-  alertSettings.value = {
+  })
+
+  const alertSettings = ref({
     small_file_threshold: 1000,
     small_file_ratio_threshold: 80,
     email_enabled: false,
     email_recipients: ''
-  }
-  ElMessage.info('所有设置已重置为默认值')
-}
-
-const checkSystemHealth = () => {
-  // TODO: 检查系统健康状态
-  // 模拟状态检查
-  const loadingMessage = ElMessage({
-    message: '正在检查系统状态...',
-    type: 'info',
-    duration: 0
   })
 
-  setTimeout(() => {
-    loadingMessage.close()
-    ElMessage.success('系统状态检查完成，一切正常')
-  }, 2000)
-}
+  const systemInfo = ref({
+    version: '1.0.0',
+    uptime: '2 天 3 小时',
+    python_version: '3.9.0',
+    db_connected: true,
+    redis_connected: true,
+    celery_active: true
+  })
 
-const exportConfig = () => {
-  // TODO: 导出配置文件
-  const config = {
-    scan: scanSettings.value,
-    merge: mergeSettings.value,
-    alert: alertSettings.value,
-    export_time: new Date().toISOString()
+  // 方法
+  const saveSettings = () => {
+    // TODO: 保存设置到后端
+    ElMessage.success('所有设置已保存成功')
   }
 
-  const blob = new Blob([JSON.stringify(config, null, 2)], {
-    type: 'application/json'
+  const resetSettings = () => {
+    // TODO: 重置为默认值
+    scanSettings.value = {
+      scan_interval: 6,
+      max_workers: 4,
+      scan_timeout: 300
+    }
+    mergeSettings.value = {
+      default_strategy: 'safe_merge',
+      target_file_size: 256,
+      max_files_per_task: 1000
+    }
+    alertSettings.value = {
+      small_file_threshold: 1000,
+      small_file_ratio_threshold: 80,
+      email_enabled: false,
+      email_recipients: ''
+    }
+    ElMessage.info('所有设置已重置为默认值')
+  }
+
+  const checkSystemHealth = () => {
+    // TODO: 检查系统健康状态
+    // 模拟状态检查
+    const loadingMessage = ElMessage({
+      message: '正在检查系统状态...',
+      type: 'info',
+      duration: 0
+    })
+
+    setTimeout(() => {
+      loadingMessage.close()
+      ElMessage.success('系统状态检查完成，一切正常')
+    }, 2000)
+  }
+
+  const exportConfig = () => {
+    // TODO: 导出配置文件
+    const config = {
+      scan: scanSettings.value,
+      merge: mergeSettings.value,
+      alert: alertSettings.value,
+      export_time: new Date().toISOString()
+    }
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: 'application/json'
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'datanova-config.json'
+    a.click()
+    URL.revokeObjectURL(url)
+
+    ElMessage.success('配置文件已导出')
+  }
+
+  const clearCache = () => {
+    // TODO: 清理系统缓存
+    const loadingMessage = ElMessage({
+      message: '正在清理系统缓存...',
+      type: 'info',
+      duration: 0
+    })
+
+    setTimeout(() => {
+      loadingMessage.close()
+      ElMessage.success('系统缓存已清理完成')
+    }, 1500)
+  }
+
+  onMounted(() => {
+    // TODO: 加载设置数据
+    console.log('Settings page mounted')
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'datanova-config.json'
-  a.click()
-  URL.revokeObjectURL(url)
-
-  ElMessage.success('配置文件已导出')
-}
-
-const clearCache = () => {
-  // TODO: 清理系统缓存
-  const loadingMessage = ElMessage({
-    message: '正在清理系统缓存...',
-    type: 'info',
-    duration: 0
-  })
-
-  setTimeout(() => {
-    loadingMessage.close()
-    ElMessage.success('系统缓存已清理完成')
-  }, 1500)
-}
-
-onMounted(() => {
-  // TODO: 加载设置数据
-  console.log('Settings page mounted')
-})
 </script>
 
 <style scoped>
-.settings-management {
-  padding: var(--space-3) var(--space-4) 400px var(--space-4);
-  min-height: 150vh;
-  overflow-y: visible;
-  background: var(--bg-app);
-}
-
-.header-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--space-8);
-  padding: var(--space-6);
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-1);
-}
-
-.title-section h1 {
-  margin: 0 0 var(--space-2) 0;
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--gray-900);
-}
-
-.title-section p {
-  margin: 0;
-  color: var(--gray-600);
-  font-size: var(--text-lg);
-}
-
-.actions-section {
-  display: flex;
-  gap: var(--space-4);
-  align-items: center;
-}
-
-/* Cloudera风格标签页 */
-.cloudera-tabs {
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-1);
-  overflow: hidden;
-  margin-bottom: var(--space-8);
-}
-
-.tab-nav {
-  display: flex;
-  background: var(--gray-50);
-  border-bottom: 1px solid var(--gray-200);
-}
-
-.tab-item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-6);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  font-weight: var(--font-medium);
-  color: var(--gray-600);
-  border-right: 1px solid var(--gray-200);
-}
-
-.tab-item:last-child {
-  border-right: none;
-}
-
-.tab-item:hover {
-  background: var(--gray-100);
-  color: var(--gray-900);
-}
-
-.tab-item.active {
-  background: var(--primary-50);
-  color: var(--primary-600);
-  border-bottom: 3px solid var(--primary-500);
-}
-
-.tab-content {
-  padding: var(--space-6);
-}
-
-.tab-pane {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Cloudera风格表单面板 */
-.cloudera-form-panel {
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-1);
-  overflow: hidden;
-}
-
-.panel-header {
-  padding: var(--space-6);
-  background: var(--gray-50);
-  border-bottom: 1px solid var(--gray-200);
-}
-
-.panel-header h3 {
-  margin: 0 0 var(--space-2) 0;
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  color: var(--gray-900);
-}
-
-.panel-header p {
-  margin: 0;
-  color: var(--gray-600);
-  font-size: var(--text-sm);
-}
-
-.cloudera-form {
-  padding: var(--space-6);
-}
-
-.cloudera-form .el-form-item {
-  margin-bottom: var(--space-6);
-}
-
-.cloudera-input-number {
-  width: 200px;
-}
-
-.input-suffix {
-  margin-left: var(--space-2);
-  color: var(--gray-600);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-}
-
-.cloudera-radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.cloudera-radio {
-  margin-right: 0;
-  margin-bottom: 0;
-}
-
-.cloudera-switch {
-  transform: scale(1.2);
-}
-
-.cloudera-textarea {
-  width: 100%;
-}
-
-.form-help {
-  font-size: var(--text-xs);
-  color: var(--gray-500);
-  margin-top: var(--space-2);
-  line-height: var(--leading-relaxed);
-}
-
-.cloudera-descriptions {
-  margin-bottom: var(--space-6);
-}
-
-.cloudera-tag {
-  font-weight: var(--font-medium);
-}
-
-.system-actions {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.settings-footer {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-6);
-  padding: var(--space-6);
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-1);
-}
-
-/* 依次出现动画 */
-.stagger-animation {
-  perspective: 1000px;
-}
-
-.stagger-item {
-  animation: staggerIn 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  opacity: 0;
-  transform: translateY(30px) scale(0.95);
-  animation-delay: var(--stagger-delay, 0s);
-}
-
-.stagger-item:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: var(--elevation-4);
-}
-
-@keyframes staggerIn {
-  0% {
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-  }
-  60% {
-    opacity: 0.8;
-    transform: translateY(-5px) scale(1.02);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* 响应式调整 */
-@media (max-width: 1200px) {
-  .cloudera-metrics-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-4);
-  }
-
-  .cloudera-form {
-    padding: var(--space-4);
-  }
-}
-
-@media (max-width: 768px) {
   .settings-management {
-    padding: var(--space-4);
+    padding: var(--space-3) var(--space-4) 400px var(--space-4);
+    min-height: 150vh;
+    overflow-y: visible;
+    background: var(--bg-app);
   }
 
   .header-section {
-    flex-direction: column;
-    gap: var(--space-4);
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-8);
+    padding: var(--space-6);
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-1);
   }
 
-  .cloudera-metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .title-section h1 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-3xl);
+    font-weight: var(--font-bold);
+    color: var(--gray-900);
+  }
+
+  .title-section p {
+    margin: 0;
+    color: var(--gray-600);
+    font-size: var(--text-lg);
+  }
+
+  .actions-section {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+  }
+
+  /* Cloudera风格标签页 */
+  .cloudera-tabs {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-1);
+    overflow: hidden;
+    margin-bottom: var(--space-8);
   }
 
   .tab-nav {
-    flex-direction: column;
-  }
-
-  .tab-item {
-    border-right: none;
+    display: flex;
+    background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
   }
 
-  .tab-item:last-child {
-    border-bottom: none;
-  }
-
-  .cloudera-radio-group {
+  .tab-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
     gap: var(--space-2);
+    padding: var(--space-4) var(--space-6);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-weight: var(--font-medium);
+    color: var(--gray-600);
+    border-right: 1px solid var(--gray-200);
   }
 
-  .system-actions {
-    flex-direction: column;
-    align-items: stretch;
+  .tab-item:last-child {
+    border-right: none;
   }
 
-  .settings-footer {
-    flex-direction: column;
-    align-items: stretch;
+  .tab-item:hover {
+    background: var(--gray-100);
+    color: var(--gray-900);
+  }
+
+  .tab-item.active {
+    background: var(--primary-50);
+    color: var(--primary-600);
+    border-bottom: 3px solid var(--primary-500);
+  }
+
+  .tab-content {
+    padding: var(--space-6);
+  }
+
+  .tab-pane {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Cloudera风格表单面板 */
+  .cloudera-form-panel {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-1);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: var(--space-6);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .panel-header h3 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+  }
+
+  .panel-header p {
+    margin: 0;
+    color: var(--gray-600);
+    font-size: var(--text-sm);
+  }
+
+  .cloudera-form {
+    padding: var(--space-6);
+  }
+
+  .cloudera-form .el-form-item {
+    margin-bottom: var(--space-6);
   }
 
   .cloudera-input-number {
+    width: 200px;
+  }
+
+  .input-suffix {
+    margin-left: var(--space-2);
+    color: var(--gray-600);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+  }
+
+  .cloudera-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .cloudera-radio {
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+
+  .cloudera-switch {
+    transform: scale(1.2);
+  }
+
+  .cloudera-textarea {
     width: 100%;
   }
-}
+
+  .form-help {
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    margin-top: var(--space-2);
+    line-height: var(--leading-relaxed);
+  }
+
+  .cloudera-descriptions {
+    margin-bottom: var(--space-6);
+  }
+
+  .cloudera-tag {
+    font-weight: var(--font-medium);
+  }
+
+  .system-actions {
+    display: flex;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .settings-footer {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-1);
+  }
+
+  /* 依次出现动画 */
+  .stagger-animation {
+    perspective: 1000px;
+  }
+
+  .stagger-item {
+    animation: staggerIn 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+    animation-delay: var(--stagger-delay, 0s);
+  }
+
+  .stagger-item:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: var(--elevation-4);
+  }
+
+  @keyframes staggerIn {
+    0% {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    60% {
+      opacity: 0.8;
+      transform: translateY(-5px) scale(1.02);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* 响应式调整 */
+  @media (max-width: 1200px) {
+    .cloudera-metrics-grid {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .cloudera-form {
+      padding: var(--space-4);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .settings-management {
+      padding: var(--space-4);
+    }
+
+    .header-section {
+      flex-direction: column;
+      gap: var(--space-4);
+      text-align: center;
+    }
+
+    .cloudera-metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .tab-nav {
+      flex-direction: column;
+    }
+
+    .tab-item {
+      border-right: none;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .tab-item:last-child {
+      border-bottom: none;
+    }
+
+    .cloudera-radio-group {
+      gap: var(--space-2);
+    }
+
+    .system-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .settings-footer {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .cloudera-input-number {
+      width: 100%;
+    }
+  }
 </style>

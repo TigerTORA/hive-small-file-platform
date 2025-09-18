@@ -47,19 +47,19 @@ export function useCharts() {
         formatter: function (params: any[]) {
           const date = params[0].axisValue
           let html = `<div style="padding: 8px;"><strong>${date}</strong><br/>`
-          
+
           params.forEach((param: any) => {
             const color = param.color
             const name = param.seriesName
             const value = param.value
-            
+
             if (name === '小文件占比') {
               html += `<div style="margin: 4px 0;"><span style="color: ${color};">●</span> ${name}: ${value}%</div>`
             } else {
               html += `<div style="margin: 4px 0;"><span style="color: ${color};">●</span> ${name}: ${monitoringStore.formatNumber(value)}</div>`
             }
           })
-          
+
           return html + '</div>'
         }
       },
@@ -252,19 +252,22 @@ export function useCharts() {
             width: 2,
             color: monitoringStore.getChartColor(0)
           },
-          areaStyle: type === 'line' ? {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: monitoringStore.getChartColor(0) + '40' },
-                { offset: 1, color: monitoringStore.getChartColor(0) + '00' }
-              ]
-            }
-          } : undefined,
+          areaStyle:
+            type === 'line'
+              ? {
+                  color: {
+                    type: 'linear',
+                    x: 0,
+                    y: 0,
+                    x2: 0,
+                    y2: 1,
+                    colorStops: [
+                      { offset: 0, color: monitoringStore.getChartColor(0) + '40' },
+                      { offset: 1, color: monitoringStore.getChartColor(0) + '00' }
+                    ]
+                  }
+                }
+              : undefined,
           itemStyle: {
             color: monitoringStore.getChartColor(0)
           }

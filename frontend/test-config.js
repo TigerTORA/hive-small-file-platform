@@ -11,7 +11,7 @@ const TEST_CONFIG = {
   // 页面路由
   routes: {
     clusters: '/#/clusters',
-    dashboard: '/#/dashboard', 
+    dashboard: '/#/dashboard',
     tables: '/#/tables',
     tasks: '/#/tasks',
     settings: '/#/settings',
@@ -28,7 +28,7 @@ const TEST_CONFIG = {
       hdfs_namenode_url: 'hdfs://localhost:9000',
       cluster_type: 'CDH'
     },
-    
+
     task: {
       task_name: 'AutoTest-Task-' + Date.now(),
       table_name: 'test_table',
@@ -54,7 +54,7 @@ const TEST_CONFIG = {
     loadingMask: '.el-loading-mask',
     notification: '.el-notification',
     messageBox: '.el-message-box',
-    
+
     // 集群管理页面
     clusters: {
       addButton: 'button:has-text("添加集群")',
@@ -152,11 +152,11 @@ const TEST_CONFIG = {
   // 测试选项
   options: {
     headless: false, // 显示浏览器窗口用于调试
-    slowMo: 100,     // 操作间延迟100ms
+    slowMo: 100, // 操作间延迟100ms
     screenshot: true, // 错误时截图
-    video: false,     // 不录制视频
+    video: false, // 不录制视频
     viewport: { width: 1280, height: 720 },
-    timeout: 10000    // 单个操作超时时间
+    timeout: 10000 // 单个操作超时时间
   },
 
   // 报告配置
@@ -167,6 +167,6 @@ const TEST_CONFIG = {
     screenshots: true,
     detailedLogs: true
   }
-};
+}
 
-module.exports = TEST_CONFIG;
+module.exports = TEST_CONFIG

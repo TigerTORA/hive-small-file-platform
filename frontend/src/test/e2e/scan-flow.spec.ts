@@ -16,7 +16,7 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
     scan_enabled: true,
     status: 'active',
     created_time: new Date().toISOString(),
-    updated_time: new Date().toISOString(),
+    updated_time: new Date().toISOString()
   }
 
   const taskId = 'e2e-task-1234'
@@ -36,7 +36,9 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
   })
 
   await page.route('**/api/v1/clusters/1/stats', async route => {
-    return route.fulfill({ json: { total_databases: 0, total_tables: 0, small_file_tables: 0, total_small_files: 0 } })
+    return route.fulfill({
+      json: { total_databases: 0, total_tables: 0, small_file_tables: 0, total_small_files: 0 }
+    })
   })
 
   await page.route('**/api/v1/clusters/1/databases', async route => {
@@ -53,46 +55,50 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
     // 列表/详情/日志统一返回已完成的任务
     const url = route.request().url()
     if (url.endsWith('/logs')) {
-      return route.fulfill({ json: [
-        { timestamp: new Date().toISOString(), level: 'INFO', message: '扫描完成' },
-      ] })
+      return route.fulfill({
+        json: [{ timestamp: new Date().toISOString(), level: 'INFO', message: '扫描完成' }]
+      })
     }
     if (url.includes('/scan-tasks/') && !url.endsWith('/logs')) {
-      return route.fulfill({ json: {
-        id: 1,
-        task_id: taskId,
-        cluster_id: 1,
-        task_type: 'cluster',
-        task_name: '扫描集群: Test Cluster',
-        status: 'completed',
-        total_items: 10,
-        completed_items: 10,
-        progress_percentage: 100,
-        estimated_remaining_seconds: 0,
-        total_tables_scanned: 10,
-        total_files_found: 100,
-        total_small_files: 20,
-        start_time: new Date().toISOString(),
-      } })
+      return route.fulfill({
+        json: {
+          id: 1,
+          task_id: taskId,
+          cluster_id: 1,
+          task_type: 'cluster',
+          task_name: '扫描集群: Test Cluster',
+          status: 'completed',
+          total_items: 10,
+          completed_items: 10,
+          progress_percentage: 100,
+          estimated_remaining_seconds: 0,
+          total_tables_scanned: 10,
+          total_files_found: 100,
+          total_small_files: 20,
+          start_time: new Date().toISOString()
+        }
+      })
     }
-    return route.fulfill({ json: [
-      {
-        id: 1,
-        task_id: taskId,
-        cluster_id: 1,
-        task_type: 'cluster',
-        task_name: '扫描集群: Test Cluster',
-        status: 'completed',
-        total_items: 10,
-        completed_items: 10,
-        progress_percentage: 100,
-        estimated_remaining_seconds: 0,
-        total_tables_scanned: 10,
-        total_files_found: 100,
-        total_small_files: 20,
-        start_time: new Date().toISOString(),
-      }
-    ] })
+    return route.fulfill({
+      json: [
+        {
+          id: 1,
+          task_id: taskId,
+          cluster_id: 1,
+          task_type: 'cluster',
+          task_name: '扫描集群: Test Cluster',
+          status: 'completed',
+          total_items: 10,
+          completed_items: 10,
+          progress_percentage: 100,
+          estimated_remaining_seconds: 0,
+          total_tables_scanned: 10,
+          total_files_found: 100,
+          total_small_files: 20,
+          start_time: new Date().toISOString()
+        }
+      ]
+    })
   })
 
   // 进入集群管理
@@ -100,11 +106,15 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
   await expect(page.getByText('集群管理')).toBeVisible()
 
   // 进入集群详情
-  await page.getByRole('button', { name: '进入集群详情' }).first().click().catch(async () => {
-    // 如果没有专门的按钮，点击卡片
-    const cards = page.locator('.cluster-card')
-    if (await cards.count()) await cards.first().click()
-  })
+  await page
+    .getByRole('button', { name: '进入集群详情' })
+    .first()
+    .click()
+    .catch(async () => {
+      // 如果没有专门的按钮，点击卡片
+      const cards = page.locator('.cluster-card')
+      if (await cards.count()) await cards.first().click()
+    })
   await expect(page.getByText('任务管理')).toBeVisible()
 
   // 触发扫描
@@ -126,4 +136,3 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
   await page.getByRole('button', { name: '查看日志' }).first().click()
   await expect(page.getByText('扫描完成')).toBeVisible()
 })
-

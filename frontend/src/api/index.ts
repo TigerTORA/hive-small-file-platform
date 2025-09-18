@@ -7,11 +7,11 @@ const api = axios.create({ baseURL, timeout: 30000 })
 
 // 请求拦截器
 api.interceptors.request.use(
-  (config) => {
+  config => {
     // TODO: 添加认证 token
     return config
   },
-  (error) => {
+  error => {
     return Promise.reject(error)
   }
 )
@@ -22,10 +22,10 @@ let __lastToastMsg = ''
 let __lastToastAt = 0
 
 api.interceptors.response.use(
-  (response) => {
+  response => {
     return response.data
   },
-  (error) => {
+  error => {
     const message = error?.response?.data?.detail || error?.message || '请求失败'
     const now = Date.now()
     if (!(message === __lastToastMsg && now - __lastToastAt < 3000)) {

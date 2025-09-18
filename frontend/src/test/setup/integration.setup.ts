@@ -14,13 +14,13 @@ config.global.plugins = [createTestingPinia({ createSpy: vi.fn })]
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
-  disconnect: vi.fn(),
+  disconnect: vi.fn()
 }))
 
 global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
-  disconnect: vi.fn(),
+  disconnect: vi.fn()
 }))
 
 // 模拟 matchMedia
@@ -34,8 +34,8 @@ Object.defineProperty(window, 'matchMedia', {
     removeListener: vi.fn(), // deprecated
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+    dispatchEvent: vi.fn()
+  }))
 })
 
 // 模拟 performance.memory（用于性能测试）
@@ -51,14 +51,14 @@ if (!performance.memory) {
 }
 
 // 模拟 requestIdleCallback
-global.requestIdleCallback = vi.fn().mockImplementation((callback) => {
+global.requestIdleCallback = vi.fn().mockImplementation(callback => {
   return setTimeout(() => callback({ didTimeout: false, timeRemaining: () => 50 }), 0)
 })
 
 global.cancelIdleCallback = vi.fn()
 
 // 模拟 requestAnimationFrame
-global.requestAnimationFrame = vi.fn().mockImplementation((callback) => {
+global.requestAnimationFrame = vi.fn().mockImplementation(callback => {
   return setTimeout(callback, 16)
 })
 
@@ -68,23 +68,40 @@ global.cancelAnimationFrame = vi.fn()
 if (typeof URL === 'undefined') {
   global.URL = class MockURL {
     constructor(public href: string) {}
-    toString() { return this.href }
+    toString() {
+      return this.href
+    }
   } as any
 }
 
 // 模拟 Blob 和 File API（用于文件上传测试）
 global.Blob = class MockBlob {
-  constructor(public parts: any[], public options: any = {}) {}
-  get size() { return 0 }
-  get type() { return this.options.type || '' }
-  slice() { return new MockBlob([], {}) }
+  constructor(
+    public parts: any[],
+    public options: any = {}
+  ) {}
+  get size() {
+    return 0
+  }
+  get type() {
+    return this.options.type || ''
+  }
+  slice() {
+    return new MockBlob([], {})
+  }
 } as any
 
 global.File = class MockFile extends global.Blob {
-  constructor(public parts: any[], public name: string, options: any = {}) {
+  constructor(
+    public parts: any[],
+    public name: string,
+    options: any = {}
+  ) {
     super(parts, options)
   }
-  get lastModified() { return Date.now() }
+  get lastModified() {
+    return Date.now()
+  }
 } as any
 
 // 模拟 localStorage 和 sessionStorage
@@ -95,7 +112,9 @@ const createStorageMock = () => {
     setItem: vi.fn((key: string, value: string) => storage.set(key, value)),
     removeItem: vi.fn((key: string) => storage.delete(key)),
     clear: vi.fn(() => storage.clear()),
-    get length() { return storage.size },
+    get length() {
+      return storage.size
+    },
     key: vi.fn((index: number) => Array.from(storage.keys())[index] || null)
   }
 }
@@ -124,7 +143,7 @@ global.fetch = vi.fn().mockImplementation((url: string, options: any = {}) => {
     arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
     headers: new Map(),
     url,
-    clone: () => ({ json: () => Promise.resolve({}) }),
+    clone: () => ({ json: () => Promise.resolve({}) })
   } as Response)
 })
 
@@ -266,15 +285,13 @@ expect.extend({
     const pass = received >= floor && received <= ceiling
     if (pass) {
       return {
-        message: () =>
-          `expected ${received} not to be within range ${floor} - ${ceiling}`,
-        pass: true,
+        message: () => `expected ${received} not to be within range ${floor} - ${ceiling}`,
+        pass: true
       }
     } else {
       return {
-        message: () =>
-          `expected ${received} to be within range ${floor} - ${ceiling}`,
-        pass: false,
+        message: () => `expected ${received} to be within range ${floor} - ${ceiling}`,
+        pass: false
       }
     }
   },
@@ -285,12 +302,12 @@ expect.extend({
     if (pass) {
       return {
         message: () => `expected ${received} not to be a valid timestamp`,
-        pass: true,
+        pass: true
       }
     } else {
       return {
         message: () => `expected ${received} to be a valid timestamp`,
-        pass: false,
+        pass: false
       }
     }
   },
@@ -299,15 +316,13 @@ expect.extend({
     const pass = received <= maxTime
     if (pass) {
       return {
-        message: () =>
-          `expected ${received}ms not to be within performance limit of ${maxTime}ms`,
-        pass: true,
+        message: () => `expected ${received}ms not to be within performance limit of ${maxTime}ms`,
+        pass: true
       }
     } else {
       return {
-        message: () =>
-          `expected ${received}ms to be within performance limit of ${maxTime}ms`,
-        pass: false,
+        message: () => `expected ${received}ms to be within performance limit of ${maxTime}ms`,
+        pass: false
       }
     }
   }
@@ -325,12 +340,7 @@ declare global {
 }
 
 // 导出通用模拟和工具
-export {
-  createStorageMock,
-  TestPerformanceMonitor,
-  waitFor,
-  flushPromises
-}
+export { createStorageMock, TestPerformanceMonitor, waitFor, flushPromises }
 
 // 日志配置（可选）
 if (process.env.VITEST_LOG_LEVEL === 'silent') {
