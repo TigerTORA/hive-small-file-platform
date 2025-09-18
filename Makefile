@@ -14,6 +14,7 @@ help:
 	@echo "  clean           Clean up cache files"
 	@echo "  build-images    Build production Docker images (backend/frontend)"
 	@echo "  release-save    Save images as tar files to dist/ (offline delivery)"
+	@echo "  dev             Run backend and frontend together (local)"
 
 setup:
 	@echo "Setting up project..."
@@ -38,6 +39,16 @@ check:
 	@echo "Running quality checks..."
 	cd backend && black --check . && isort -c . && flake8 . --count --statistics
 	cd frontend && npm run lint 2>/dev/null || echo "Frontend linting not available"
+
+dev:
+	@echo "Starting backend (8000) and frontend (Vite)..."
+	(\
+	  cd backend && uvicorn app.main:app --reload --port 8000 \
+	) & \
+	(\
+	  cd frontend && npm run dev \
+	) & \
+	wait
 
 test:
 	@echo "Running backend tests..."
