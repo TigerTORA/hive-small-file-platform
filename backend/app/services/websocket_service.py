@@ -118,7 +118,8 @@ class WebSocketManager:
         sent_count = 0
         failed_count = 0
 
-        for user_id, subscribed_topics in self.subscriptions.items():
+        # Iterate over a snapshot to avoid mutation during disconnect()
+        for user_id, subscribed_topics in list(self.subscriptions.items()):
             if topic in subscribed_topics and user_id in self.active_connections:
                 for websocket in self.active_connections[user_id].copy():
                     try:
