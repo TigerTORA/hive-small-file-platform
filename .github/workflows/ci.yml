@@ -10,7 +10,6 @@ jobs:
   backend:
     name: Backend · Python tests
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +39,7 @@ jobs:
           # TODO: restore --cov-fail-under=75 after stabilizing test suites
           python -m pytest \
             -m "not integration and not e2e and not slow" \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=1 -v \
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=60 -v \
             --maxfail=5 --tb=short
 
       - name: Upload backend coverage
