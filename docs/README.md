@@ -7,6 +7,12 @@
 - 生产编排（Docker Compose）：`docker-compose.prod.yml`
 - 迁移与环境配置：`MIGRATION_GUIDE.md`
 
+### 本地数据目录（工程化）
+- 推荐将本地 SQLite 数据文件放在 `backend/var/data/` 下：
+  - `.env` 示例：`DATABASE_URL=sqlite:///./var/data/hive_small_file_db.db`
+  - 该目录已被 `.gitignore` 忽略，避免数据入库；不同操作系统下路径一致，便于协作。
+  - 生产环境请使用 PostgreSQL/MySQL，并通过环境变量覆盖。
+
 ## 产品与需求（建议迁移到内部知识库，仅保留索引）
 - 功能清单：`FEATURE_LIST.md`（可迁移）
 - 功能跟踪：`FEATURE_TRACKER.md`（可迁移）
