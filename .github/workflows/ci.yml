@@ -85,6 +85,16 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Prettier formatting check (if configured)
+        working-directory: frontend
+        run: |
+          # Run only if project defines the script (opt-in)
+          if npm run -s lint:format >/dev/null 2>&1; then
+            npm run lint:format
+          else
+            echo "Prettier script not configured; skipping check"
+          fi
+
       - name: Run frontend unit tests
         working-directory: frontend
         run: npm run test:run
