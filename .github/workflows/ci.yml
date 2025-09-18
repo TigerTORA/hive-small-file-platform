@@ -36,6 +36,7 @@ jobs:
       - name: Run backend tests (CI)
         working-directory: backend
         run: |
+          export DATABASE_URL="sqlite:////tmp/hive_small_file_db.db"
           # Phase-in: expand unit subset and raise coverage gate to 60%
           python -m pytest \
             test_performance_baseline.py \
