@@ -110,7 +110,9 @@ jobs:
         env:
           CI: 'true'
         run: |
-          npx playwright test -c playwright.smoke.config.ts src/test/e2e/basic.spec.ts --project=chromium --reporter=line
+          npx http-server dist -p 4173 -a 127.0.0.1 >/dev/null 2>&1 &
+          sleep 3
+          npx playwright test -c playwright.smoke.noserver.config.ts src/test/e2e/basic.spec.ts --project=chromium --reporter=line
 
   status:
     name: Project status report
