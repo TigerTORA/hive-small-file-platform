@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Optional
 import pymysql
+from datetime import datetime
 from .base_connector import BaseMetastoreConnector
 
 logger = logging.getLogger(__name__)
@@ -371,5 +372,105 @@ class MySQLHiveMetastoreConnector(BaseMetastoreConnector):
         for key, value in format_mapping.items():
             if key in input_format_lower:
                 return value
-        
+
         return 'OTHER'
+
+    def get_table_access_info(self, database_name: Optional[str] = None, table_name: Optional[str] = None) -> List[Dict]:
+        """
+        获取表的访问时间信息
+        Args:
+            database_name: 数据库名称，为空则获取所有数据库
+            table_name: 表名称，为空则获取指定数据库的所有表
+        Returns:
+            包含访问时间信息的字典列表
+        """
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+
+        try:
+            with self._connection.cursor() as cursor:
+                base_query = """
+                SELECT
+                    d.NAME as database_name,
+                    t.TBL_NAME as table_name,
+                    t.LAST_ACCESS_TIME,
+                    t.CREATE_TIME
+                FROM TBLS t
+                JOIN DBS d ON t.DB_ID = d.DB_ID
+                """
+
+                conditions = []
+                params = []
+
+                if database_name:
+                    conditions.append("d.NAME = %s")
+                    params.append(database_name)
+
+                if table_name:
+                    conditions.append("t.TBL_NAME = %s")
+                    params.append(table_name)
+
+                if conditions:
+                    base_query += " WHERE " + " AND ".join(conditions)
+
+                cursor.execute(base_query, params)
+                results = cursor.fetchall()
+
+                return [
+                    {
+                        'database_name': row['database_name'],
+                        'table_name': row['table_name'],
+                        'last_access_time': self._timestamp_to_datetime(row['LAST_ACCESS_TIME']),
+                        'create_time': self._timestamp_to_datetime(row['CREATE_TIME'])
+                    }
+                    for row in results
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get table access info: {e}")
+            return []
+
+    def get_table_last_access_time(self, database_name: str, table_name: str) -> Optional[datetime]:
+        """
+        获取单个表的最后访问时间
+        Args:
+            database_name: 数据库名称
+            table_name: 表名称
+        Returns:
+            最后访问时间，如果没有记录则返回None
+        """
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+
+        try:
+            with self._connection.cursor() as cursor:
+                query = """
+                SELECT t.LAST_ACCESS_TIME
+                FROM TBLS t
+                JOIN DBS d ON t.DB_ID = d.DB_ID
+                WHERE d.NAME = %s AND t.TBL_NAME = %s
+                """
+                cursor.execute(query, (database_name, table_name))
+                result = cursor.fetchone()
+
+                if result and result['LAST_ACCESS_TIME']:
+                    return self._timestamp_to_datetime(result['LAST_ACCESS_TIME'])
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get last access time for {database_name}.{table_name}: {e}")
+            return None
+
+    def _timestamp_to_datetime(self, timestamp) -> Optional[datetime]:
+        """
+        将时间戳转换为datetime对象
+        Args:
+            timestamp: Unix时间戳
+        Returns:
+            datetime对象，如果时间戳无效则返回None
+        """
+        if timestamp and timestamp > 0:
+            try:
+                return datetime.fromtimestamp(timestamp)
+            except (ValueError, OSError) as e:
+                logger.warning(f"Invalid timestamp {timestamp}: {e}")
+                return None
+        return None

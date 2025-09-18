@@ -11,6 +11,10 @@ on:
         description: 'Only fix frontend (true/false)'
         required: false
         default: 'false'
+      enable_emergency_fix:
+        description: 'Allow emergency SSH/firewall fix steps (true/false)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -18,10 +22,12 @@ permissions:
 jobs:
   deploy:
     runs-on: [self-hosted, staging]
+    environment: staging
     env:
       VERSION: ${{ inputs.version }}
       IMAGE_OWNER: ${{ vars.IMAGE_OWNER || github.repository_owner }}
       FIX_FRONTEND_ONLY: ${{ inputs.fix_frontend_only }}
+      ENABLE_EMERGENCY_FIX: ${{ inputs.enable_emergency_fix }}
     steps:
       - name: Quick Frontend Fix (if requested)
         if: env.FIX_FRONTEND_ONLY == 'true'
@@ -339,6 +345,7 @@ jobs:
           curl -I http://127.0.0.1:8000/health 2>/dev/null || echo "本地API访问失败"
 
       - name: Emergency SSH and firewall fix
+        if: env.ENABLE_EMERGENCY_FIX == 'true'
         shell: bash
         run: |
           echo "=== 紧急SSH和防火墙修复 ==="
@@ -370,4 +377,3 @@ jobs:
           netstat -tlnp | grep ":22\|:80\|:8000" || echo "端口检查完成"
 
           echo "=== SSH修复完成，可以尝试重新连接 ==="
-

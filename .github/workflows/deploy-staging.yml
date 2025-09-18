@@ -14,12 +14,13 @@ permissions:
 jobs:
   deploy:
     name: SSH deploy to staging
+    environment: staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
+      - name: Deploy via SSH (key)
         uses: appleboy/ssh-action@v1.0.3
         env:
           VERSION: ${{ inputs.version }}
@@ -27,7 +28,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
           port: ${{ secrets.STAGING_PORT || 22 }}
           script: |
             set -euo pipefail
@@ -138,4 +139,3 @@ jobs:
             # Health checks
             echo 'API:'; curl -s http://127.0.0.1:8000/health || true
             echo 'FE:';  curl -s http://127.0.0.1/health || true
-

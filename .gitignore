@@ -53,6 +53,15 @@ PROJECT_STATUS.md
 dist/*.tar
 dist/*.tgz
 
+# Local dev timestamp file
+.last-dashboard-update
+
+# Nested duplicate frontend path (hygiene)
+frontend/frontend/
+
+# Frontend local logs (ensure ignored even if moved)
+frontend/api-server.log
+
 # IDE
 .vscode/
 .idea/

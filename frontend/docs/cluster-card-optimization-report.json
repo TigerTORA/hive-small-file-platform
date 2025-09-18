@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-09-17T04:54:07.941Z",
+  "verificationResults": {
+    "cardHeight": {
+      "target": "240px (从300px优化)",
+      "actual": [294.3046875],
+      "status": "REVIEW"
+    },
+    "nameAndStatusLayout": {
+      "target": "集群名称和连接状态指示器同行显示",
+      "status": "REVIEW"
+    },
+    "statsLayout": {
+      "target": "统计信息水平紧凑布局",
+      "status": "REVIEW"
+    },
+    "operationsOptimization": {
+      "target": "删除按钮移至下拉菜单，连接测试文案优化",
+      "status": "REVIEW"
+    }
+  },
+  "screenshots": [
+    "/Users/luohu/new_project/hive-small-file-platform/frontend/docs/screenshots/cluster-cards-optimization-verification.png"
+  ],
+  "recommendations": [
+    "建议调整卡片高度到240px左右，当前高度偏离目标",
+    "建议优化集群名称行布局，确保名称和状态指示器在同一行",
+    "建议优化统计信息布局，使用水平紧凑排列",
+    "建议将删除按钮移到下拉菜单，优化操作逻辑"
+  ]
+}

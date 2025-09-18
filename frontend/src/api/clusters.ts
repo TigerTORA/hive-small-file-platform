@@ -82,5 +82,109 @@ export const clustersApi = {
   // 测试连接配置（不创建集群）
   testConnectionConfig(cluster: ClusterCreate): Promise<any> {
     return api.post('/clusters/test-connection', cluster)
+  },
+
+  // 获取集群统计数据
+  getStats(id: number): Promise<{
+    total_databases: number
+    total_tables: number
+    small_file_tables: number
+    total_small_files: number
+  }> {
+    return api.get(`/clusters/${id}/stats`)
+  },
+
+  // 增强连接测试
+  testConnectionEnhanced(
+    id: number,
+    options?: {
+      connectionTypes?: string[]
+      forceRefresh?: boolean
+    }
+  ): Promise<{
+    cluster_id: number
+    cluster_name: string
+    test_mode: string
+    overall_status: string
+    total_test_time_ms: number
+    tests: Record<string, {
+      status: string
+      response_time_ms: number
+      failure_type?: string
+      error_message?: string
+      attempt_count: number
+      retry_count: number
+    }>
+    logs: Array<{level: string, message: string}>
+    suggestions: string[]
+  }> {
+    const params = new URLSearchParams()
+    if (options?.forceRefresh) {
+      params.append('force_refresh', 'true')
+    }
+    if (options?.connectionTypes) {
+      options.connectionTypes.forEach(type => params.append('connection_types', type))
+    }
+
+    const url = `/clusters/${id}/test-enhanced${params.toString() ? `?${params.toString()}` : ''}`
+    return api.post(url)
+  },
+
+  // 获取连接统计
+  getConnectionStatistics(id: number, hours: number = 24): Promise<{
+    cluster_id: number
+    cluster_name: string
+    total_tests: number
+    successful_tests: number
+    success_rate: number
+    average_response_time_ms: number
+    failure_types: Record<string, number>
+    period_hours: number
+  }> {
+    return api.get(`/clusters/${id}/connection-statistics?hours=${hours}`)
+  },
+
+  // 获取连接历史
+  getConnectionHistory(id: number, limit: number = 50): Promise<{
+    cluster_id: number
+    cluster_name: string
+    total_records: number
+    history: Array<{
+      connection_type: string
+      status: string
+      response_time_ms: number
+      failure_type?: string
+      error_message?: string
+      attempt_count: number
+      retry_count: number
+      timestamp: string
+    }>
+  }> {
+    return api.get(`/clusters/${id}/connection-history?limit=${limit}`)
+  },
+
+  // 获取集群状态
+  getStatus(id: number): Promise<{
+    cluster_id: number
+    cluster_name: string
+    status: string
+    health_status: string
+    last_health_check?: string
+    connections: Record<string, {
+      status: string
+      last_check?: string
+      cached: boolean
+    }>
+  }> {
+    return api.get(`/clusters/${id}/status`)
+  },
+
+  // 清除连接缓存
+  clearConnectionCache(id: number): Promise<{
+    cluster_id: number
+    cluster_name: string
+    message: string
+  }> {
+    return api.delete(`/clusters/${id}/cache`)
   }
 }

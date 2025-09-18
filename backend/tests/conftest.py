@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.config.database import Base, get_db
-from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog
+from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog, ClusterStatusHistory, ScanTask, ScanTaskLogDB
 
 # Test database URL (SQLite in memory)
 TEST_DATABASE_URL = "sqlite:///./test.db"

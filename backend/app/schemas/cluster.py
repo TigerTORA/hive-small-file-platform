@@ -53,8 +53,10 @@ class ClusterUpdate(BaseModel):
 class ClusterResponse(ClusterBase):
     id: int
     status: str
+    health_status: Optional[str] = None
+    last_health_check: Optional[datetime] = None
     created_time: datetime
     updated_time: datetime
-    
+
     class Config:
         from_attributes = True

@@ -30,6 +30,18 @@ export interface TableMetric {
   // Scan metadata
   scan_time: string
   scan_duration: number
+
+  // Cold data fields
+  is_cold_data?: boolean
+  days_since_last_access?: number
+  last_access_time?: string
+  archive_status?: string
+  archive_location?: string
+  archived_at?: string
+
+  // UI state fields
+  archiving?: boolean
+  restoring?: boolean
 }
 
 export interface SmallFileSummary {
@@ -164,5 +176,54 @@ export const tablesApi = {
       table_name: tableName
     }
     return api.post('/tables/scan', data, { params: { strict_real: strictReal } })
+  },
+
+  // 冷数据扫描
+  scanColdData(clusterId: number, coldDaysThreshold = 90, databaseName?: string): Promise<any> {
+    const params: any = { cold_days_threshold: coldDaysThreshold }
+    if (databaseName) {
+      params.database_name = databaseName
+    }
+    return api.post(`/tables/scan-cold-data/${clusterId}`, null, { params })
+  },
+
+  // 获取冷数据摘要
+  getColdDataSummary(clusterId: number): Promise<any> {
+    return api.get(`/tables/cold-data-summary/${clusterId}`)
+  },
+
+  // 获取冷数据表列表
+  getColdDataList(clusterId: number, page = 1, pageSize = 20): Promise<any> {
+    return api.get(`/tables/cold-data-list/${clusterId}`, {
+      params: { page, page_size: pageSize }
+    })
+  },
+
+  // 归档表
+  archiveTable(clusterId: number, databaseName: string, tableName: string, force = false): Promise<any> {
+    const params: any = { force }
+    return api.post(`/tables/archive-table/${clusterId}/${databaseName}/${tableName}`, null, { params })
+  },
+
+  // 恢复表
+  restoreTable(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+    return api.post(`/tables/restore-table/${clusterId}/${databaseName}/${tableName}`)
+  },
+
+  // 获取表归档状态
+  getArchiveStatus(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+    return api.get(`/tables/archive-status/${clusterId}/${databaseName}/${tableName}`)
+  },
+
+  // 获取已归档表列表
+  getArchivedTables(clusterId: number, limit = 100): Promise<any> {
+    return api.get(`/tables/archived-tables/${clusterId}`, {
+      params: { limit }
+    })
+  },
+
+  // 获取归档统计信息
+  getArchiveStatistics(clusterId: number): Promise<any> {
+    return api.get(`/tables/archive-statistics/${clusterId}`)
   }
 }

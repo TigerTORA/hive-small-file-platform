@@ -2,6 +2,11 @@ name: Emergency SSH Fix
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type YES-EMERGENCY to confirm you understand the risks"
+        required: true
+        default: "NO"
 
 permissions:
   contents: read
@@ -10,6 +15,13 @@ jobs:
   fix-ssh:
     runs-on: [self-hosted, staging]
     steps:
+      - name: Confirm manual approval
+        shell: bash
+        run: |
+          if [ "${{ inputs.confirm }}" != "YES-EMERGENCY" ]; then
+            echo "Refusing to proceed without explicit confirmation." >&2
+            exit 1
+          fi
       - name: Emergency SSH restoration
         shell: bash
         run: |

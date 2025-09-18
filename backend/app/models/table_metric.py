@@ -37,7 +37,15 @@ class TableMetric(Base):
     # Scan metadata
     scan_time = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     scan_duration = Column(Float, default=0.0)  # seconds
-    
+
+    # Cold data archive fields
+    last_access_time = Column(DateTime(timezone=True), nullable=True, index=True)
+    days_since_last_access = Column(Integer, nullable=True)
+    is_cold_data = Column(Integer, default=0)  # boolean as int for compatibility
+    archive_status = Column(String(50), default='active', index=True)  # active, archived, restored
+    archive_location = Column(String(1000), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
     # Relationships
     cluster = relationship("Cluster", back_populates="table_metrics")
     partition_metrics = relationship("PartitionMetric", back_populates="table_metric", lazy="dynamic")

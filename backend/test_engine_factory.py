@@ -14,6 +14,8 @@ with patch.dict('sys.modules', {
     'app.engines.base_engine': MagicMock(),
 }):
     from app.engines.engine_factory import MergeEngineFactory
+    # 导入所有模型以确保SQLAlchemy关系正确注册
+    import app.models  # noqa: F401 - 这将导入所有模型
     from app.models.cluster import Cluster
     from app.models.merge_task import MergeTask
 
