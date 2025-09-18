@@ -6,7 +6,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.api import clusters, dashboard, errors
 from app.api import scan_tasks as scan_tasks_api
-from app.api import tables, tasks, websocket
+from app.api import tables_refactored, tasks, websocket
 from app.config.database import Base, engine
 from app.config.settings import settings
 from app.models import (
@@ -64,7 +64,7 @@ app.add_middleware(
 )
 
 app.include_router(clusters.router, prefix="/api/v1/clusters", tags=["clusters"])
-app.include_router(tables.router, prefix="/api/v1/tables", tags=["tables"])
+app.include_router(tables_refactored.router, prefix="/api/v1/tables", tags=["tables"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(errors.router, prefix="/api/v1/errors", tags=["errors"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])

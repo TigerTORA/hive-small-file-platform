@@ -22,7 +22,11 @@ router = APIRouter()
 @router.post("/scan-cold-data/{cluster_id}")
 async def scan_cold_data(
     cluster_id: int,
-    cold_threshold_days: int = Query(90, description="冷数据阈值天数"),
+    # 兼容旧参数名 cold_days_threshold，同时支持 cold_threshold_days
+    cold_days_threshold: Optional[int] = Query(
+        None, description="冷数据阈值天数（兼容参数名）"
+    ),
+    cold_threshold_days: Optional[int] = Query(None, description="冷数据阈值天数"),
     database_name: Optional[str] = Query(None, description="指定数据库名称"),
     db: Session = Depends(get_db),
 ):
@@ -34,8 +38,14 @@ async def scan_cold_data(
     try:
         cold_scanner = SimpleColdDataScanner(cluster)
 
+        threshold = (
+            cold_days_threshold
+            if cold_days_threshold is not None
+            else (cold_threshold_days if cold_threshold_days is not None else 90)
+        )
+
         scan_result = cold_scanner.scan_cold_data(
-            threshold_days=cold_threshold_days, database_filter=database_name
+            threshold_days=threshold, database_filter=database_name
         )
 
         # 更新数据库中的冷数据标记
@@ -72,7 +82,7 @@ async def scan_cold_data(
             "message": "Cold data scan completed",
             "cluster_id": cluster_id,
             "scan_config": {
-                "threshold_days": cold_threshold_days,
+                "threshold_days": threshold,
                 "database_filter": database_name,
             },
             "scan_result": {
