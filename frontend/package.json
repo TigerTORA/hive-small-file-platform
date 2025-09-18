@@ -7,6 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
+    "format": "prettier --write .",
+    "lint:format": "prettier --check .",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -36,6 +38,7 @@
     "vue3-grid-layout-next": "^1.0.7"
   },
   "devDependencies": {
+    "prettier": "^3.3.3",
     "@percy/cli": "^1.31.2",
     "@percy/playwright": "^1.0.9",
     "@pinia/testing": "^0.1.7",
