@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
+    "lint": "npm run type-check && npm run lint:format",
     "format": "prettier --write .",
     "lint:format": "prettier --check .",
     "test": "vitest",
