@@ -51,22 +51,22 @@ const defaultFeatures: FeatureFlags = {
 
 // 环境变量覆盖配置
 const envOverrides: Partial<FeatureFlags> = {
-  realtimeMonitoring: getEnvBoolean('VITE_FEATURE_REALTIME_MONITORING'),
-  advancedCharts: getEnvBoolean('VITE_FEATURE_ADVANCED_CHARTS'),
-  demoMode: getEnvBoolean('VITE_FEATURE_DEMO_MODE'),
-  exportReports: getEnvBoolean('VITE_FEATURE_EXPORT_REPORTS'),
-  fullscreenMode: getEnvBoolean('VITE_FEATURE_FULLSCREEN_MODE'),
-  darkTheme: getEnvBoolean('VITE_FEATURE_DARK_THEME'),
-  performanceMonitoring: getEnvBoolean('VITE_FEATURE_PERFORMANCE_MONITORING'),
-  smartRecommendations: getEnvBoolean('VITE_FEATURE_SMART_RECOMMENDATIONS'),
-  batchOperations: getEnvBoolean('VITE_FEATURE_BATCH_OPERATIONS'),
-  websocketUpdates: getEnvBoolean('VITE_FEATURE_WEBSOCKET_UPDATES'),
+  realtimeMonitoring: getEnvBoolean("VITE_FEATURE_REALTIME_MONITORING"),
+  advancedCharts: getEnvBoolean("VITE_FEATURE_ADVANCED_CHARTS"),
+  demoMode: getEnvBoolean("VITE_FEATURE_DEMO_MODE"),
+  exportReports: getEnvBoolean("VITE_FEATURE_EXPORT_REPORTS"),
+  fullscreenMode: getEnvBoolean("VITE_FEATURE_FULLSCREEN_MODE"),
+  darkTheme: getEnvBoolean("VITE_FEATURE_DARK_THEME"),
+  performanceMonitoring: getEnvBoolean("VITE_FEATURE_PERFORMANCE_MONITORING"),
+  smartRecommendations: getEnvBoolean("VITE_FEATURE_SMART_RECOMMENDATIONS"),
+  batchOperations: getEnvBoolean("VITE_FEATURE_BATCH_OPERATIONS"),
+  websocketUpdates: getEnvBoolean("VITE_FEATURE_WEBSOCKET_UPDATES"),
 };
 
 function getEnvBoolean(key: string): boolean | undefined {
   const value = import.meta.env[key];
   if (value === undefined) return undefined;
-  return value === 'true' || value === '1';
+  return value === "true" || value === "1";
 }
 
 // 运行时特性开关状态
@@ -77,7 +77,7 @@ function mergeFeatures(): FeatureFlags {
   return {
     ...defaultFeatures,
     ...Object.fromEntries(
-      Object.entries(envOverrides).filter(([, value]) => value !== undefined)
+      Object.entries(envOverrides).filter(([, value]) => value !== undefined),
     ),
     ...runtimeFeatures,
   };
@@ -88,7 +88,7 @@ export const featureFlags: FeatureFlags = new Proxy({} as FeatureFlags, {
   get(target, prop: string) {
     const currentFeatures = mergeFeatures();
     return currentFeatures[prop as keyof FeatureFlags];
-  }
+  },
 });
 
 // 特性开关管理器
@@ -126,13 +126,13 @@ export class FeatureManager {
   // 批量设置特性
   static setFeatures(features: Partial<FeatureFlags>): void {
     runtimeFeatures = { ...runtimeFeatures, ...features };
-    console.log('[FeatureFlags] Updated features:', features);
+    console.log("[FeatureFlags] Updated features:", features);
   }
 
   // 重置到默认配置
   static reset(): void {
     runtimeFeatures = {};
-    console.log('[FeatureFlags] Reset to default configuration');
+    console.log("[FeatureFlags] Reset to default configuration");
   }
 
   // 导出当前配置
@@ -146,7 +146,7 @@ export class FeatureManager {
       const features = JSON.parse(config) as Partial<FeatureFlags>;
       this.setFeatures(features);
     } catch (error) {
-      console.error('[FeatureFlags] Failed to import config:', error);
+      console.error("[FeatureFlags] Failed to import config:", error);
     }
   }
 }
@@ -220,5 +220,7 @@ if (import.meta.env.DEV) {
   (window as any).featureFlags = featureFlags;
   (window as any).FeatureManager = FeatureManager;
   (window as any).applyPreset = applyPreset;
-  console.log('[FeatureFlags] Development mode: feature flags available in window object');
+  console.log(
+    "[FeatureFlags] Development mode: feature flags available in window object",
+  );
 }

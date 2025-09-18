@@ -8,7 +8,11 @@
 ============================================ */
 
 .cloudera-sidebar {
-  background: linear-gradient(180deg, var(--nav-bg-start) 0%, var(--nav-bg-end) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--nav-bg-start) 0%,
+    var(--nav-bg-end) 100%
+  );
   border-right: 1px solid var(--nav-border);
   width: 240px;
   height: 100vh;
@@ -35,7 +39,11 @@
 .sidebar-brand .logo {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-500) 0%,
+    var(--primary-600) 100%
+  );
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -49,21 +57,31 @@
 }
 
 .sidebar-brand .logo::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -2px;
   left: -2px;
   right: -2px;
   bottom: -2px;
-  background: linear-gradient(45deg, var(--primary-400), var(--primary-600), var(--primary-400));
+  background: linear-gradient(
+    45deg,
+    var(--primary-400),
+    var(--primary-600),
+    var(--primary-400)
+  );
   border-radius: var(--radius-lg);
   z-index: -1;
   animation: logoGlow 3s ease-in-out infinite;
 }
 
 @keyframes logoGlow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .sidebar-brand .brand-text {
@@ -132,7 +150,7 @@
 }
 
 .nav-link.active::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 50%;
@@ -273,13 +291,15 @@
 }
 
 .cloudera-metric-card {
-  background: #ffffff !important;  /* 强制纯白背景 */
+  background: #ffffff !important; /* 强制纯白背景 */
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-xl);
   padding: var(--space-8);
   position: relative;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.1);
   min-height: 160px;
   display: flex;
   flex-direction: column;
@@ -288,9 +308,11 @@
 
 .cloudera-metric-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.05),
+    0 2px 4px rgba(0, 0, 0, 0.1);
   border-color: var(--gray-300);
-  background: #ffffff !important;  /* 保持纯白 */
+  background: #ffffff !important; /* 保持纯白 */
 }
 
 .metric-header {
@@ -417,7 +439,7 @@
 }
 
 .cloudera-table .el-table__body tr:hover::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 0;
@@ -457,12 +479,20 @@
 }
 
 .cloudera-btn.primary {
-  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-500) 0%,
+    var(--primary-600) 100%
+  );
   color: white;
 }
 
 .cloudera-btn.primary:hover {
-  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-600) 0%,
+    var(--primary-700) 100%
+  );
 }
 
 .cloudera-btn.secondary {
@@ -477,17 +507,29 @@
 }
 
 .cloudera-btn.success {
-  background: linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--success-500) 0%,
+    var(--success-600) 100%
+  );
   color: white;
 }
 
 .cloudera-btn.warning {
-  background: linear-gradient(135deg, var(--warning-500) 0%, var(--warning-600) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--warning-500) 0%,
+    var(--warning-600) 100%
+  );
   color: white;
 }
 
 .cloudera-btn.danger {
-  background: linear-gradient(135deg, var(--danger-500) 0%, var(--danger-600) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--danger-500) 0%,
+    var(--danger-600) 100%
+  );
   color: white;
 }
 
@@ -602,12 +644,24 @@
   transform: translateY(20px);
 }
 
-.stagger-item:nth-child(1) { animation-delay: 0.1s; }
-.stagger-item:nth-child(2) { animation-delay: 0.2s; }
-.stagger-item:nth-child(3) { animation-delay: 0.3s; }
-.stagger-item:nth-child(4) { animation-delay: 0.4s; }
-.stagger-item:nth-child(5) { animation-delay: 0.5s; }
-.stagger-item:nth-child(6) { animation-delay: 0.6s; }
+.stagger-item:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.stagger-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.stagger-item:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.stagger-item:nth-child(4) {
+  animation-delay: 0.4s;
+}
+.stagger-item:nth-child(5) {
+  animation-delay: 0.5s;
+}
+.stagger-item:nth-child(6) {
+  animation-delay: 0.6s;
+}
 
 @keyframes staggerIn {
   to {

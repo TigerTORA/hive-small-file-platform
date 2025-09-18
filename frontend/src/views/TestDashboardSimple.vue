@@ -3,13 +3,16 @@
     <h1>测试中心 - 简化版本</h1>
     <p>这是一个测试页面，用于验证路由是否正常工作。</p>
     <p>如果您能看到这个页面，说明路由配置正确。</p>
-    
+
     <div class="test-info">
       <h2>测试状态</h2>
-      <p>API服务: <span :class="apiStatus.connected ? 'success' : 'error'">
-        {{ apiStatus.connected ? '已连接' : '未连接' }}
-      </span></p>
-      <p>测试数据: {{ testData ? '已加载' : '加载中...' }}</p>
+      <p>
+        API服务:
+        <span :class="apiStatus.connected ? 'success' : 'error'">
+          {{ apiStatus.connected ? "已连接" : "未连接" }}
+        </span>
+      </p>
+      <p>测试数据: {{ testData ? "已加载" : "加载中..." }}</p>
     </div>
 
     <div class="actions">
@@ -25,48 +28,48 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted } from "vue";
 
 // 响应式数据
-const apiStatus = ref({ connected: false })
-const testData = ref(null)
+const apiStatus = ref({ connected: false });
+const testData = ref(null);
 
 // 测试API连接
 const testAPI = async () => {
   try {
-    const response = await fetch('http://localhost:3001/api/health')
+    const response = await fetch("http://localhost:3001/api/health");
     if (response.ok) {
-      apiStatus.value.connected = true
-      console.log('API连接成功')
+      apiStatus.value.connected = true;
+      console.log("API连接成功");
     } else {
-      throw new Error('API响应异常')
+      throw new Error("API响应异常");
     }
   } catch (error) {
-    apiStatus.value.connected = false
-    console.error('API连接失败:', error)
+    apiStatus.value.connected = false;
+    console.error("API连接失败:", error);
   }
-}
+};
 
 // 加载测试数据
 const loadData = async () => {
   try {
-    const response = await fetch('http://localhost:3001/api/test/overview')
+    const response = await fetch("http://localhost:3001/api/test/overview");
     if (response.ok) {
-      const result = await response.json()
-      testData.value = result.data
-      console.log('测试数据加载成功:', result.data)
+      const result = await response.json();
+      testData.value = result.data;
+      console.log("测试数据加载成功:", result.data);
     } else {
-      throw new Error('数据加载失败')
+      throw new Error("数据加载失败");
     }
   } catch (error) {
-    console.error('数据加载失败:', error)
+    console.error("数据加载失败:", error);
   }
-}
+};
 
 // 组件挂载时测试连接
 onMounted(() => {
-  testAPI()
-})
+  testAPI();
+});
 </script>
 
 <style scoped>

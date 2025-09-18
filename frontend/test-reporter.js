@@ -1,6 +1,6 @@
-const fs = require('fs');
-const path = require('path');
-const TEST_CONFIG = require('./test-config.js');
+const fs = require("fs");
+const path = require("path");
+const TEST_CONFIG = require("./test-config.js");
 
 class TestReporter {
   constructor() {
@@ -12,10 +12,10 @@ class TestReporter {
     if (!fs.existsSync(this.outputDir)) {
       fs.mkdirSync(this.outputDir, { recursive: true });
     }
-    
+
     // 创建子目录
-    const subdirs = ['screenshots', 'reports', 'logs'];
-    subdirs.forEach(dir => {
+    const subdirs = ["screenshots", "reports", "logs"];
+    subdirs.forEach((dir) => {
       const fullPath = path.join(this.outputDir, dir);
       if (!fs.existsSync(fullPath)) {
         fs.mkdirSync(fullPath, { recursive: true });
@@ -24,32 +24,32 @@ class TestReporter {
   }
 
   async generateComprehensiveReport(testResults) {
-    console.log('📊 生成综合测试报告...');
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    console.log("📊 生成综合测试报告...");
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const reportBaseName = `test-report-${timestamp}`;
-    
+
     // 生成多种格式的报告
     const reports = {
       html: await this.generateHtmlReport(testResults, reportBaseName),
       json: await this.generateJsonReport(testResults, reportBaseName),
       xml: await this.generateXmlReport(testResults, reportBaseName),
-      csv: await this.generateCsvReport(testResults, reportBaseName)
+      csv: await this.generateCsvReport(testResults, reportBaseName),
     };
-    
+
     // 生成报告索引
     await this.generateReportIndex(reports, testResults);
-    
-    console.log('✅ 所有格式的测试报告已生成');
+
+    console.log("✅ 所有格式的测试报告已生成");
     return reports.html;
   }
 
   async generateHtmlReport(testResults, baseName) {
-    const htmlPath = path.join(this.outputDir, 'reports', `${baseName}.html`);
-    
+    const htmlPath = path.join(this.outputDir, "reports", `${baseName}.html`);
+
     const htmlContent = this.buildHtmlContent(testResults);
-    fs.writeFileSync(htmlPath, htmlContent, 'utf8');
-    
+    fs.writeFileSync(htmlPath, htmlContent, "utf8");
+
     console.log(`📄 HTML报告: ${htmlPath}`);
     return htmlPath;
   }
@@ -57,8 +57,11 @@ class TestReporter {
   buildHtmlContent(testResults) {
     const timestamp = new Date().toLocaleString();
     const overall = testResults.overall;
-    const successRate = overall.total > 0 ? ((overall.passed / overall.total) * 100).toFixed(1) : 0;
-    
+    const successRate =
+      overall.total > 0
+        ? ((overall.passed / overall.total) * 100).toFixed(1)
+        : 0;
+
     return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -114,7 +117,7 @@ class TestReporter {
             ${this.buildSuitesHtml(testResults.suites)}
         </div>
 
-        ${testResults.errors.length > 0 ? this.buildErrorsHtml(testResults.errors) : ''}
+        ${testResults.errors.length > 0 ? this.buildErrorsHtml(testResults.errors) : ""}
 
         <div class="recommendations">
             <h2>💡 建议和下一步</h2>
@@ -156,11 +159,18 @@ class TestReporter {
   }
 
   buildSuitesHtml(suites) {
-    return Object.entries(suites).map(([key, suite]) => {
-      const successRate = suite.total > 0 ? ((suite.passed / suite.total) * 100).toFixed(1) : 0;
-      const statusIcon = suite.status === 'PASS' ? '✅' : suite.status === 'FAIL' ? '❌' : '⚠️';
-      
-      return `
+    return Object.entries(suites)
+      .map(([key, suite]) => {
+        const successRate =
+          suite.total > 0 ? ((suite.passed / suite.total) * 100).toFixed(1) : 0;
+        const statusIcon =
+          suite.status === "PASS"
+            ? "✅"
+            : suite.status === "FAIL"
+              ? "❌"
+              : "⚠️";
+
+        return `
         <div class="suite-card ${suite.status.toLowerCase()}">
             <div class="suite-header">
                 <h3>${statusIcon} ${suite.name}</h3>
@@ -171,40 +181,41 @@ class TestReporter {
                 </div>
             </div>
             
-            ${suite.details ? this.buildSuiteDetailsHtml(suite.details) : ''}
+            ${suite.details ? this.buildSuiteDetailsHtml(suite.details) : ""}
             
-            ${suite.error ? `<div class="error-message">❌ 错误: ${suite.error}</div>` : ''}
+            ${suite.error ? `<div class="error-message">❌ 错误: ${suite.error}</div>` : ""}
         </div>`;
-    }).join('');
+      })
+      .join("");
   }
 
   buildSuiteDetailsHtml(details) {
-    if (!details || details.length === 0) return '';
-    
-    const failedTests = details.filter(test => test.status === 'FAIL');
-    const passedTests = details.filter(test => test.status === 'PASS');
-    
+    if (!details || details.length === 0) return "";
+
+    const failedTests = details.filter((test) => test.status === "FAIL");
+    const passedTests = details.filter((test) => test.status === "PASS");
+
     let html = '<div class="suite-details">';
-    
+
     if (failedTests.length > 0) {
       html += '<div class="failed-tests"><h4>❌ 失败的测试:</h4><ul>';
-      failedTests.forEach(test => {
+      failedTests.forEach((test) => {
         html += `<li>${test.name}: ${test.details}</li>`;
       });
-      html += '</ul></div>';
+      html += "</ul></div>";
     }
-    
+
     if (passedTests.length > 5) {
       html += `<div class="passed-summary">✅ ${passedTests.length} 个测试通过</div>`;
     } else if (passedTests.length > 0) {
       html += '<div class="passed-tests"><h4>✅ 通过的测试:</h4><ul>';
-      passedTests.forEach(test => {
+      passedTests.forEach((test) => {
         html += `<li>${test.name}</li>`;
       });
-      html += '</ul></div>';
+      html += "</ul></div>";
     }
-    
-    html += '</div>';
+
+    html += "</div>";
     return html;
   }
 
@@ -213,24 +224,31 @@ class TestReporter {
       <div class="errors-section">
         <h2>❌ 错误详情</h2>
         <div class="errors-list">
-          ${errors.map(error => `
+          ${errors
+            .map(
+              (error) => `
             <div class="error-item">
               <div class="error-type">${error.type}</div>
               <div class="error-message">${error.message}</div>
               <div class="error-time">${error.timestamp}</div>
             </div>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </div>
       </div>`;
   }
 
   buildRecommendationsHtml(testResults) {
     const overall = testResults.overall;
-    const successRate = overall.total > 0 ? ((overall.passed / overall.total) * 100) : 0;
-    const failedSuites = Object.values(testResults.suites).filter(suite => suite.status === 'FAIL');
-    
+    const successRate =
+      overall.total > 0 ? (overall.passed / overall.total) * 100 : 0;
+    const failedSuites = Object.values(testResults.suites).filter(
+      (suite) => suite.status === "FAIL",
+    );
+
     let recommendations = '<div class="recommendations-content">';
-    
+
     if (successRate === 100) {
       recommendations += `
         <div class="recommendation success">
@@ -276,18 +294,18 @@ class TestReporter {
           </ul>
         </div>`;
     }
-    
+
     if (failedSuites.length > 0) {
       recommendations += `
         <div class="failed-suites-list">
           <h3>🔧 需要修复的测试套件：</h3>
           <ol>
-            ${failedSuites.map(suite => `<li>${suite.name}</li>`).join('')}
+            ${failedSuites.map((suite) => `<li>${suite.name}</li>`).join("")}
           </ol>
         </div>`;
     }
-    
-    recommendations += '</div>';
+
+    recommendations += "</div>";
     return recommendations;
   }
 
@@ -716,92 +734,92 @@ class TestReporter {
   }
 
   async generateJsonReport(testResults, baseName) {
-    const jsonPath = path.join(this.outputDir, 'reports', `${baseName}.json`);
-    
+    const jsonPath = path.join(this.outputDir, "reports", `${baseName}.json`);
+
     const jsonData = {
       metadata: {
         generatedAt: new Date().toISOString(),
-        platform: 'Hive小文件治理平台',
-        version: '1.0.0'
+        platform: "Hive小文件治理平台",
+        version: "1.0.0",
       },
       summary: testResults.overall,
       suites: testResults.suites,
       errors: testResults.errors,
-      screenshots: testResults.screenshots || []
+      screenshots: testResults.screenshots || [],
     };
-    
-    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
+
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), "utf8");
     console.log(`📄 JSON报告: ${jsonPath}`);
     return jsonPath;
   }
 
   async generateXmlReport(testResults, baseName) {
-    const xmlPath = path.join(this.outputDir, 'reports', `${baseName}.xml`);
-    
+    const xmlPath = path.join(this.outputDir, "reports", `${baseName}.xml`);
+
     const xmlContent = this.buildXmlContent(testResults);
-    fs.writeFileSync(xmlPath, xmlContent, 'utf8');
-    
+    fs.writeFileSync(xmlPath, xmlContent, "utf8");
+
     console.log(`📄 XML报告: ${xmlPath}`);
     return xmlPath;
   }
 
   buildXmlContent(testResults) {
     const timestamp = new Date().toISOString();
-    
+
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<testsuites>\n';
-    
+    xml += "<testsuites>\n";
+
     Object.entries(testResults.suites).forEach(([key, suite]) => {
       xml += `  <testsuite name="${this.escapeXml(suite.name)}" `;
       xml += `tests="${suite.total}" `;
       xml += `failures="${suite.failed}" `;
       xml += `time="${(suite.duration / 1000).toFixed(3)}" `;
       xml += `timestamp="${timestamp}">\n`;
-      
+
       if (suite.details) {
-        suite.details.forEach(test => {
+        suite.details.forEach((test) => {
           xml += `    <testcase name="${this.escapeXml(test.name)}" `;
           xml += `classname="${this.escapeXml(suite.name)}">\n`;
-          
-          if (test.status === 'FAIL') {
+
+          if (test.status === "FAIL") {
             xml += `      <failure message="${this.escapeXml(test.details)}"></failure>\n`;
           }
-          
-          xml += '    </testcase>\n';
+
+          xml += "    </testcase>\n";
         });
       }
-      
-      xml += '  </testsuite>\n';
+
+      xml += "  </testsuite>\n";
     });
-    
-    xml += '</testsuites>';
+
+    xml += "</testsuites>";
     return xml;
   }
 
   async generateCsvReport(testResults, baseName) {
-    const csvPath = path.join(this.outputDir, 'reports', `${baseName}.csv`);
-    
-    let csvContent = 'Suite,Test,Status,Details,Timestamp\n';
-    
+    const csvPath = path.join(this.outputDir, "reports", `${baseName}.csv`);
+
+    let csvContent = "Suite,Test,Status,Details,Timestamp\n";
+
     Object.entries(testResults.suites).forEach(([key, suite]) => {
       if (suite.details) {
-        suite.details.forEach(test => {
+        suite.details.forEach((test) => {
           csvContent += `"${suite.name}","${test.name}","${test.status}","${test.details}","${test.timestamp}"\n`;
         });
       } else {
-        csvContent += `"${suite.name}","Overall","${suite.status}","${suite.error || ''}","${new Date().toISOString()}"\n`;
+        csvContent += `"${suite.name}","Overall","${suite.status}","${suite.error || ""}","${new Date().toISOString()}"\n`;
       }
     });
-    
-    fs.writeFileSync(csvPath, csvContent, 'utf8');
+
+    fs.writeFileSync(csvPath, csvContent, "utf8");
     console.log(`📄 CSV报告: ${csvPath}`);
     return csvPath;
   }
 
   async generateReportIndex(reports, testResults) {
-    const indexPath = path.join(this.outputDir, 'index.html');
+    const indexPath = path.join(this.outputDir, "index.html");
     const timestamp = new Date().toLocaleString();
-    
+
     const indexContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -861,8 +879,8 @@ class TestReporter {
     </div>
 </body>
 </html>`;
-    
-    fs.writeFileSync(indexPath, indexContent, 'utf8');
+
+    fs.writeFileSync(indexPath, indexContent, "utf8");
     console.log(`📄 报告索引: ${indexPath}`);
   }
 
@@ -871,26 +889,26 @@ class TestReporter {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
   }
 
   getSuccessRateClass(rate) {
-    if (rate >= 95) return 'excellent';
-    if (rate >= 80) return 'good';
-    if (rate >= 60) return 'poor';
-    return 'critical';
+    if (rate >= 95) return "excellent";
+    if (rate >= 80) return "good";
+    if (rate >= 60) return "poor";
+    return "critical";
   }
 
   escapeXml(text) {
     return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 }
 

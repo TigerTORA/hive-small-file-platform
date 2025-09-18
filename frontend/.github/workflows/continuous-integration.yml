@@ -2,16 +2,16 @@ name: 持续最小化集成测试
 
 on:
   push:
-    branches: [ main, develop, 'feature/*' ]
+    branches: [main, develop, "feature/*"]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     # 每天UTC 2:00运行完整测试套件
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
 
 env:
-  NODE_VERSION: '18'
-  CACHE_VERSION: 'v1'
+  NODE_VERSION: "18"
+  CACHE_VERSION: "v1"
 
 jobs:
   # 阶段1：快速验证（最小化测试）
@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -65,12 +65,13 @@ jobs:
 
     strategy:
       matrix:
-        test-group: [
-          'feature-flags',
-          'api-integration',
-          'dashboard-components',
-          'performance'
-        ]
+        test-group:
+          [
+            "feature-flags",
+            "api-integration",
+            "dashboard-components",
+            "performance",
+          ]
 
     steps:
       - name: 检出代码
@@ -80,7 +81,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -130,7 +131,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -193,7 +194,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -245,7 +246,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -283,7 +284,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -312,7 +313,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: ['16', '18', '20']
+        node-version: ["16", "18", "20"]
 
     steps:
       - name: 检出代码
@@ -322,7 +323,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: 安装依赖
         run: npm ci --prefer-offline --no-audit
@@ -350,14 +351,15 @@ jobs:
   test-summary:
     name: 测试总结
     runs-on: ubuntu-latest
-    needs: [
-      quick-validation,
-      component-integration,
-      e2e-tests,
-      performance-regression,
-      security-quality,
-      build-verification
-    ]
+    needs:
+      [
+        quick-validation,
+        component-integration,
+        e2e-tests,
+        performance-regression,
+        security-quality,
+        build-verification,
+      ]
     if: always()
 
     steps:

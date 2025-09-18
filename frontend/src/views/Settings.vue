@@ -20,20 +20,29 @@
 
     <!-- Cloudera风格系统状态概览 -->
     <div class="cloudera-metrics-grid stagger-animation">
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.1s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.1s"
+      >
         <div class="metric-header">
           <div class="metric-icon info">
             <el-icon><Monitor /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.db_connected ? 'success' : 'danger'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.db_connected ? 'success' : 'danger'"
+            ></div>
           </div>
         </div>
         <div class="metric-value">{{ systemInfo.version }}</div>
         <div class="metric-label">系统版本</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.2s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.2s"
+      >
         <div class="metric-header">
           <div class="metric-icon success">
             <el-icon><Timer /></el-icon>
@@ -43,29 +52,51 @@
         <div class="metric-label">运行时间</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.3s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.3s"
+      >
         <div class="metric-header">
-          <div class="metric-icon" :class="systemInfo.db_connected ? 'success' : 'danger'">
+          <div
+            class="metric-icon"
+            :class="systemInfo.db_connected ? 'success' : 'danger'"
+          >
             <el-icon><Connection /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.db_connected ? 'success' : 'danger'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.db_connected ? 'success' : 'danger'"
+            ></div>
           </div>
         </div>
-        <div class="metric-value">{{ systemInfo.db_connected ? '正常' : '异常' }}</div>
+        <div class="metric-value">
+          {{ systemInfo.db_connected ? "正常" : "异常" }}
+        </div>
         <div class="metric-label">数据库连接</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.4s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.4s"
+      >
         <div class="metric-header">
-          <div class="metric-icon" :class="systemInfo.celery_active ? 'warning' : 'danger'">
+          <div
+            class="metric-icon"
+            :class="systemInfo.celery_active ? 'warning' : 'danger'"
+          >
             <el-icon><Operation /></el-icon>
           </div>
           <div class="metric-status">
-            <div class="status-dot" :class="systemInfo.celery_active ? 'success' : 'warning'"></div>
+            <div
+              class="status-dot"
+              :class="systemInfo.celery_active ? 'success' : 'warning'"
+            ></div>
           </div>
         </div>
-        <div class="metric-value">{{ systemInfo.celery_active ? '运行中' : '未启动' }}</div>
+        <div class="metric-value">
+          {{ systemInfo.celery_active ? "运行中" : "未启动" }}
+        </div>
         <div class="metric-label">Celery状态</div>
       </div>
     </div>
@@ -93,7 +124,11 @@
               <p>配置集群扫描的默认参数和行为</p>
             </div>
 
-            <el-form :model="scanSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="scanSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="默认扫描间隔">
                 <el-input-number
                   v-model="scanSettings.scan_interval"
@@ -140,12 +175,25 @@
               <p>配置小文件合并任务的默认策略和参数</p>
             </div>
 
-            <el-form :model="mergeSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="mergeSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="默认合并策略">
-                <el-radio-group v-model="mergeSettings.default_strategy" class="cloudera-radio-group">
-                  <el-radio label="safe_merge" class="cloudera-radio">安全合并 (推荐)</el-radio>
-                  <el-radio label="concatenate" class="cloudera-radio">文件合并 (CONCATENATE)</el-radio>
-                  <el-radio label="insert_overwrite" class="cloudera-radio">重写插入 (INSERT OVERWRITE)</el-radio>
+                <el-radio-group
+                  v-model="mergeSettings.default_strategy"
+                  class="cloudera-radio-group"
+                >
+                  <el-radio label="safe_merge" class="cloudera-radio"
+                    >安全合并 (推荐)</el-radio
+                  >
+                  <el-radio label="concatenate" class="cloudera-radio"
+                    >文件合并 (CONCATENATE)</el-radio
+                  >
+                  <el-radio label="insert_overwrite" class="cloudera-radio"
+                    >重写插入 (INSERT OVERWRITE)</el-radio
+                  >
                 </el-radio-group>
                 <div class="form-help">新建任务时的默认合并策略</div>
               </el-form-item>
@@ -184,7 +232,11 @@
               <p>配置小文件告警的阈值和通知方式</p>
             </div>
 
-            <el-form :model="alertSettings" label-width="150px" class="cloudera-form">
+            <el-form
+              :model="alertSettings"
+              label-width="150px"
+              class="cloudera-form"
+            >
               <el-form-item label="小文件告警阈值">
                 <el-input-number
                   v-model="alertSettings.small_file_threshold"
@@ -218,7 +270,10 @@
                 <div class="form-help">开启后会向指定邮箱发送告警通知</div>
               </el-form-item>
 
-              <el-form-item v-if="alertSettings.email_enabled" label="收件人列表">
+              <el-form-item
+                v-if="alertSettings.email_enabled"
+                label="收件人列表"
+              >
                 <el-input
                   v-model="alertSettings.email_recipients"
                   type="textarea"
@@ -247,29 +302,47 @@
               class="cloudera-descriptions"
             >
               <el-descriptions-item label="系统版本">
-                <el-tag type="info" class="cloudera-tag">{{ systemInfo.version }}</el-tag>
+                <el-tag type="info" class="cloudera-tag">{{
+                  systemInfo.version
+                }}</el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="运行时间">{{ systemInfo.uptime }}</el-descriptions-item>
-              <el-descriptions-item label="Python 版本">{{ systemInfo.python_version }}</el-descriptions-item>
+              <el-descriptions-item label="运行时间">{{
+                systemInfo.uptime
+              }}</el-descriptions-item>
+              <el-descriptions-item label="Python 版本">{{
+                systemInfo.python_version
+              }}</el-descriptions-item>
               <el-descriptions-item label="数据库连接">
-                <el-tag :type="systemInfo.db_connected ? 'success' : 'danger'" class="cloudera-tag">
-                  {{ systemInfo.db_connected ? '正常' : '异常' }}
+                <el-tag
+                  :type="systemInfo.db_connected ? 'success' : 'danger'"
+                  class="cloudera-tag"
+                >
+                  {{ systemInfo.db_connected ? "正常" : "异常" }}
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="Redis 连接">
-                <el-tag :type="systemInfo.redis_connected ? 'success' : 'danger'" class="cloudera-tag">
-                  {{ systemInfo.redis_connected ? '正常' : '异常' }}
+                <el-tag
+                  :type="systemInfo.redis_connected ? 'success' : 'danger'"
+                  class="cloudera-tag"
+                >
+                  {{ systemInfo.redis_connected ? "正常" : "异常" }}
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="Celery 状态">
-                <el-tag :type="systemInfo.celery_active ? 'success' : 'warning'" class="cloudera-tag">
-                  {{ systemInfo.celery_active ? '运行中' : '未启动' }}
+                <el-tag
+                  :type="systemInfo.celery_active ? 'success' : 'warning'"
+                  class="cloudera-tag"
+                >
+                  {{ systemInfo.celery_active ? "运行中" : "未启动" }}
                 </el-tag>
               </el-descriptions-item>
             </el-descriptions>
 
             <div class="system-actions">
-              <el-button @click="checkSystemHealth" class="cloudera-btn primary">
+              <el-button
+                @click="checkSystemHealth"
+                class="cloudera-btn primary"
+              >
                 <el-icon><Refresh /></el-icon>
                 刷新系统状态
               </el-button>
@@ -302,93 +375,100 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 import {
-  Check, Refresh, Monitor, Timer, Connection, Operation,
-  Download, Delete, RefreshLeft
-} from '@element-plus/icons-vue'
+  Check,
+  Refresh,
+  Monitor,
+  Timer,
+  Connection,
+  Operation,
+  Download,
+  Delete,
+  RefreshLeft,
+} from "@element-plus/icons-vue";
 
-const activeTab = ref('scan')
+const activeTab = ref("scan");
 
 // 标签页配置
 const tabs = [
-  { key: 'scan', label: '扫描配置', icon: 'Monitor' },
-  { key: 'merge', label: '合并配置', icon: 'Operation' },
-  { key: 'alert', label: '告警配置', icon: 'Bell' },
-  { key: 'system', label: '系统信息', icon: 'InfoFilled' }
-]
+  { key: "scan", label: "扫描配置", icon: "Monitor" },
+  { key: "merge", label: "合并配置", icon: "Operation" },
+  { key: "alert", label: "告警配置", icon: "Bell" },
+  { key: "system", label: "系统信息", icon: "InfoFilled" },
+];
 
 // 设置数据
 const scanSettings = ref({
   scan_interval: 6,
   max_workers: 4,
-  scan_timeout: 300
-})
+  scan_timeout: 300,
+});
 
 const mergeSettings = ref({
-  default_strategy: 'safe_merge',
+  default_strategy: "safe_merge",
   target_file_size: 256,
-  max_files_per_task: 1000
-})
+  max_files_per_task: 1000,
+});
 
 const alertSettings = ref({
   small_file_threshold: 1000,
   small_file_ratio_threshold: 80,
   email_enabled: false,
-  email_recipients: ''
-})
+  email_recipients: "",
+});
 
 const systemInfo = ref({
-  version: '1.0.0',
-  uptime: '2 天 3 小时',
-  python_version: '3.9.0',
+  version: "1.0.0",
+  uptime: "2 天 3 小时",
+  python_version: "3.9.0",
   db_connected: true,
   redis_connected: true,
-  celery_active: true
-})
+  celery_active: true,
+});
 
 // 方法
 const saveSettings = () => {
   // TODO: 保存设置到后端
-  ElMessage.success('所有设置已保存成功')
-}
+  ElMessage.success("所有设置已保存成功");
+};
 
 const resetSettings = () => {
   // TODO: 重置为默认值
   scanSettings.value = {
     scan_interval: 6,
     max_workers: 4,
-    scan_timeout: 300
-  }
+    scan_timeout: 300,
+  };
   mergeSettings.value = {
-    default_strategy: 'safe_merge',
+    default_strategy: "safe_merge",
     target_file_size: 256,
-    max_files_per_task: 1000
-  }
+    max_files_per_task: 1000,
+  };
   alertSettings.value = {
     small_file_threshold: 1000,
     small_file_ratio_threshold: 80,
     email_enabled: false,
-    email_recipients: ''
-  }
-  ElMessage.info('所有设置已重置为默认值')
-}
+    email_recipients: "",
+  };
+  ElMessage.info("所有设置已重置为默认值");
+};
 
 const checkSystemHealth = () => {
   // TODO: 检查系统健康状态
   // 模拟状态检查
   const loadingMessage = ElMessage({
-    message: '正在检查系统状态...',
-    type: 'info',
-    duration: 0
-  })
+    message: "正在检查系统状态...",
+    type: "info",
+    duration: 0,
+  });
 
   setTimeout(() => {
-    loadingMessage.close()
-    ElMessage.success('系统状态检查完成，一切正常')
-  }, 2000)
-}
+    loadingMessage.close();
+    ElMessage.success("系统状态检查完成，一切正常");
+  }, 2000);
+};
 
 const exportConfig = () => {
   // TODO: 导出配置文件
@@ -396,40 +476,40 @@ const exportConfig = () => {
     scan: scanSettings.value,
     merge: mergeSettings.value,
     alert: alertSettings.value,
-    export_time: new Date().toISOString()
-  }
+    export_time: new Date().toISOString(),
+  };
 
   const blob = new Blob([JSON.stringify(config, null, 2)], {
-    type: 'application/json'
-  })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'datanova-config.json'
-  a.click()
-  URL.revokeObjectURL(url)
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "datanova-config.json";
+  a.click();
+  URL.revokeObjectURL(url);
 
-  ElMessage.success('配置文件已导出')
-}
+  ElMessage.success("配置文件已导出");
+};
 
 const clearCache = () => {
   // TODO: 清理系统缓存
   const loadingMessage = ElMessage({
-    message: '正在清理系统缓存...',
-    type: 'info',
-    duration: 0
-  })
+    message: "正在清理系统缓存...",
+    type: "info",
+    duration: 0,
+  });
 
   setTimeout(() => {
-    loadingMessage.close()
-    ElMessage.success('系统缓存已清理完成')
-  }, 1500)
-}
+    loadingMessage.close();
+    ElMessage.success("系统缓存已清理完成");
+  }, 1500);
+};
 
 onMounted(() => {
   // TODO: 加载设置数据
-  console.log('Settings page mounted')
-})
+  console.log("Settings page mounted");
+});
 </script>
 
 <style scoped>

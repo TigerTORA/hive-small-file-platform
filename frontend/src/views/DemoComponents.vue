@@ -99,7 +99,9 @@
           <el-table-column prop="files" label="文件数" width="100" />
           <el-table-column prop="status" label="状态" width="120">
             <template #default="{ row }">
-              <span class="cloudera-tag" :class="row.statusType">{{ row.status }}</span>
+              <span class="cloudera-tag" :class="row.statusType">{{
+                row.status
+              }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -135,7 +137,9 @@
       <div class="glass-demo">
         <div class="glass-card hover-lift">
           <h3>玻璃效果卡片</h3>
-          <p>这是一个带有玻璃形态效果的卡片组件，具有毛玻璃背景和现代化的视觉效果。</p>
+          <p>
+            这是一个带有玻璃形态效果的卡片组件，具有毛玻璃背景和现代化的视觉效果。
+          </p>
           <el-button class="cloudera-btn primary">了解更多</el-button>
         </div>
       </div>
@@ -144,43 +148,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { TrendCharts, Warning, Document, Connection } from '@element-plus/icons-vue'
+import { ref } from "vue";
+import {
+  TrendCharts,
+  Warning,
+  Document,
+  Connection,
+} from "@element-plus/icons-vue";
 
 const tableData = ref([
   {
-    name: 'user_behavior_logs',
-    database: 'analytics',
-    size: '2.3 GB',
+    name: "user_behavior_logs",
+    database: "analytics",
+    size: "2.3 GB",
     files: 1247,
-    status: '正常',
-    statusType: 'success'
+    status: "正常",
+    statusType: "success",
   },
   {
-    name: 'transaction_records',
-    database: 'finance',
-    size: '856 MB',
+    name: "transaction_records",
+    database: "finance",
+    size: "856 MB",
     files: 523,
-    status: '警告',
-    statusType: 'warning'
+    status: "警告",
+    statusType: "warning",
   },
   {
-    name: 'system_logs',
-    database: 'monitoring',
-    size: '4.1 GB',
+    name: "system_logs",
+    database: "monitoring",
+    size: "4.1 GB",
     files: 2891,
-    status: '错误',
-    statusType: 'danger'
+    status: "错误",
+    statusType: "danger",
   },
   {
-    name: 'customer_data',
-    database: 'crm',
-    size: '1.8 GB',
+    name: "customer_data",
+    database: "crm",
+    size: "1.8 GB",
     files: 892,
-    status: '正常',
-    statusType: 'success'
-  }
-])
+    status: "正常",
+    statusType: "success",
+  },
+]);
 </script>
 
 <style scoped>
@@ -262,7 +271,11 @@ const tableData = ref([
 
 .glass-demo {
   padding: var(--space-8);
-  background: linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-100) 0%,
+    var(--primary-200) 100%
+  );
   border-radius: var(--radius-xl);
   display: flex;
   justify-content: center;

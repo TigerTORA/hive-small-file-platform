@@ -136,11 +136,12 @@
 // 字体系统
 :root {
   // 字体族
-  --hive-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-                      'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
-                      'Microsoft YaHei', Arial, sans-serif;
-  --hive-font-family-mono: 'SF Mono', Monaco, Consolas, 'Liberation Mono',
-                           'Courier New', monospace;
+  --hive-font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial,
+    sans-serif;
+  --hive-font-family-mono:
+    "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   // 字体大小
   --hive-font-size-xs: 12px;

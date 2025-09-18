@@ -30,7 +30,7 @@
               </div>
             </div>
           </div>
-          
+
           <div class="severity-level" :class="severityClass">
             <div class="level-text">{{ severityText }}</div>
             <div class="level-desc">{{ severityDescription }}</div>
@@ -44,7 +44,9 @@
                 <el-icon :size="20"><Warning /></el-icon>
               </div>
               <div class="stat-content">
-                <div class="stat-number">{{ formatNumber(summary.total_small_files) }}</div>
+                <div class="stat-number">
+                  {{ formatNumber(summary.total_small_files) }}
+                </div>
                 <div class="stat-text">小文件数</div>
               </div>
             </div>
@@ -77,13 +79,13 @@
           <el-icon :size="14"><TrendCharts /></el-icon>
           <span>影响分析</span>
         </div>
-        
+
         <div class="impact-metrics">
           <div class="impact-item">
             <div class="impact-label">性能影响</div>
             <div class="impact-bar">
-              <el-progress 
-                :percentage="performanceImpact" 
+              <el-progress
+                :percentage="performanceImpact"
                 color="#F56C6C"
                 :show-text="false"
                 stroke-width="6"
@@ -95,8 +97,8 @@
           <div class="impact-item">
             <div class="impact-label">存储效率</div>
             <div class="impact-bar">
-              <el-progress 
-                :percentage="storageWaste" 
+              <el-progress
+                :percentage="storageWaste"
                 color="#E6A23C"
                 :show-text="false"
                 stroke-width="6"
@@ -108,8 +110,8 @@
           <div class="impact-item">
             <div class="impact-label">查询延迟</div>
             <div class="impact-bar">
-              <el-progress 
-                :percentage="queryLatency" 
+              <el-progress
+                :percentage="queryLatency"
                 color="#909399"
                 :show-text="false"
                 stroke-width="6"
@@ -125,9 +127,13 @@
           <el-icon :size="14"><InfoFilled /></el-icon>
           <span>优化建议</span>
         </div>
-        
+
         <div class="suggestion-list">
-          <div class="suggestion-item" v-for="suggestion in suggestions" :key="suggestion.id">
+          <div
+            class="suggestion-item"
+            v-for="suggestion in suggestions"
+            :key="suggestion.id"
+          >
             <div class="suggestion-priority" :class="suggestion.priority">
               <el-icon :size="12">
                 <component :is="getPriorityIcon(suggestion.priority)" />
@@ -135,7 +141,9 @@
             </div>
             <div class="suggestion-content">
               <div class="suggestion-text">{{ suggestion.text }}</div>
-              <div class="suggestion-impact">预计收益: {{ suggestion.impact }}</div>
+              <div class="suggestion-impact">
+                预计收益: {{ suggestion.impact }}
+              </div>
             </div>
           </div>
         </div>
@@ -143,19 +151,19 @@
 
       <div class="action-buttons" v-if="showActions">
         <div class="primary-actions">
-          <el-button 
-            type="danger" 
-            size="small" 
+          <el-button
+            type="danger"
+            size="small"
             @click="$emit('start-merge')"
             :loading="merging"
           >
             <el-icon><Operation /></el-icon>
             开始合并
           </el-button>
-          
-          <el-button 
-            type="warning" 
-            size="small" 
+
+          <el-button
+            type="warning"
+            size="small"
             @click="$emit('analyze-files')"
             :loading="analyzing"
           >
@@ -166,19 +174,19 @@
 
         <!-- 扩展操作 -->
         <div class="extended-actions" v-if="showExtendedActions">
-          <el-button 
-            type="primary" 
-            size="small" 
+          <el-button
+            type="primary"
+            size="small"
             @click="$emit('scan-tables')"
             :loading="scanning"
           >
             <el-icon><Refresh /></el-icon>
             扫描表
           </el-button>
-          
-          <el-button 
-            type="success" 
-            size="small" 
+
+          <el-button
+            type="success"
+            size="small"
             @click="$emit('view-tables')"
             :loading="loading"
           >
@@ -196,8 +204,12 @@
               <el-dropdown-item command="schedule">定时合并</el-dropdown-item>
               <el-dropdown-item command="export">导出报告</el-dropdown-item>
               <el-dropdown-item command="settings">合并设置</el-dropdown-item>
-              <el-dropdown-item divided command="view-trends">查看趋势</el-dropdown-item>
-              <el-dropdown-item command="batch-process">批量处理</el-dropdown-item>
+              <el-dropdown-item divided command="view-trends"
+                >查看趋势</el-dropdown-item
+              >
+              <el-dropdown-item command="batch-process"
+                >批量处理</el-dropdown-item
+              >
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -207,23 +219,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { 
-  WarningFilled, Warning, Coin, Timer, TrendCharts, Operation, 
-  Search, CaretBottom, InfoFilled, CircleCheck, Bell, Refresh, View 
-} from '@element-plus/icons-vue'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useMonitoringStore } from '@/stores/monitoring'
+import { computed, ref } from "vue";
+import {
+  WarningFilled,
+  Warning,
+  Coin,
+  Timer,
+  TrendCharts,
+  Operation,
+  Search,
+  CaretBottom,
+  InfoFilled,
+  CircleCheck,
+  Bell,
+  Refresh,
+  View,
+} from "@element-plus/icons-vue";
+import { useDashboardStore } from "@/stores/dashboard";
+import { useMonitoringStore } from "@/stores/monitoring";
 
 interface Props {
-  showImpact?: boolean
-  showSuggestions?: boolean
-  showActions?: boolean
-  showExtendedActions?: boolean
-  merging?: boolean
-  analyzing?: boolean
-  scanning?: boolean
-  loading?: boolean
+  showImpact?: boolean;
+  showSuggestions?: boolean;
+  showActions?: boolean;
+  showExtendedActions?: boolean;
+  merging?: boolean;
+  analyzing?: boolean;
+  scanning?: boolean;
+  loading?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -234,166 +257,189 @@ const props = withDefaults(defineProps<Props>(), {
   merging: false,
   analyzing: false,
   scanning: false,
-  loading: false
-})
+  loading: false,
+});
 
 defineEmits<{
-  'start-merge': []
-  'analyze-files': []
-  'scan-tables': []
-  'view-tables': []
-  'schedule-merge': []
-  'export-report': []
-  'merge-settings': []
-}>()
+  "start-merge": [];
+  "analyze-files": [];
+  "scan-tables": [];
+  "view-tables": [];
+  "schedule-merge": [];
+  "export-report": [];
+  "merge-settings": [];
+}>();
 
-const dashboardStore = useDashboardStore()
-const monitoringStore = useMonitoringStore()
+const dashboardStore = useDashboardStore();
+const monitoringStore = useMonitoringStore();
 
 // 计算属性
-const summary = computed(() => dashboardStore.summary)
+const summary = computed(() => dashboardStore.summary);
 
 const smallFileRatio = computed(() => {
-  if (summary.value.total_files === 0) return 0
-  return Math.round((summary.value.total_small_files / summary.value.total_files) * 100)
-})
+  if (summary.value.total_files === 0) return 0;
+  return Math.round(
+    (summary.value.total_small_files / summary.value.total_files) * 100,
+  );
+});
 
 const smallFileSize = computed(() => {
-  const sizeGB = summary.value.small_file_size_gb
+  const sizeGB = summary.value.small_file_size_gb;
   if (sizeGB >= 1000) {
-    return `${(sizeGB / 1000).toFixed(1)} TB`
+    return `${(sizeGB / 1000).toFixed(1)} TB`;
   } else if (sizeGB >= 1) {
-    return `${sizeGB.toFixed(1)} GB`
+    return `${sizeGB.toFixed(1)} GB`;
   } else {
-    return `${(sizeGB * 1024).toFixed(0)} MB`
+    return `${(sizeGB * 1024).toFixed(0)} MB`;
   }
-})
+});
 
 const wastedStorage = computed(() => {
-  const wasteRatio = 0.3
-  const wastedGB = summary.value.small_file_size_gb * wasteRatio
+  const wasteRatio = 0.3;
+  const wastedGB = summary.value.small_file_size_gb * wasteRatio;
   if (wastedGB >= 1000) {
-    return `${(wastedGB / 1000).toFixed(1)} TB`
+    return `${(wastedGB / 1000).toFixed(1)} TB`;
   } else if (wastedGB >= 1) {
-    return `${wastedGB.toFixed(1)} GB`
+    return `${wastedGB.toFixed(1)} GB`;
   } else {
-    return `${(wastedGB * 1024).toFixed(0)} MB`
+    return `${(wastedGB * 1024).toFixed(0)} MB`;
   }
-})
+});
 
 const alertType = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return 'danger'
-  if (ratio >= 40) return 'warning'
-  if (ratio >= 20) return 'info'
-  return 'success'
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return "danger";
+  if (ratio >= 40) return "warning";
+  if (ratio >= 20) return "info";
+  return "success";
+});
 
 const alertLevel = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return '严重'
-  if (ratio >= 40) return '警告'
-  if (ratio >= 20) return '注意'
-  return '正常'
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return "严重";
+  if (ratio >= 40) return "警告";
+  if (ratio >= 20) return "注意";
+  return "正常";
+});
 
 const alertIcon = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return WarningFilled
-  if (ratio >= 40) return Warning
-  if (ratio >= 20) return InfoFilled
-  return CircleCheck
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return WarningFilled;
+  if (ratio >= 40) return Warning;
+  if (ratio >= 20) return InfoFilled;
+  return CircleCheck;
+});
 
 const severityClass = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return 'critical'
-  if (ratio >= 40) return 'high'
-  if (ratio >= 20) return 'medium'
-  return 'low'
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return "critical";
+  if (ratio >= 40) return "high";
+  if (ratio >= 20) return "medium";
+  return "low";
+});
 
 const severityText = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return '严重问题'
-  if (ratio >= 40) return '高风险'
-  if (ratio >= 20) return '中等风险'
-  return '低风险'
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return "严重问题";
+  if (ratio >= 40) return "高风险";
+  if (ratio >= 20) return "中等风险";
+  return "低风险";
+});
 
 const severityDescription = computed(() => {
-  const ratio = smallFileRatio.value
-  if (ratio >= 60) return '需要立即处理'
-  if (ratio >= 40) return '建议尽快处理'
-  if (ratio >= 20) return '建议定期处理'
-  return '保持现状'
-})
+  const ratio = smallFileRatio.value;
+  if (ratio >= 60) return "需要立即处理";
+  if (ratio >= 40) return "建议尽快处理";
+  if (ratio >= 20) return "建议定期处理";
+  return "保持现状";
+});
 
 const ringStyle = computed(() => {
-  const ratio = smallFileRatio.value
-  const strokeDasharray = `${ratio * 2.83} 283`
-  let color = '#67C23A'
-  
-  if (ratio >= 60) color = '#F56C6C'
-  else if (ratio >= 40) color = '#E6A23C'
-  else if (ratio >= 20) color = '#409EFF'
-  
-  return {
-    '--stroke-dasharray': strokeDasharray,
-    '--ring-color': color
-  }
-})
+  const ratio = smallFileRatio.value;
+  const strokeDasharray = `${ratio * 2.83} 283`;
+  let color = "#67C23A";
 
-const performanceImpact = computed(() => Math.min(90, smallFileRatio.value * 1.5))
-const storageWaste = computed(() => Math.min(85, smallFileRatio.value * 1.2))
-const queryLatency = computed(() => Math.min(95, smallFileRatio.value * 2))
+  if (ratio >= 60) color = "#F56C6C";
+  else if (ratio >= 40) color = "#E6A23C";
+  else if (ratio >= 20) color = "#409EFF";
+
+  return {
+    "--stroke-dasharray": strokeDasharray,
+    "--ring-color": color,
+  };
+});
+
+const performanceImpact = computed(() =>
+  Math.min(90, smallFileRatio.value * 1.5),
+);
+const storageWaste = computed(() => Math.min(85, smallFileRatio.value * 1.2));
+const queryLatency = computed(() => Math.min(95, smallFileRatio.value * 2));
 
 // 优化建议
 const suggestions = computed(() => {
-  const ratio = smallFileRatio.value
+  const ratio = smallFileRatio.value;
   const baseSuggestions = [
-    { id: 1, text: '合并小文件到128MB以上', impact: '提升查询性能30%', priority: 'high' },
-    { id: 2, text: '设置定时合并任务', impact: '降低维护成本50%', priority: 'medium' },
-    { id: 3, text: '优化数据写入策略', impact: '减少小文件产生60%', priority: 'medium' }
-  ]
+    {
+      id: 1,
+      text: "合并小文件到128MB以上",
+      impact: "提升查询性能30%",
+      priority: "high",
+    },
+    {
+      id: 2,
+      text: "设置定时合并任务",
+      impact: "降低维护成本50%",
+      priority: "medium",
+    },
+    {
+      id: 3,
+      text: "优化数据写入策略",
+      impact: "减少小文件产生60%",
+      priority: "medium",
+    },
+  ];
 
   if (ratio >= 60) {
     baseSuggestions.unshift({
       id: 0,
-      text: '立即停止新数据写入并紧急合并',
-      impact: '避免系统性能进一步恶化',
-      priority: 'critical'
-    })
+      text: "立即停止新数据写入并紧急合并",
+      impact: "避免系统性能进一步恶化",
+      priority: "critical",
+    });
   }
 
-  return baseSuggestions.slice(0, ratio >= 40 ? 4 : 3)
-})
+  return baseSuggestions.slice(0, ratio >= 40 ? 4 : 3);
+});
 
 // 方法
 function formatNumber(num: number): string {
-  return monitoringStore.formatNumber(num)
+  return monitoringStore.formatNumber(num);
 }
 
 function getPriorityIcon(priority: string) {
   switch (priority) {
-    case 'critical': return WarningFilled
-    case 'high': return Warning
-    case 'medium': return InfoFilled
-    default: return Bell
+    case "critical":
+      return WarningFilled;
+    case "high":
+      return Warning;
+    case "medium":
+      return InfoFilled;
+    default:
+      return Bell;
   }
 }
 
 function handleCommand(command: string) {
   switch (command) {
-    case 'schedule':
+    case "schedule":
       // emit('schedule-merge')
-      break
-    case 'export':
+      break;
+    case "export":
       // emit('export-report')
-      break
-    case 'settings':
+      break;
+    case "settings":
       // emit('merge-settings')
-      break
+      break;
   }
 }
 </script>
@@ -471,7 +517,7 @@ function handleCommand(command: string) {
 }
 
 .chart-ring::before {
-  content: '';
+  content: "";
   position: absolute;
   width: 60px;
   height: 60px;
@@ -514,19 +560,19 @@ function handleCommand(command: string) {
 }
 
 .severity-level.critical {
-  color: #FF6B6B;
+  color: #ff6b6b;
 }
 
 .severity-level.high {
-  color: #FFA726;
+  color: #ffa726;
 }
 
 .severity-level.medium {
-  color: #42A5F5;
+  color: #42a5f5;
 }
 
 .severity-level.low {
-  color: #66BB6A;
+  color: #66bb6a;
 }
 
 .stat-grid {
@@ -578,14 +624,16 @@ function handleCommand(command: string) {
   letter-spacing: 0.5px;
 }
 
-.impact-analysis, .optimization-suggestions {
+.impact-analysis,
+.optimization-suggestions {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
 }
 
-.impact-title, .suggestions-title {
+.impact-title,
+.suggestions-title {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -653,19 +701,19 @@ function handleCommand(command: string) {
 }
 
 .suggestion-priority.critical {
-  background: #FF6B6B;
+  background: #ff6b6b;
 }
 
 .suggestion-priority.high {
-  background: #FFA726;
+  background: #ffa726;
 }
 
 .suggestion-priority.medium {
-  background: #42A5F5;
+  background: #42a5f5;
 }
 
 .suggestion-priority.low {
-  background: #66BB6A;
+  background: #66bb6a;
 }
 
 .suggestion-content {

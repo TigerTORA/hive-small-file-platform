@@ -35,7 +35,9 @@
               <el-icon :size="16"><Document /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value">{{ formatNumber(summary.total_files) }}</div>
+              <div class="stat-value">
+                {{ formatNumber(summary.total_files) }}
+              </div>
               <div class="stat-label">总文件数</div>
             </div>
           </div>
@@ -69,7 +71,7 @@
             <span class="metric-value">{{ avgFileSize }}</span>
           </div>
         </div>
-        
+
         <div class="metric-row">
           <div class="metric-item">
             <span class="metric-label">文件密度</span>
@@ -81,8 +83,8 @@
           <div class="metric-item">
             <span class="metric-label">存储效率</span>
             <div class="efficiency-indicator">
-              <el-progress 
-                :percentage="storageEfficiency" 
+              <el-progress
+                :percentage="storageEfficiency"
                 :color="efficiencyColor"
                 :show-text="false"
                 stroke-width="4"
@@ -104,7 +106,7 @@
             </el-radio-group>
           </div>
         </div>
-        
+
         <div class="mini-trend-chart">
           <div class="trend-line" :style="trendLineStyle"></div>
           <div class="trend-change" :class="trendChangeClass">
@@ -120,111 +122,125 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Document, DocumentChecked, Coin, ArrowUp, CaretBottom, Minus } from '@element-plus/icons-vue'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useMonitoringStore } from '@/stores/monitoring'
+import { computed, ref } from "vue";
+import {
+  Document,
+  DocumentChecked,
+  Coin,
+  ArrowUp,
+  CaretBottom,
+  Minus,
+} from "@element-plus/icons-vue";
+import { useDashboardStore } from "@/stores/dashboard";
+import { useMonitoringStore } from "@/stores/monitoring";
 
 interface Props {
-  showMetrics?: boolean
-  showTrend?: boolean
+  showMetrics?: boolean;
+  showTrend?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showMetrics: true,
-  showTrend: true
-})
+  showTrend: true,
+});
 
-const dashboardStore = useDashboardStore()
-const monitoringStore = useMonitoringStore()
+const dashboardStore = useDashboardStore();
+const monitoringStore = useMonitoringStore();
 
-const trendPeriod = ref<'7d' | '30d'>('7d')
+const trendPeriod = ref<"7d" | "30d">("7d");
 
 // 计算属性
-const summary = computed(() => dashboardStore.summary)
-const totalFiles = computed(() => formatNumber(summary.value.total_files))
-const normalFiles = computed(() => summary.value.total_files - summary.value.total_small_files)
+const summary = computed(() => dashboardStore.summary);
+const totalFiles = computed(() => formatNumber(summary.value.total_files));
+const normalFiles = computed(
+  () => summary.value.total_files - summary.value.total_small_files,
+);
 
 const totalSizeFormatted = computed(() => {
-  const sizeGB = summary.value.total_size_gb
+  const sizeGB = summary.value.total_size_gb;
   if (sizeGB >= 1000) {
-    return `${(sizeGB / 1000).toFixed(1)} TB`
+    return `${(sizeGB / 1000).toFixed(1)} TB`;
   } else if (sizeGB >= 1) {
-    return `${sizeGB.toFixed(1)} GB`
+    return `${sizeGB.toFixed(1)} GB`;
   } else {
-    return `${(sizeGB * 1024).toFixed(0)} MB`
+    return `${(sizeGB * 1024).toFixed(0)} MB`;
   }
-})
+});
 
 const fileStatus = computed(() => {
-  const ratio = (summary.value.total_small_files / summary.value.total_files) * 100
-  if (ratio < 20) return '优秀'
-  if (ratio < 40) return '良好'
-  if (ratio < 60) return '一般'
-  return '需优化'
-})
+  const ratio =
+    (summary.value.total_small_files / summary.value.total_files) * 100;
+  if (ratio < 20) return "优秀";
+  if (ratio < 40) return "良好";
+  if (ratio < 60) return "一般";
+  return "需优化";
+});
 
 const statusType = computed(() => {
-  const ratio = (summary.value.total_small_files / summary.value.total_files) * 100
-  if (ratio < 20) return 'success'
-  if (ratio < 40) return 'info'
-  if (ratio < 60) return 'warning'
-  return 'danger'
-})
+  const ratio =
+    (summary.value.total_small_files / summary.value.total_files) * 100;
+  if (ratio < 20) return "success";
+  if (ratio < 40) return "info";
+  if (ratio < 60) return "warning";
+  return "danger";
+});
 
 const avgFileSize = computed(() => {
-  if (summary.value.total_files === 0) return '--'
-  const avgSizeMB = (summary.value.total_size_gb * 1024) / summary.value.total_files
+  if (summary.value.total_files === 0) return "--";
+  const avgSizeMB =
+    (summary.value.total_size_gb * 1024) / summary.value.total_files;
   if (avgSizeMB >= 1024) {
-    return `${(avgSizeMB / 1024).toFixed(1)} GB`
+    return `${(avgSizeMB / 1024).toFixed(1)} GB`;
   } else {
-    return `${avgSizeMB.toFixed(1)} MB`
+    return `${avgSizeMB.toFixed(1)} MB`;
   }
-})
+});
 
 const fileDensity = computed(() => {
-  if (summary.value.total_tables === 0) return '--'
-  const density = summary.value.total_files / summary.value.total_tables
-  return `${density.toFixed(0)} 文件/表`
-})
+  if (summary.value.total_tables === 0) return "--";
+  const density = summary.value.total_files / summary.value.total_tables;
+  return `${density.toFixed(0)} 文件/表`;
+});
 
 const storageEfficiency = computed(() => {
-  const ratio = (summary.value.total_small_files / summary.value.total_files) * 100
-  return Math.max(0, 100 - Math.round(ratio))
-})
+  const ratio =
+    (summary.value.total_small_files / summary.value.total_files) * 100;
+  return Math.max(0, 100 - Math.round(ratio));
+});
 
 const efficiencyColor = computed(() => {
-  const efficiency = storageEfficiency.value
-  if (efficiency >= 80) return '#67C23A'
-  if (efficiency >= 60) return '#E6A23C'
-  return '#F56C6C'
-})
+  const efficiency = storageEfficiency.value;
+  if (efficiency >= 80) return "#67C23A";
+  if (efficiency >= 60) return "#E6A23C";
+  return "#F56C6C";
+});
 
 const donutStyle = computed(() => {
-  const smallFileRatio = (summary.value.total_small_files / summary.value.total_files) * 100 || 0
-  const normalRatio = 100 - smallFileRatio
-  
+  const smallFileRatio =
+    (summary.value.total_small_files / summary.value.total_files) * 100 || 0;
+  const normalRatio = 100 - smallFileRatio;
+
   return {
     background: `conic-gradient(
       #67C23A 0deg ${normalRatio * 3.6}deg,
       #F56C6C ${normalRatio * 3.6}deg 360deg
-    )`
-  }
-})
+    )`,
+  };
+});
 
 // 模拟趋势数据
-const trendChangeText = computed(() => '+12.5%')
-const trendChangeClass = computed(() => 'positive')
-const trendIcon = computed(() => ArrowUp)
+const trendChangeText = computed(() => "+12.5%");
+const trendChangeClass = computed(() => "positive");
+const trendIcon = computed(() => ArrowUp);
 const trendLineStyle = computed(() => ({
-  background: 'linear-gradient(90deg, #409EFF 0%, #67C23A 100%)',
-  height: '3px',
-  borderRadius: '2px'
-}))
+  background: "linear-gradient(90deg, #409EFF 0%, #67C23A 100%)",
+  height: "3px",
+  borderRadius: "2px",
+}));
 
 // 方法
 function formatNumber(num: number): string {
-  return monitoringStore.formatNumber(num)
+  return monitoringStore.formatNumber(num);
 }
 </script>
 
@@ -292,7 +308,7 @@ function formatNumber(num: number): string {
 }
 
 .donut-chart::before {
-  content: '';
+  content: "";
   position: absolute;
   width: 50px;
   height: 50px;
@@ -477,11 +493,11 @@ function formatNumber(num: number): string {
 }
 
 .trend-change.positive {
-  color: #67C23A;
+  color: #67c23a;
 }
 
 .trend-change.negative {
-  color: #F56C6C;
+  color: #f56c6c;
 }
 
 @media (max-width: 768px) {

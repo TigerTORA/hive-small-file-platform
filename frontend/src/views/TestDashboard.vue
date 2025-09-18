@@ -19,14 +19,16 @@
               size="large"
             />
           </el-tooltip>
-          <span class="mode-label">{{ isRealMode ? '真实测试' : '模拟数据' }}</span>
+          <span class="mode-label">{{
+            isRealMode ? "真实测试" : "模拟数据"
+          }}</span>
         </div>
-        
+
         <el-divider direction="vertical" />
-        
+
         <el-button type="primary" @click="runAllTests" :loading="isRunning">
           <el-icon><VideoPlay /></el-icon>
-          {{ isRealMode ? '执行真实测试' : '模拟执行测试' }}
+          {{ isRealMode ? "执行真实测试" : "模拟执行测试" }}
         </el-button>
         <el-button @click="refreshData" :loading="isRefreshing">
           <el-icon><Refresh /></el-icon>
@@ -51,7 +53,7 @@
             </div>
           </el-card>
         </el-col>
-        
+
         <el-col :span="6">
           <el-card class="overview-card danger">
             <div class="card-content">
@@ -65,7 +67,7 @@
             </div>
           </el-card>
         </el-col>
-        
+
         <el-col :span="6">
           <el-card class="overview-card info">
             <div class="card-content">
@@ -79,7 +81,7 @@
             </div>
           </el-card>
         </el-col>
-        
+
         <el-col :span="6">
           <el-card class="overview-card warning">
             <div class="card-content">
@@ -105,17 +107,21 @@
             <el-tag>基于11条核心测试规则</el-tag>
           </div>
         </template>
-        
+
         <el-row :gutter="16">
-          <el-col :span="12" v-for="category in testCategories" :key="category.id">
+          <el-col
+            :span="12"
+            v-for="category in testCategories"
+            :key="category.id"
+          >
             <div class="category-card" @click="viewCategoryDetails(category)">
               <div class="category-header">
                 <h3>{{ category.name }}</h3>
                 <el-badge :value="category.testCount" type="primary" />
               </div>
               <div class="category-progress">
-                <el-progress 
-                  :percentage="category.successRate" 
+                <el-progress
+                  :percentage="category.successRate"
                   :color="getProgressColor(category.successRate)"
                   :stroke-width="8"
                 />
@@ -143,16 +149,24 @@
           <div class="section-header">
             <h2>详细测试结果</h2>
             <div class="header-filters">
-              <el-select v-model="filterCategory" placeholder="选择分类" clearable>
-                <el-option 
-                  v-for="category in testCategories" 
+              <el-select
+                v-model="filterCategory"
+                placeholder="选择分类"
+                clearable
+              >
+                <el-option
+                  v-for="category in testCategories"
                   :key="category.id"
-                  :label="category.name" 
+                  :label="category.name"
                   :value="category.id"
                 />
               </el-select>
-              
-              <el-select v-model="filterStatus" placeholder="选择状态" clearable>
+
+              <el-select
+                v-model="filterStatus"
+                placeholder="选择状态"
+                clearable
+              >
                 <el-option label="全部" value="" />
                 <el-option label="通过" value="passed" />
                 <el-option label="失败" value="failed" />
@@ -162,19 +176,25 @@
           </div>
         </template>
 
-        <el-table 
-          :data="filteredTestResults" 
-          stripe 
+        <el-table
+          :data="filteredTestResults"
+          stripe
           style="width: 100%"
           v-loading="isLoading"
         >
           <el-table-column prop="name" label="测试名称" min-width="200">
             <template #default="scope">
               <div class="test-name">
-                <el-icon v-if="scope.row.status === 'passed'" class="status-icon success">
+                <el-icon
+                  v-if="scope.row.status === 'passed'"
+                  class="status-icon success"
+                >
                   <Check />
                 </el-icon>
-                <el-icon v-else-if="scope.row.status === 'failed'" class="status-icon danger">
+                <el-icon
+                  v-else-if="scope.row.status === 'failed'"
+                  class="status-icon danger"
+                >
                   <Close />
                 </el-icon>
                 <el-icon v-else class="status-icon warning">
@@ -184,7 +204,7 @@
               </div>
             </template>
           </el-table-column>
-          
+
           <el-table-column prop="category" label="分类" width="150">
             <template #default="scope">
               <el-tag :type="getCategoryTagType(scope.row.category)">
@@ -192,29 +212,35 @@
               </el-tag>
             </template>
           </el-table-column>
-          
+
           <el-table-column prop="status" label="状态" width="100">
             <template #default="scope">
-              <el-tag 
-                :type="scope.row.status === 'passed' ? 'success' : scope.row.status === 'failed' ? 'danger' : 'warning'"
+              <el-tag
+                :type="
+                  scope.row.status === 'passed'
+                    ? 'success'
+                    : scope.row.status === 'failed'
+                      ? 'danger'
+                      : 'warning'
+                "
               >
                 {{ getStatusText(scope.row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          
+
           <el-table-column prop="duration" label="执行时间" width="120">
             <template #default="scope">
               {{ formatDuration(scope.row.duration) }}
             </template>
           </el-table-column>
-          
+
           <el-table-column prop="lastRun" label="最后运行" width="160">
             <template #default="scope">
               {{ formatTime(scope.row.lastRun) }}
             </template>
           </el-table-column>
-          
+
           <el-table-column label="操作" width="200">
             <template #default="scope">
               <el-button size="small" @click="runSingleTest(scope.row)">
@@ -225,9 +251,9 @@
                 <el-icon><View /></el-icon>
                 详情
               </el-button>
-              <el-button 
+              <el-button
                 v-if="scope.row.screenshots && scope.row.screenshots.length > 0"
-                size="small" 
+                size="small"
                 @click="viewScreenshots(scope.row)"
               >
                 <el-icon><Picture /></el-icon>
@@ -236,7 +262,7 @@
             </template>
           </el-table-column>
         </el-table>
-        
+
         <div class="pagination-wrapper">
           <el-pagination
             v-model:current-page="currentPage"
@@ -250,9 +276,9 @@
     </div>
 
     <!-- 测试详情对话框 -->
-    <el-dialog 
-      v-model="detailDialogVisible" 
-      title="测试详情" 
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="测试详情"
       width="80%"
       top="5vh"
     >
@@ -262,7 +288,9 @@
             {{ selectedTest.name }}
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="selectedTest.status === 'passed' ? 'success' : 'danger'">
+            <el-tag
+              :type="selectedTest.status === 'passed' ? 'success' : 'danger'"
+            >
               {{ getStatusText(selectedTest.status) }}
             </el-tag>
           </el-descriptions-item>
@@ -304,15 +332,18 @@
     </el-dialog>
 
     <!-- 截图查看对话框 -->
-    <el-dialog 
-      v-model="screenshotDialogVisible" 
-      title="测试截图" 
+    <el-dialog
+      v-model="screenshotDialogVisible"
+      title="测试截图"
       width="90%"
       top="5vh"
     >
       <div v-if="selectedScreenshots.length > 0" class="screenshot-gallery">
         <el-carousel height="500px" indicator-position="outside">
-          <el-carousel-item v-for="(screenshot, index) in selectedScreenshots" :key="index">
+          <el-carousel-item
+            v-for="(screenshot, index) in selectedScreenshots"
+            :key="index"
+          >
             <div class="screenshot-item">
               <img :src="screenshot.path" :alt="screenshot.name" />
               <p class="screenshot-caption">{{ screenshot.name }}</p>
@@ -325,123 +356,131 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, computed, onMounted } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
-  DataBoard, VideoPlay, Refresh, Check, Close, Document, TrendCharts,
-  Warning, View, Picture
-} from '@element-plus/icons-vue'
+  DataBoard,
+  VideoPlay,
+  Refresh,
+  Check,
+  Close,
+  Document,
+  TrendCharts,
+  Warning,
+  View,
+  Picture,
+} from "@element-plus/icons-vue";
 
 // API基础URL - 修复404错误：使用3002端口 (更新于2025-09-11)
-const API_BASE_URL = 'http://localhost:3002/api/test'
+const API_BASE_URL = "http://localhost:3002/api/test";
 
 // 响应式数据
-const isRunning = ref(false)
-const isRefreshing = ref(false)
-const isLoading = ref(false)
-const filterCategory = ref('')
-const filterStatus = ref('')
-const currentPage = ref(1)
-const pageSize = ref(20)
-const detailDialogVisible = ref(false)
-const screenshotDialogVisible = ref(false)
-const selectedTest = ref(null)
-const selectedScreenshots = ref([])
+const isRunning = ref(false);
+const isRefreshing = ref(false);
+const isLoading = ref(false);
+const filterCategory = ref("");
+const filterStatus = ref("");
+const currentPage = ref(1);
+const pageSize = ref(20);
+const detailDialogVisible = ref(false);
+const screenshotDialogVisible = ref(false);
+const selectedTest = ref(null);
+const selectedScreenshots = ref([]);
 
 // 新增：模式切换相关
-const isRealMode = ref(false)
+const isRealMode = ref(false);
 const testExecutionStatus = ref({
   isRunning: false,
   progress: 0,
-  currentTest: '',
-  startTime: null
-})
+  currentTest: "",
+  startTime: null,
+});
 
 // 测试概览数据
 const testOverview = reactive({
   totalTests: 0,
   totalPassed: 0,
   totalFailed: 0,
-  successRate: 0
-})
+  successRate: 0,
+});
 
 // 测试分类数据
-const testCategories = ref([])
+const testCategories = ref([]);
 
 // 详细测试结果
-const testResults = ref([])
+const testResults = ref([]);
 
 // API调用方法
 const fetchData = async (url, options = {}) => {
   try {
     // 添加时间戳避免缓存
-    const timestamp = new Date().getTime()
-    const separator = url.includes('?') ? '&' : '?'
-    const fullUrl = `${API_BASE_URL}${url}${separator}_t=${timestamp}`
-    
+    const timestamp = new Date().getTime();
+    const separator = url.includes("?") ? "&" : "?";
+    const fullUrl = `${API_BASE_URL}${url}${separator}_t=${timestamp}`;
+
     const response = await fetch(fullUrl, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      ...options
-    })
-    
+      ...options,
+    });
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
-    const result = await response.json()
+
+    const result = await response.json();
     if (!result.success) {
-      throw new Error(result.error || 'API调用失败')
+      throw new Error(result.error || "API调用失败");
     }
-    
-    return result.data
+
+    return result.data;
   } catch (error) {
-    console.error('API调用失败:', error)
-    ElMessage.error('数据获取失败: ' + error.message)
-    throw error
+    console.error("API调用失败:", error);
+    ElMessage.error("数据获取失败: " + error.message);
+    throw error;
   }
-}
+};
 
 // 加载测试概览数据
 const loadTestOverview = async () => {
   try {
-    const data = await fetchData('/overview')
-    Object.assign(testOverview, data)
+    const data = await fetchData("/overview");
+    Object.assign(testOverview, data);
   } catch (error) {
     // 使用默认数据
-    console.warn('使用默认概览数据')
+    console.warn("使用默认概览数据");
   }
-}
+};
 
 // 加载测试分类数据
 const loadTestCategories = async () => {
   try {
-    const data = await fetchData('/categories')
-    testCategories.value = data
+    const data = await fetchData("/categories");
+    testCategories.value = data;
   } catch (error) {
     // 使用默认数据
     testCategories.value = [
       {
-        id: 'data-integrity',
-        name: '数据完整性验证',
+        id: "data-integrity",
+        name: "数据完整性验证",
         testCount: 0,
         passedTests: 0,
         failedTests: 0,
-        successRate: 0
+        successRate: 0,
       },
       {
-        id: 'navigation',
-        name: '导航功能测试',
+        id: "navigation",
+        name: "导航功能测试",
         testCount: 0,
         passedTests: 0,
         failedTests: 0,
-        successRate: 0
-      }
-    ]
-    console.warn('使用默认分类数据')
+        successRate: 0,
+      },
+    ];
+    console.warn("使用默认分类数据");
   }
-}
+};
 
 // 加载测试结果数据
 const loadTestResults = async () => {
@@ -449,216 +488,216 @@ const loadTestResults = async () => {
     const params = new URLSearchParams({
       page: currentPage.value,
       pageSize: pageSize.value,
-      ...(filterCategory.value && { category: getCategoryName(filterCategory.value) }),
-      ...(filterStatus.value && { status: filterStatus.value })
-    })
-    
-    const data = await fetchData(`/results?${params}`)
-    testResults.value = data.results || []
+      ...(filterCategory.value && {
+        category: getCategoryName(filterCategory.value),
+      }),
+      ...(filterStatus.value && { status: filterStatus.value }),
+    });
+
+    const data = await fetchData(`/results?${params}`);
+    testResults.value = data.results || [];
   } catch (error) {
-    testResults.value = []
-    console.warn('使用默认测试结果数据')
+    testResults.value = [];
+    console.warn("使用默认测试结果数据");
   }
-}
+};
 
 // 计算属性
 const filteredTestResults = computed(() => {
-  let filtered = testResults.value
+  let filtered = testResults.value;
 
   if (filterCategory.value) {
-    filtered = filtered.filter(test => 
-      test.category === getCategoryName(filterCategory.value)
-    )
+    filtered = filtered.filter(
+      (test) => test.category === getCategoryName(filterCategory.value),
+    );
   }
 
   if (filterStatus.value) {
-    filtered = filtered.filter(test => test.status === filterStatus.value)
+    filtered = filtered.filter((test) => test.status === filterStatus.value);
   }
 
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filtered.slice(start, end)
-})
+  const start = (currentPage.value - 1) * pageSize.value;
+  const end = start + pageSize.value;
+  return filtered.slice(start, end);
+});
 
 // 新增：模式切换方法
 const handleModeChange = async (value) => {
   try {
-    const mode = value ? 'real' : 'mock'
-    await fetchData('/mode', {
-      method: 'POST',
-      body: JSON.stringify({ mode })
-    })
-    
-    ElMessage.success(`已切换到${value ? '真实测试' : '模拟数据'}模式`)
-    
+    const mode = value ? "real" : "mock";
+    await fetchData("/mode", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    });
+
+    ElMessage.success(`已切换到${value ? "真实测试" : "模拟数据"}模式`);
+
     // 刷新数据
-    await refreshData()
+    await refreshData();
   } catch (error) {
-    ElMessage.error('模式切换失败: ' + error.message)
+    ElMessage.error("模式切换失败: " + error.message);
     // 恢复先前状态
-    isRealMode.value = !value
+    isRealMode.value = !value;
   }
-}
+};
 
 // 加载当前模式
 const loadCurrentMode = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/mode`)
-    const result = await response.json()
+    const response = await fetch(`${API_BASE_URL}/mode`);
+    const result = await response.json();
     if (result.success) {
-      isRealMode.value = result.currentMode === 'real'
-      testExecutionStatus.value.isRunning = result.isRunning || false
+      isRealMode.value = result.currentMode === "real";
+      testExecutionStatus.value.isRunning = result.isRunning || false;
     }
   } catch (error) {
-    console.warn('无法获取当前模式，使用默认设置')
+    console.warn("无法获取当前模式，使用默认设置");
   }
-}
+};
 
 // 方法
 const runAllTests = async () => {
-  isRunning.value = true
+  isRunning.value = true;
   try {
-    ElMessage.info('开始执行所有测试...')
-    
-    await fetchData('/run-all', {
-      method: 'POST',
+    ElMessage.info("开始执行所有测试...");
+
+    await fetchData("/run-all", {
+      method: "POST",
       body: JSON.stringify({
         parallel: false,
-        maxConcurrency: 3
-      })
-    })
-    
-    ElMessage.success('测试执行已开始，请稍后刷新查看结果')
-    
+        maxConcurrency: 3,
+      }),
+    });
+
+    ElMessage.success("测试执行已开始，请稍后刷新查看结果");
+
     // 等待一段时间后自动刷新数据
     setTimeout(async () => {
-      await refreshData()
-    }, 5000)
-    
+      await refreshData();
+    }, 5000);
   } catch (error) {
-    ElMessage.error('测试执行失败: ' + error.message)
+    ElMessage.error("测试执行失败: " + error.message);
   } finally {
-    isRunning.value = false
+    isRunning.value = false;
   }
-}
+};
 
 const refreshData = async () => {
-  isRefreshing.value = true
+  isRefreshing.value = true;
   try {
     // 刷新所有数据
     await Promise.all([
       loadTestOverview(),
       loadTestCategories(),
-      loadTestResults()
-    ])
-    
+      loadTestResults(),
+    ]);
+
     // 如果需要，也可以调用后端刷新接口
-    await fetchData('/refresh', { method: 'POST' })
-    
-    ElMessage.success('数据刷新成功')
+    await fetchData("/refresh", { method: "POST" });
+
+    ElMessage.success("数据刷新成功");
   } catch (error) {
-    ElMessage.error('数据刷新失败: ' + error.message)
+    ElMessage.error("数据刷新失败: " + error.message);
   } finally {
-    isRefreshing.value = false
+    isRefreshing.value = false;
   }
-}
+};
 
 const runSingleTest = async (test) => {
   try {
-    ElMessage.info(`开始执行测试: ${test.name}`)
-    
-    const result = await fetchData('/run-single', {
-      method: 'POST',
+    ElMessage.info(`开始执行测试: ${test.name}`);
+
+    const result = await fetchData("/run-single", {
+      method: "POST",
       body: JSON.stringify({
-        testFile: test.filePath
-      })
-    })
-    
-    ElMessage.success('测试执行完成')
-    
+        testFile: test.filePath,
+      }),
+    });
+
+    ElMessage.success("测试执行完成");
+
     // 刷新测试结果
-    await loadTestResults()
-    
+    await loadTestResults();
   } catch (error) {
-    ElMessage.error('测试执行失败: ' + error.message)
+    ElMessage.error("测试执行失败: " + error.message);
   }
-}
+};
 
 const viewTestDetails = (test) => {
-  selectedTest.value = test
-  detailDialogVisible.value = true
-}
+  selectedTest.value = test;
+  detailDialogVisible.value = true;
+};
 
 const viewScreenshots = (test) => {
-  selectedScreenshots.value = test.screenshots || []
-  screenshotDialogVisible.value = true
-}
+  selectedScreenshots.value = test.screenshots || [];
+  screenshotDialogVisible.value = true;
+};
 
 const viewCategoryDetails = (category) => {
-  filterCategory.value = category.id
-  filterStatus.value = ''
-}
+  filterCategory.value = category.id;
+  filterStatus.value = "";
+};
 
 const handlePageChange = (page) => {
-  currentPage.value = page
-}
+  currentPage.value = page;
+};
 
 // 工具方法
 const getProgressColor = (percentage) => {
-  if (percentage >= 90) return '#67c23a'
-  if (percentage >= 70) return '#e6a23c'
-  return '#f56c6c'
-}
+  if (percentage >= 90) return "#67c23a";
+  if (percentage >= 70) return "#e6a23c";
+  return "#f56c6c";
+};
 
 const getCategoryTagType = (category) => {
   const typeMap = {
-    '数据完整性验证': 'primary',
-    '导航功能测试': 'success',
-    'API连接状态验证': 'info',
-    '用户界面元素检查': 'warning',
-    '交互功能测试': '',
-    '表单验证测试': 'success',
-    '端到端用户流程': 'primary',
-    '质量标准和错误处理': 'danger'
-  }
-  return typeMap[category] || ''
-}
+    数据完整性验证: "primary",
+    导航功能测试: "success",
+    API连接状态验证: "info",
+    用户界面元素检查: "warning",
+    交互功能测试: "",
+    表单验证测试: "success",
+    端到端用户流程: "primary",
+    质量标准和错误处理: "danger",
+  };
+  return typeMap[category] || "";
+};
 
 const getCategoryName = (categoryId) => {
-  const category = testCategories.value.find(c => c.id === categoryId)
-  return category ? category.name : ''
-}
+  const category = testCategories.value.find((c) => c.id === categoryId);
+  return category ? category.name : "";
+};
 
 const getStatusText = (status) => {
   const statusMap = {
-    'passed': '通过',
-    'failed': '失败',
-    'skipped': '跳过'
-  }
-  return statusMap[status] || '未知'
-}
+    passed: "通过",
+    failed: "失败",
+    skipped: "跳过",
+  };
+  return statusMap[status] || "未知";
+};
 
 const formatDuration = (duration) => {
-  if (duration < 1000) return `${duration}ms`
-  return `${(duration / 1000).toFixed(1)}s`
-}
+  if (duration < 1000) return `${duration}ms`;
+  return `${(duration / 1000).toFixed(1)}s`;
+};
 
 const formatTime = (time) => {
-  return new Date(time).toLocaleString('zh-CN')
-}
+  return new Date(time).toLocaleString("zh-CN");
+};
 
 // 生命周期
 onMounted(async () => {
-  isLoading.value = true
+  isLoading.value = true;
   try {
     // 先加载当前模式
-    await loadCurrentMode()
+    await loadCurrentMode();
     // 然后加载数据
-    await refreshData()
+    await refreshData();
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
-})
+});
 </script>
 
 <style scoped>
@@ -869,7 +908,7 @@ onMounted(async () => {
 }
 
 .log-textarea {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: "Consolas", "Monaco", monospace;
 }
 
 .screenshot-gallery {

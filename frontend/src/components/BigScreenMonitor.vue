@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="big-screen-monitor"
-    :class="{ 'fullscreen-mode': isFullscreen }"
-  >
+  <div class="big-screen-monitor" :class="{ 'fullscreen-mode': isFullscreen }">
     <!-- 大屏头部 -->
     <div class="big-screen-header">
       <div class="header-left">
@@ -25,7 +22,7 @@
             v-model="selectedCluster"
             placeholder="选择集群"
             size="large"
-            style="width: 200px;"
+            style="width: 200px"
             @change="handleClusterChange"
           >
             <el-option
@@ -59,7 +56,7 @@
           :class="`metric-${metric.type}`"
           :style="{
             animationDelay: `${index * 0.1}s`,
-            '--metric-color': getMetricColor(metric.type)
+            '--metric-color': getMetricColor(metric.type),
           }"
         >
           <div class="metric-icon">
@@ -138,10 +135,7 @@
               <div class="task-type">{{ task.type_display }}</div>
               <div class="task-target">{{ task.target_info }}</div>
               <div class="task-status">
-                <el-tag
-                  :type="getTaskStatusType(task.status)"
-                  size="small"
-                >
+                <el-tag :type="getTaskStatusType(task.status)" size="small">
                   {{ task.status_display }}
                 </el-tag>
               </div>
@@ -169,7 +163,11 @@
             </div>
             <div class="status-item">
               <div class="indicator" :class="wsConnectionStatus"></div>
-              <span>WebSocket：{{ wsConnectionStatus === 'online' ? '已连接' : '断开' }}</span>
+              <span
+                >WebSocket：{{
+                  wsConnectionStatus === "online" ? "已连接" : "断开"
+                }}</span
+              >
             </div>
             <div class="status-item">
               <div class="indicator online"></div>
@@ -183,8 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { useRouter } from "vue-router";
 import {
   Monitor,
   Close,
@@ -193,506 +191,517 @@ import {
   Coin,
   Document,
   ArrowUp,
-  ArrowDown
-} from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useMonitoringStore } from '@/stores/monitoring'
-import { FeatureManager } from '@/utils/feature-flags'
+  ArrowDown,
+} from "@element-plus/icons-vue";
+import * as echarts from "echarts";
+import { useDashboardStore } from "@/stores/dashboard";
+import { useMonitoringStore } from "@/stores/monitoring";
+import { FeatureManager } from "@/utils/feature-flags";
 
 // Props
 interface Props {
-  clusterId?: string
+  clusterId?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  clusterId: ''
-})
+  clusterId: "",
+});
 
 // Router
-const router = useRouter()
+const router = useRouter();
 
 // Stores
-const dashboardStore = useDashboardStore()
-const monitoringStore = useMonitoringStore()
+const dashboardStore = useDashboardStore();
+const monitoringStore = useMonitoringStore();
 
 // 响应式数据
-const isFullscreen = ref(true)
-const currentTime = ref('')
-const selectedCluster = ref(props.clusterId || '')
-const chartTimeRange = ref('24h')
-const isRefreshing = ref(false)
-const wsConnectionStatus = ref<'online' | 'offline'>('online')
+const isFullscreen = ref(true);
+const currentTime = ref("");
+const selectedCluster = ref(props.clusterId || "");
+const chartTimeRange = ref("24h");
+const isRefreshing = ref(false);
+const wsConnectionStatus = ref<"online" | "offline">("online");
 
 // Chart refs
-const mainChartRef = ref<HTMLElement>()
-const clusterStatusChartRef = ref<HTMLElement>()
-const topDatabaseChartRef = ref<HTMLElement>()
+const mainChartRef = ref<HTMLElement>();
+const clusterStatusChartRef = ref<HTMLElement>();
+const topDatabaseChartRef = ref<HTMLElement>();
 
 // Chart instances
-let mainChart: echarts.ECharts | null = null
-let clusterStatusChart: echarts.ECharts | null = null
-let topDatabaseChart: echarts.ECharts | null = null
+let mainChart: echarts.ECharts | null = null;
+let clusterStatusChart: echarts.ECharts | null = null;
+let topDatabaseChart: echarts.ECharts | null = null;
 
 // 模拟集群数据
 const availableClusters = ref([
-  { id: 'cluster-1', name: '生产集群-01' },
-  { id: 'cluster-2', name: '测试集群-01' },
-  { id: 'cluster-3', name: '开发集群-01' }
-])
+  { id: "cluster-1", name: "生产集群-01" },
+  { id: "cluster-2", name: "测试集群-01" },
+  { id: "cluster-3", name: "开发集群-01" },
+]);
 
 // 计算属性 - 关键指标
 const keyMetrics = computed(() => {
-  const summary = dashboardStore.summary
+  const summary = dashboardStore.summary;
   return [
     {
-      key: 'total_tables',
-      label: '总表数',
+      key: "total_tables",
+      label: "总表数",
       value: formatNumber(summary.total_tables),
       icon: Grid,
-      type: 'primary',
-      trend: { type: 'up', icon: ArrowUp, value: '+5.2%' }
+      type: "primary",
+      trend: { type: "up", icon: ArrowUp, value: "+5.2%" },
     },
     {
-      key: 'small_files',
-      label: '小文件总数',
+      key: "small_files",
+      label: "小文件总数",
       value: formatNumber(summary.total_small_files),
       icon: Document,
-      type: 'warning',
-      trend: { type: 'down', icon: ArrowDown, value: '-2.1%' }
+      type: "warning",
+      trend: { type: "down", icon: ArrowDown, value: "-2.1%" },
     },
     {
-      key: 'total_size',
-      label: '总存储大小',
+      key: "total_size",
+      label: "总存储大小",
       value: formatFileSize(summary.total_size_bytes),
       icon: Coin,
-      type: 'info',
-      trend: { type: 'up', icon: ArrowUp, value: '+8.3%' }
+      type: "info",
+      trend: { type: "up", icon: ArrowUp, value: "+8.3%" },
     },
     {
-      key: 'small_file_ratio',
-      label: '小文件率',
+      key: "small_file_ratio",
+      label: "小文件率",
       value: `${summary.small_file_ratio}%`,
       icon: ArrowUp,
-      type: summary.small_file_ratio > 30 ? 'danger' : 'success',
-      trend: { type: 'down', icon: ArrowDown, value: '-1.5%' }
-    }
-  ]
-})
+      type: summary.small_file_ratio > 30 ? "danger" : "success",
+      trend: { type: "down", icon: ArrowDown, value: "-1.5%" },
+    },
+  ];
+});
 
 // 计算属性 - 最近任务
 const recentTasks = computed(() => {
-  return dashboardStore.recentTasks.slice(0, 8).map(task => ({
+  return dashboardStore.recentTasks.slice(0, 8).map((task) => ({
     ...task,
-    type_display: task.type === 'scan' ? '扫描任务' : '合并任务',
+    type_display: task.type === "scan" ? "扫描任务" : "合并任务",
     target_info: `${task.database_name}.${task.table_name}`,
     status_display: getStatusDisplay(task.status),
-    progress: Math.floor(Math.random() * 100) // 模拟进度
-  }))
-})
+    progress: Math.floor(Math.random() * 100), // 模拟进度
+  }));
+});
 
 // 时间更新
 const updateTime = () => {
-  const now = new Date()
-  currentTime.value = now.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-}
+  const now = new Date();
+  currentTime.value = now.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
 
 // 工具函数
 const formatNumber = (num: number): string => {
   if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M'
+    return (num / 1000000).toFixed(1) + "M";
   } else if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K'
+    return (num / 1000).toFixed(1) + "K";
   }
-  return num.toString()
-}
+  return num.toString();
+};
 
 const formatFileSize = (bytes: number): string => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unitIndex = 0
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unitIndex = 0;
 
   while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
+    size /= 1024;
+    unitIndex++;
   }
 
-  return `${size.toFixed(1)} ${units[unitIndex]}`
-}
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
 
 const getMetricColor = (type: string): string => {
   const colors = {
-    primary: 'var(--hive-primary)',
-    success: 'var(--hive-success)',
-    warning: 'var(--hive-warning)',
-    danger: 'var(--hive-danger)',
-    info: 'var(--hive-info)'
-  }
-  return colors[type as keyof typeof colors] || colors.primary
-}
+    primary: "var(--hive-primary)",
+    success: "var(--hive-success)",
+    warning: "var(--hive-warning)",
+    danger: "var(--hive-danger)",
+    info: "var(--hive-info)",
+  };
+  return colors[type as keyof typeof colors] || colors.primary;
+};
 
 const getStatusDisplay = (status: string): string => {
   const statusMap = {
-    pending: '待执行',
-    running: '执行中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消'
-  }
-  return statusMap[status as keyof typeof statusMap] || status
-}
+    pending: "待执行",
+    running: "执行中",
+    completed: "已完成",
+    failed: "失败",
+    cancelled: "已取消",
+  };
+  return statusMap[status as keyof typeof statusMap] || status;
+};
 
 const getTaskStatusType = (status: string): string => {
   const typeMap = {
-    pending: 'info',
-    running: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'info'
-  }
-  return typeMap[status as keyof typeof typeMap] || 'info'
-}
+    pending: "info",
+    running: "warning",
+    completed: "success",
+    failed: "danger",
+    cancelled: "info",
+  };
+  return typeMap[status as keyof typeof typeMap] || "info";
+};
 
 // 事件处理
 const handleClusterChange = (clusterId: string) => {
-  selectedCluster.value = clusterId
-  dashboardStore.loadAllData(clusterId)
-  refreshCharts()
-}
+  selectedCluster.value = clusterId;
+  dashboardStore.loadAllData(clusterId);
+  refreshCharts();
+};
 
 const exitBigScreen = () => {
-  FeatureManager.disable('fullscreenMode')
-  router.push('/')
-}
+  FeatureManager.disable("fullscreenMode");
+  router.push("/");
+};
 
 // 图表相关方法
 const initCharts = async () => {
-  await nextTick()
+  await nextTick();
 
   // 主图表
   if (mainChartRef.value) {
-    mainChart = echarts.init(mainChartRef.value)
-    updateMainChart()
+    mainChart = echarts.init(mainChartRef.value);
+    updateMainChart();
   }
 
   // 集群状态图表
   if (clusterStatusChartRef.value) {
-    clusterStatusChart = echarts.init(clusterStatusChartRef.value)
-    updateClusterStatusChart()
+    clusterStatusChart = echarts.init(clusterStatusChartRef.value);
+    updateClusterStatusChart();
   }
 
   // TOP数据库图表
   if (topDatabaseChartRef.value) {
-    topDatabaseChart = echarts.init(topDatabaseChartRef.value)
-    updateTopDatabaseChart()
+    topDatabaseChart = echarts.init(topDatabaseChartRef.value);
+    updateTopDatabaseChart();
   }
 
   // 监听窗口大小变化
-  window.addEventListener('resize', handleResize)
-}
+  window.addEventListener("resize", handleResize);
+};
 
 const updateMainChart = () => {
-  if (!mainChart) return
+  if (!mainChart) return;
 
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     tooltip: {
-      trigger: 'axis',
+      trigger: "axis",
       axisPointer: {
-        type: 'cross'
-      }
+        type: "cross",
+      },
     },
     legend: {
-      data: ['小文件数量', '合并后文件数量'],
+      data: ["小文件数量", "合并后文件数量"],
       textStyle: {
-        color: '#fff'
-      }
+        color: "#fff",
+      },
     },
     grid: {
-      left: '5%',
-      right: '5%',
-      bottom: '10%',
-      top: '20%'
+      left: "5%",
+      right: "5%",
+      bottom: "10%",
+      top: "20%",
     },
     xAxis: {
-      type: 'category',
+      type: "category",
       data: generateTimeLabels(),
       axisLine: {
         lineStyle: {
-          color: '#4a5568'
-        }
+          color: "#4a5568",
+        },
       },
       axisLabel: {
-        color: '#a0aec0'
-      }
+        color: "#a0aec0",
+      },
     },
     yAxis: {
-      type: 'value',
+      type: "value",
       axisLine: {
         lineStyle: {
-          color: '#4a5568'
-        }
+          color: "#4a5568",
+        },
       },
       axisLabel: {
-        color: '#a0aec0'
+        color: "#a0aec0",
       },
       splitLine: {
         lineStyle: {
-          color: '#2d3748'
-        }
-      }
+          color: "#2d3748",
+        },
+      },
     },
     series: [
       {
-        name: '小文件数量',
-        type: 'line',
+        name: "小文件数量",
+        type: "line",
         data: generateMockData(),
         smooth: true,
         lineStyle: {
-          color: '#f56565',
-          width: 3
+          color: "#f56565",
+          width: 3,
         },
         areaStyle: {
           color: {
-            type: 'linear',
+            type: "linear",
             x: 0,
             y: 0,
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(245, 101, 101, 0.6)' },
-              { offset: 1, color: 'rgba(245, 101, 101, 0.1)' }
-            ]
-          }
-        }
+              { offset: 0, color: "rgba(245, 101, 101, 0.6)" },
+              { offset: 1, color: "rgba(245, 101, 101, 0.1)" },
+            ],
+          },
+        },
       },
       {
-        name: '合并后文件数量',
-        type: 'line',
+        name: "合并后文件数量",
+        type: "line",
         data: generateMockData(0.3),
         smooth: true,
         lineStyle: {
-          color: '#48bb78',
-          width: 3
+          color: "#48bb78",
+          width: 3,
         },
         areaStyle: {
           color: {
-            type: 'linear',
+            type: "linear",
             x: 0,
             y: 0,
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(72, 187, 120, 0.6)' },
-              { offset: 1, color: 'rgba(72, 187, 120, 0.1)' }
-            ]
-          }
-        }
-      }
-    ]
-  }
+              { offset: 0, color: "rgba(72, 187, 120, 0.6)" },
+              { offset: 1, color: "rgba(72, 187, 120, 0.1)" },
+            ],
+          },
+        },
+      },
+    ],
+  };
 
-  mainChart.setOption(option)
-}
+  mainChart.setOption(option);
+};
 
 const updateClusterStatusChart = () => {
-  if (!clusterStatusChart) return
+  if (!clusterStatusChart) return;
 
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     tooltip: {
-      trigger: 'item'
+      trigger: "item",
     },
     series: [
       {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['50%', '50%'],
+        type: "pie",
+        radius: ["40%", "70%"],
+        center: ["50%", "50%"],
         data: [
-          { value: 2, name: '正常', itemStyle: { color: '#48bb78' } },
-          { value: 1, name: '警告', itemStyle: { color: '#ed8936' } },
-          { value: 0, name: '故障', itemStyle: { color: '#f56565' } }
+          { value: 2, name: "正常", itemStyle: { color: "#48bb78" } },
+          { value: 1, name: "警告", itemStyle: { color: "#ed8936" } },
+          { value: 0, name: "故障", itemStyle: { color: "#f56565" } },
         ],
         label: {
-          color: '#fff',
-          fontSize: 12
-        }
-      }
-    ]
-  }
+          color: "#fff",
+          fontSize: 12,
+        },
+      },
+    ],
+  };
 
-  clusterStatusChart.setOption(option)
-}
+  clusterStatusChart.setOption(option);
+};
 
 const updateTopDatabaseChart = () => {
-  if (!topDatabaseChart) return
+  if (!topDatabaseChart) return;
 
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     tooltip: {
-      trigger: 'axis',
+      trigger: "axis",
       axisPointer: {
-        type: 'shadow'
-      }
+        type: "shadow",
+      },
     },
     grid: {
-      left: '15%',
-      right: '5%',
-      bottom: '10%',
-      top: '10%'
+      left: "15%",
+      right: "5%",
+      bottom: "10%",
+      top: "10%",
     },
     xAxis: {
-      type: 'value',
+      type: "value",
       axisLine: {
         lineStyle: {
-          color: '#4a5568'
-        }
+          color: "#4a5568",
+        },
       },
       axisLabel: {
-        color: '#a0aec0'
+        color: "#a0aec0",
       },
       splitLine: {
         lineStyle: {
-          color: '#2d3748'
-        }
-      }
+          color: "#2d3748",
+        },
+      },
     },
     yAxis: {
-      type: 'category',
-      data: ['db_logs', 'user_data', 'temp_data', 'backup_db', 'analytics'],
+      type: "category",
+      data: ["db_logs", "user_data", "temp_data", "backup_db", "analytics"],
       axisLine: {
         lineStyle: {
-          color: '#4a5568'
-        }
+          color: "#4a5568",
+        },
       },
       axisLabel: {
-        color: '#a0aec0'
-      }
+        color: "#a0aec0",
+      },
     },
     series: [
       {
-        type: 'bar',
+        type: "bar",
         data: [1234, 987, 756, 543, 321],
         itemStyle: {
           color: {
-            type: 'linear',
+            type: "linear",
             x: 0,
             y: 0,
             x2: 1,
             y2: 0,
             colorStops: [
-              { offset: 0, color: '#667eea' },
-              { offset: 1, color: '#764ba2' }
-            ]
-          }
+              { offset: 0, color: "#667eea" },
+              { offset: 1, color: "#764ba2" },
+            ],
+          },
         },
-        barWidth: '60%'
-      }
-    ]
-  }
+        barWidth: "60%",
+      },
+    ],
+  };
 
-  topDatabaseChart.setOption(option)
-}
+  topDatabaseChart.setOption(option);
+};
 
 const generateTimeLabels = (): string[] => {
-  const labels = []
-  const now = new Date()
-  const interval = chartTimeRange.value === '1h' ? 5 : chartTimeRange.value === '24h' ? 60 : 1440 // 分钟
-  const count = chartTimeRange.value === '1h' ? 12 : chartTimeRange.value === '24h' ? 24 : 7
+  const labels = [];
+  const now = new Date();
+  const interval =
+    chartTimeRange.value === "1h"
+      ? 5
+      : chartTimeRange.value === "24h"
+        ? 60
+        : 1440; // 分钟
+  const count =
+    chartTimeRange.value === "1h"
+      ? 12
+      : chartTimeRange.value === "24h"
+        ? 24
+        : 7;
 
   for (let i = count - 1; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * interval * 60 * 1000)
-    labels.push(time.toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }))
+    const time = new Date(now.getTime() - i * interval * 60 * 1000);
+    labels.push(
+      time.toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    );
   }
 
-  return labels
-}
+  return labels;
+};
 
 const generateMockData = (factor = 1): number[] => {
-  const data = []
-  const baseValue = 1000
+  const data = [];
+  const baseValue = 1000;
 
   for (let i = 0; i < 24; i++) {
-    const variation = Math.random() * 200 - 100 // -100 到 +100 的随机变化
-    data.push(Math.max(0, Math.floor((baseValue + variation) * factor)))
+    const variation = Math.random() * 200 - 100; // -100 到 +100 的随机变化
+    data.push(Math.max(0, Math.floor((baseValue + variation) * factor)));
   }
 
-  return data
-}
+  return data;
+};
 
 const refreshCharts = () => {
-  updateMainChart()
-  updateClusterStatusChart()
-  updateTopDatabaseChart()
-}
+  updateMainChart();
+  updateClusterStatusChart();
+  updateTopDatabaseChart();
+};
 
 const handleResize = () => {
-  if (mainChart) mainChart.resize()
-  if (clusterStatusChart) clusterStatusChart.resize()
-  if (topDatabaseChart) topDatabaseChart.resize()
-}
+  if (mainChart) mainChart.resize();
+  if (clusterStatusChart) clusterStatusChart.resize();
+  if (topDatabaseChart) topDatabaseChart.resize();
+};
 
 // 定时器
-let timeInterval: NodeJS.Timeout | null = null
-let refreshInterval: NodeJS.Timeout | null = null
+let timeInterval: NodeJS.Timeout | null = null;
+let refreshInterval: NodeJS.Timeout | null = null;
 
 // 生命周期
 onMounted(async () => {
   // 启动时间更新
-  updateTime()
-  timeInterval = setInterval(updateTime, 1000)
+  updateTime();
+  timeInterval = setInterval(updateTime, 1000);
 
   // 启动数据刷新
   refreshInterval = setInterval(() => {
-    isRefreshing.value = true
+    isRefreshing.value = true;
     setTimeout(() => {
-      isRefreshing.value = false
-      refreshCharts()
-    }, 1000)
-  }, 30000) // 30秒刷新一次
+      isRefreshing.value = false;
+      refreshCharts();
+    }, 1000);
+  }, 30000); // 30秒刷新一次
 
   // 初始化图表
-  await initCharts()
+  await initCharts();
 
   // 加载数据
   if (selectedCluster.value) {
-    await dashboardStore.loadAllData(selectedCluster.value)
+    await dashboardStore.loadAllData(selectedCluster.value);
   }
-})
+});
 
 onUnmounted(() => {
-  if (timeInterval) clearInterval(timeInterval)
-  if (refreshInterval) clearInterval(refreshInterval)
+  if (timeInterval) clearInterval(timeInterval);
+  if (refreshInterval) clearInterval(refreshInterval);
 
   if (mainChart) {
-    mainChart.dispose()
-    mainChart = null
+    mainChart.dispose();
+    mainChart = null;
   }
   if (clusterStatusChart) {
-    clusterStatusChart.dispose()
-    clusterStatusChart = null
+    clusterStatusChart.dispose();
+    clusterStatusChart = null;
   }
   if (topDatabaseChart) {
-    topDatabaseChart.dispose()
-    topDatabaseChart = null
+    topDatabaseChart.dispose();
+    topDatabaseChart = null;
   }
 
-  window.removeEventListener('resize', handleResize)
-})
+  window.removeEventListener("resize", handleResize);
+});
 </script>
 
 <style scoped>
-
 .big-screen-monitor {
   width: 100vw;
   height: 100vh;
@@ -703,16 +712,28 @@ onUnmounted(() => {
 }
 
 .big-screen-monitor::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background:
-    radial-gradient(circle at 20% 20%, rgba(64, 158, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(72, 187, 120, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 40% 60%, rgba(245, 101, 101, 0.05) 0%, transparent 50%);
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(64, 158, 255, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(72, 187, 120, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 40% 60%,
+      rgba(245, 101, 101, 0.05) 0%,
+      transparent 50%
+    );
   pointer-events: none;
 }
 
@@ -811,13 +832,18 @@ onUnmounted(() => {
 }
 
 .metric-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
   transition: left 0.5s ease;
 }
 

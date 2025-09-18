@@ -7,11 +7,18 @@
         <p>管理和监控您的小文件合并任务</p>
       </div>
       <div class="actions-section">
-        <el-button @click="loadTasks" :loading="loading" class="cloudera-btn secondary">
+        <el-button
+          @click="loadTasks"
+          :loading="loading"
+          class="cloudera-btn secondary"
+        >
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button @click="showCreateDialog = true" class="cloudera-btn primary">
+        <el-button
+          @click="showCreateDialog = true"
+          class="cloudera-btn primary"
+        >
           <el-icon><Plus /></el-icon>
           创建任务
         </el-button>
@@ -20,7 +27,10 @@
 
     <!-- Cloudera风格统计概览 -->
     <div class="cloudera-metrics-grid stagger-animation">
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.1s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.1s"
+      >
         <div class="metric-header">
           <div class="metric-icon primary">
             <el-icon><List /></el-icon>
@@ -30,7 +40,10 @@
         <div class="metric-label">总任务数</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.2s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.2s"
+      >
         <div class="metric-header">
           <div class="metric-icon warning">
             <el-icon><Clock /></el-icon>
@@ -43,7 +56,10 @@
         <div class="metric-label">运行中</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.3s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.3s"
+      >
         <div class="metric-header">
           <div class="metric-icon success">
             <el-icon><CircleCheckFilled /></el-icon>
@@ -53,7 +69,10 @@
         <div class="metric-label">已完成</div>
       </div>
 
-      <div class="cloudera-metric-card stagger-item" style="--stagger-delay: 0.4s">
+      <div
+        class="cloudera-metric-card stagger-item"
+        style="--stagger-delay: 0.4s"
+      >
         <div class="metric-header">
           <div class="metric-icon danger">
             <el-icon><CircleCloseFilled /></el-icon>
@@ -90,7 +109,7 @@
                   placeholder="搜索任务名称或表名..."
                   clearable
                   class="search-input"
-                  style="width: 250px;"
+                  style="width: 250px"
                 >
                   <template #prefix>
                     <el-icon><Search /></el-icon>
@@ -99,14 +118,38 @@
               </div>
             </div>
 
-            <el-table :data="filteredTasks" stripe v-loading="loading" class="cloudera-data-table">
+            <el-table
+              :data="filteredTasks"
+              stripe
+              v-loading="loading"
+              class="cloudera-data-table"
+            >
               <el-table-column prop="task_name" label="任务名称" width="200" />
-              <el-table-column prop="database_name" label="数据库" width="120" />
+              <el-table-column
+                prop="database_name"
+                label="数据库"
+                width="120"
+              />
               <el-table-column prop="table_name" label="表名" width="200" />
-              <el-table-column prop="merge_strategy" label="合并策略" width="120">
+              <el-table-column
+                prop="merge_strategy"
+                label="合并策略"
+                width="120"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="row.merge_strategy === 'concatenate' ? 'success' : 'warning'" size="small">
-                    {{ row.merge_strategy === 'concatenate' ? '文件合并' : '重写插入' }}
+                  <el-tag
+                    :type="
+                      row.merge_strategy === 'concatenate'
+                        ? 'success'
+                        : 'warning'
+                    "
+                    size="small"
+                  >
+                    {{
+                      row.merge_strategy === "concatenate"
+                        ? "文件合并"
+                        : "重写插入"
+                    }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -116,25 +159,41 @@
                     <el-tag :type="getStatusType(row.status)" size="small">
                       {{ getStatusText(row.status) }}
                     </el-tag>
-                    <div v-if="row.status === 'running'" class="execution-phase">
-                      <span class="phase-text">{{ getExecutionPhase(row) }}</span>
+                    <div
+                      v-if="row.status === 'running'"
+                      class="execution-phase"
+                    >
+                      <span class="phase-text">{{
+                        getExecutionPhase(row)
+                      }}</span>
                     </div>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="执行进度" width="180" v-if="hasRunningTasks">
+              <el-table-column
+                label="执行进度"
+                width="180"
+                v-if="hasRunningTasks"
+              >
                 <template #default="{ row }">
                   <div v-if="row.status === 'running'" class="progress-column">
                     <el-progress
                       :percentage="getTaskProgress(row)"
-                      :status="row.status === 'failed' ? 'exception' : undefined"
+                      :status="
+                        row.status === 'failed' ? 'exception' : undefined
+                      "
                       :stroke-width="6"
                     />
                     <div class="progress-details">
-                      <span class="progress-text">{{ getProgressText(row) }}</span>
+                      <span class="progress-text">{{
+                        getProgressText(row)
+                      }}</span>
                     </div>
                   </div>
-                  <div v-else-if="row.status === 'success'" class="completed-info">
+                  <div
+                    v-else-if="row.status === 'success'"
+                    class="completed-info"
+                  >
                     <el-icon color="#67c23a"><CircleCheckFilled /></el-icon>
                     <span>已完成</span>
                   </div>
@@ -161,10 +220,33 @@
               </el-table-column>
               <el-table-column label="操作" width="250">
                 <template #default="{ row }">
-                  <el-button v-if="row.status === 'pending'" @click="showPreview(row)" class="cloudera-btn info" size="small">预览</el-button>
-                  <el-button v-if="row.status === 'pending'" @click="executeTask(row)" class="cloudera-btn primary" size="small">执行</el-button>
-                  <el-button v-if="row.status === 'running'" @click="cancelTask(row)" class="cloudera-btn warning" size="small">取消</el-button>
-                  <el-button @click="viewLogs(row)" class="cloudera-btn secondary" size="small">日志</el-button>
+                  <el-button
+                    v-if="row.status === 'pending'"
+                    @click="showPreview(row)"
+                    class="cloudera-btn info"
+                    size="small"
+                    >预览</el-button
+                  >
+                  <el-button
+                    v-if="row.status === 'pending'"
+                    @click="executeTask(row)"
+                    class="cloudera-btn primary"
+                    size="small"
+                    >执行</el-button
+                  >
+                  <el-button
+                    v-if="row.status === 'running'"
+                    @click="cancelTask(row)"
+                    class="cloudera-btn warning"
+                    size="small"
+                    >取消</el-button
+                  >
+                  <el-button
+                    @click="viewLogs(row)"
+                    class="cloudera-btn secondary"
+                    size="small"
+                    >日志</el-button
+                  >
                 </template>
               </el-table-column>
             </el-table>
@@ -177,52 +259,101 @@
             <div class="table-header">
               <h3>扫描任务列表</h3>
               <div class="table-actions">
-                <el-select v-model="scanClusterFilter" placeholder="全部集群" clearable style="width: 160px; margin-right: 8px;">
-                  <el-option v-for="c in clusters" :key="c.id" :label="c.name" :value="c.id" />
+                <el-select
+                  v-model="scanClusterFilter"
+                  placeholder="全部集群"
+                  clearable
+                  style="width: 160px; margin-right: 8px"
+                >
+                  <el-option
+                    v-for="c in clusters"
+                    :key="c.id"
+                    :label="c.name"
+                    :value="c.id"
+                  />
                 </el-select>
-                <el-select v-model="scanStatusFilter" placeholder="全部状态" clearable style="width: 140px; margin-right: 8px;">
+                <el-select
+                  v-model="scanStatusFilter"
+                  placeholder="全部状态"
+                  clearable
+                  style="width: 140px; margin-right: 8px"
+                >
                   <el-option label="等待中" value="pending" />
                   <el-option label="运行中" value="running" />
                   <el-option label="已完成" value="completed" />
                   <el-option label="失败" value="failed" />
                 </el-select>
-                <el-select v-model="scanAutoRefresh" placeholder="刷新频率" style="width: 140px; margin-right: 8px;">
+                <el-select
+                  v-model="scanAutoRefresh"
+                  placeholder="刷新频率"
+                  style="width: 140px; margin-right: 8px"
+                >
                   <el-option :value="0" label="手动刷新" />
                   <el-option :value="30" label="30秒" />
                   <el-option :value="60" label="60秒" />
                 </el-select>
-                <el-button @click="loadScanTasks" class="cloudera-btn secondary">刷新</el-button>
+                <el-button @click="loadScanTasks" class="cloudera-btn secondary"
+                  >刷新</el-button
+                >
               </div>
             </div>
 
-            <el-table :data="scanTasks" stripe v-loading="loadingScan" class="cloudera-data-table">
+            <el-table
+              :data="scanTasks"
+              stripe
+              v-loading="loadingScan"
+              class="cloudera-data-table"
+            >
               <el-table-column label="任务ID" min-width="260">
                 <template #default="{ row }">
                   <span class="mono">{{ shortId(row.task_id) }}</span>
-                  <el-button size="small" link @click="copyId(row.task_id)">复制</el-button>
+                  <el-button size="small" link @click="copyId(row.task_id)"
+                    >复制</el-button
+                  >
                 </template>
               </el-table-column>
-              <el-table-column prop="task_name" label="任务名称" min-width="200" />
+              <el-table-column
+                prop="task_name"
+                label="任务名称"
+                min-width="200"
+              />
               <el-table-column prop="status" label="状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+                  <el-tag :type="getStatusType(row.status)" size="small">{{
+                    getStatusText(row.status)
+                  }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="进度" width="200">
                 <template #default="{ row }">
-                  <el-progress :percentage="row.progress_percentage || 0" :status="row.status === 'failed' ? 'exception' : undefined" style="width: 140px; margin-right: 6px;" />
-                  <span style="font-size:12px; color:#909399;">{{ (row.progress_percentage || 0).toFixed(0) }}%</span>
+                  <el-progress
+                    :percentage="row.progress_percentage || 0"
+                    :status="row.status === 'failed' ? 'exception' : undefined"
+                    style="width: 140px; margin-right: 6px"
+                  />
+                  <span style="font-size: 12px; color: #909399"
+                    >{{ (row.progress_percentage || 0).toFixed(0) }}%</span
+                  >
                 </template>
               </el-table-column>
               <el-table-column prop="start_time" label="开始时间" width="160">
-                <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
+                <template #default="{ row }">{{
+                  formatTime(row.start_time)
+                }}</template>
               </el-table-column>
               <el-table-column prop="last_update" label="最近更新" width="160">
-                <template #default="{ row }">{{ formatTime(row.last_update || row.end_time || row.start_time) }}</template>
+                <template #default="{ row }">{{
+                  formatTime(row.last_update || row.end_time || row.start_time)
+                }}</template>
               </el-table-column>
               <el-table-column label="操作" width="180">
                 <template #default="{ row }">
-                  <el-button size="small" @click="openScanLogs(row.task_id)" class="cloudera-btn secondary">查看日志</el-button>
+                  <el-button
+                    size="small"
+                    @click="openScanLogs(row.task_id)"
+                    class="cloudera-btn secondary"
+                    >查看日志</el-button
+                  >
                 </template>
               </el-table-column>
             </el-table>
@@ -233,7 +364,12 @@
 
     <!-- 创建任务对话框 -->
     <el-dialog v-model="showCreateDialog" title="创建合并任务" width="600px">
-      <el-form :model="taskForm" :rules="taskRules" ref="taskFormRef" label-width="120px">
+      <el-form
+        :model="taskForm"
+        :rules="taskRules"
+        ref="taskFormRef"
+        label-width="120px"
+      >
         <el-form-item label="集群" prop="cluster_id">
           <el-select v-model="taskForm.cluster_id" placeholder="选择集群">
             <el-option
@@ -248,7 +384,10 @@
           <el-input v-model="taskForm.task_name" placeholder="请输入任务名称" />
         </el-form-item>
         <el-form-item label="数据库" prop="database_name">
-          <el-input v-model="taskForm.database_name" placeholder="请输入数据库名" />
+          <el-input
+            v-model="taskForm.database_name"
+            placeholder="请输入数据库名"
+          />
         </el-form-item>
         <el-form-item label="表名" prop="table_name">
           <el-input
@@ -260,10 +399,16 @@
 
         <!-- 表信息显示 -->
         <el-form-item v-if="tableInfo" label="表信息">
-          <el-tag :type="tableInfo.is_partitioned ? 'success' : 'info'" size="small">
-            {{ tableInfo.is_partitioned ? '分区表' : '普通表' }}
+          <el-tag
+            :type="tableInfo.is_partitioned ? 'success' : 'info'"
+            size="small"
+          >
+            {{ tableInfo.is_partitioned ? "分区表" : "普通表" }}
           </el-tag>
-          <span v-if="tableInfo.is_partitioned" style="margin-left: 8px; color: #606266;">
+          <span
+            v-if="tableInfo.is_partitioned"
+            style="margin-left: 8px; color: #606266"
+          >
             共 {{ tableInfo.partition_count }} 个分区
           </span>
         </el-form-item>
@@ -274,14 +419,26 @@
             size="small"
             @click="loadPartitions"
             :loading="partitionsLoading"
-            style="margin-bottom: 8px;"
+            style="margin-bottom: 8px"
           >
             加载分区列表
           </el-button>
 
-          <div v-if="partitions.length > 0" style="max-height: 200px; overflow-y: auto; border: 1px solid #dcdfe6; border-radius: 4px; padding: 8px;">
+          <div
+            v-if="partitions.length > 0"
+            style="
+              max-height: 200px;
+              overflow-y: auto;
+              border: 1px solid #dcdfe6;
+              border-radius: 4px;
+              padding: 8px;
+            "
+          >
             <el-checkbox-group v-model="selectedPartitions">
-              <div v-for="partition in partitions" :key="partition.partition_spec">
+              <div
+                v-for="partition in partitions"
+                :key="partition.partition_spec"
+              >
                 <el-checkbox :label="partition.partition_spec">
                   {{ partition.partition_spec }}
                 </el-checkbox>
@@ -293,22 +450,27 @@
             v-if="!tableInfo?.is_partitioned"
             v-model="taskForm.partition_filter"
             placeholder="手动输入分区过滤器，如: dt='2023-12-01'"
-            style="margin-top: 8px;"
+            style="margin-top: 8px"
           />
         </el-form-item>
 
         <!-- 非分区表的分区过滤器输入 -->
         <el-form-item v-else label="分区过滤">
-          <el-input v-model="taskForm.partition_filter" placeholder="如: dt='2023-12-01' (可选)" />
+          <el-input
+            v-model="taskForm.partition_filter"
+            placeholder="如: dt='2023-12-01' (可选)"
+          />
         </el-form-item>
 
         <el-form-item label="合并策略">
           <el-radio-group v-model="taskForm.merge_strategy">
             <el-radio label="safe_merge">安全合并 (推荐)</el-radio>
             <el-radio label="concatenate">文件合并 (CONCATENATE)</el-radio>
-            <el-radio label="insert_overwrite">重写插入 (INSERT OVERWRITE)</el-radio>
+            <el-radio label="insert_overwrite"
+              >重写插入 (INSERT OVERWRITE)</el-radio
+            >
           </el-radio-group>
-          <div style="margin-top: 4px; font-size: 12px; color: #909399;">
+          <div style="margin-top: 4px; font-size: 12px; color: #909399">
             安全合并使用临时表+重命名策略，确保零停机时间
           </div>
         </el-form-item>
@@ -319,7 +481,7 @@
             :step="64 * 1024 * 1024"
             placeholder="字节"
           />
-          <span style="margin-left: 8px; color: #909399;">字节（可选）</span>
+          <span style="margin-left: 8px; color: #909399">字节（可选）</span>
         </el-form-item>
       </el-form>
 
@@ -334,9 +496,7 @@
     <!-- 日志查看对话框 -->
     <el-dialog v-model="showLogsDialog" title="任务日志" width="800px">
       <div class="logs-container">
-        <div v-if="taskLogs.length === 0" class="no-logs">
-          暂无日志记录
-        </div>
+        <div v-if="taskLogs.length === 0" class="no-logs">暂无日志记录</div>
         <div v-else>
           <div
             v-for="log in taskLogs"
@@ -353,19 +513,29 @@
 
     <!-- 预览对话框 -->
     <el-dialog v-model="showPreviewDialog" title="合并预览" width="700px">
-      <div v-if="previewLoading" style="text-align: center; padding: 20px;">
+      <div v-if="previewLoading" style="text-align: center; padding: 20px">
         <el-icon class="is-loading"><Loading /></el-icon>
-        <div style="margin-top: 10px;">正在生成预览...</div>
+        <div style="margin-top: 10px">正在生成预览...</div>
       </div>
 
       <div v-else-if="previewData" class="preview-container">
         <div class="preview-section">
           <h3>任务信息</h3>
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="任务名称">{{ previewData.task_name }}</el-descriptions-item>
-            <el-descriptions-item label="目标表">{{ previewData.table }}</el-descriptions-item>
+            <el-descriptions-item label="任务名称">{{
+              previewData.task_name
+            }}</el-descriptions-item>
+            <el-descriptions-item label="目标表">{{
+              previewData.table
+            }}</el-descriptions-item>
             <el-descriptions-item label="合并策略">
-              <el-tag :type="previewData.merge_strategy === 'safe_merge' ? 'success' : 'warning'">
+              <el-tag
+                :type="
+                  previewData.merge_strategy === 'safe_merge'
+                    ? 'success'
+                    : 'warning'
+                "
+              >
                 {{ getStrategyName(previewData.merge_strategy) }}
               </el-tag>
             </el-descriptions-item>
@@ -376,15 +546,23 @@
           <h3>预期效果</h3>
           <el-row :gutter="20">
             <el-col :span="6">
-              <el-statistic title="合并前文件数" :value="previewData.preview.estimated_files_before" />
+              <el-statistic
+                title="合并前文件数"
+                :value="previewData.preview.estimated_files_before"
+              />
             </el-col>
             <el-col :span="6">
-              <el-statistic title="合并后文件数" :value="previewData.preview.estimated_files_after" />
+              <el-statistic
+                title="合并后文件数"
+                :value="previewData.preview.estimated_files_after"
+              />
             </el-col>
             <el-col :span="6">
               <el-statistic
                 title="预计节省空间"
-                :value="formatBytes(previewData.preview.estimated_size_reduction)"
+                :value="
+                  formatBytes(previewData.preview.estimated_size_reduction)
+                "
                 suffix="B"
               />
             </el-col>
@@ -398,7 +576,13 @@
           </el-row>
         </div>
 
-        <div v-if="previewData.preview.warnings && previewData.preview.warnings.length > 0" class="preview-section">
+        <div
+          v-if="
+            previewData.preview.warnings &&
+            previewData.preview.warnings.length > 0
+          "
+          class="preview-section"
+        >
           <h3>注意事项</h3>
           <el-alert
             v-for="(warning, index) in previewData.preview.warnings"
@@ -406,7 +590,7 @@
             :title="warning"
             type="warning"
             show-icon
-            style="margin-bottom: 10px;"
+            style="margin-bottom: 10px"
           />
         </div>
 
@@ -414,7 +598,9 @@
           <h3>分区信息</h3>
           <p>
             <el-tag type="info">分区表</el-tag>
-            <span style="margin-left: 10px;">共 {{ previewData.preview.partitions?.length || 0 }} 个分区</span>
+            <span style="margin-left: 10px"
+              >共 {{ previewData.preview.partitions?.length || 0 }} 个分区</span
+            >
           </p>
         </div>
       </div>
@@ -422,501 +608,547 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="showPreviewDialog = false">关闭</el-button>
-          <el-button v-if="previewData && !previewLoading" type="primary" @click="executeTaskFromPreview">
+          <el-button
+            v-if="previewData && !previewLoading"
+            type="primary"
+            @click="executeTaskFromPreview"
+          >
             确认执行
           </el-button>
         </div>
       </template>
     </el-dialog>
-    <ScanProgressDialog v-model="showScanDialog" :task-id="selectedScanTaskId" />
+    <ScanProgressDialog
+      v-model="showScanDialog"
+      :task-id="selectedScanTaskId"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted, computed, watch, onBeforeUnmount } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
-  Plus, List, Clock, CircleCheckFilled, CircleCloseFilled,
-  Refresh, Search, Loading
-} from '@element-plus/icons-vue'
-import { tasksApi, type MergeTask, type MergeTaskCreate } from '@/api/tasks'
-import { clustersApi, type Cluster } from '@/api/clusters'
-import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
-import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
-import dayjs from 'dayjs'
+  Plus,
+  List,
+  Clock,
+  CircleCheckFilled,
+  CircleCloseFilled,
+  Refresh,
+  Search,
+  Loading,
+} from "@element-plus/icons-vue";
+import { tasksApi, type MergeTask, type MergeTaskCreate } from "@/api/tasks";
+import { clustersApi, type Cluster } from "@/api/clusters";
+import { scanTasksApi, type ScanTask } from "@/api/scanTasks";
+import ScanProgressDialog from "@/components/ScanProgressDialog.vue";
+import dayjs from "dayjs";
 
 // 数据
-const activeTab = ref('merge')
-const taskSearchText = ref('')
+const activeTab = ref("merge");
+const taskSearchText = ref("");
 
 // 标签页配置
 const tabs = [
-  { key: 'merge', label: '合并任务', icon: 'List' },
-  { key: 'scan', label: '扫描任务', icon: 'Search' }
-]
+  { key: "merge", label: "合并任务", icon: "List" },
+  { key: "scan", label: "扫描任务", icon: "Search" },
+];
 
-const tasks = ref<MergeTask[]>([])
-const scanTasks = ref<ScanTask[]>([])
-const clusters = ref<Cluster[]>([])
-const loading = ref(false)
-const loadingScan = ref(false)
-const showCreateDialog = ref(false)
-const showLogsDialog = ref(false)
-const showPreviewDialog = ref(false)
-const showScanDialog = ref(false)
-const taskLogs = ref<any[]>([])
-const previewData = ref<any>(null)
-const previewLoading = ref(false)
-const previewingTask = ref<MergeTask | null>(null)
-const selectedScanTaskId = ref<string | null>(null)
+const tasks = ref<MergeTask[]>([]);
+const scanTasks = ref<ScanTask[]>([]);
+const clusters = ref<Cluster[]>([]);
+const loading = ref(false);
+const loadingScan = ref(false);
+const showCreateDialog = ref(false);
+const showLogsDialog = ref(false);
+const showPreviewDialog = ref(false);
+const showScanDialog = ref(false);
+const taskLogs = ref<any[]>([]);
+const previewData = ref<any>(null);
+const previewLoading = ref(false);
+const previewingTask = ref<MergeTask | null>(null);
+const selectedScanTaskId = ref<string | null>(null);
 // 扫描任务筛选与刷新
-const scanClusterFilter = ref<number | null>(null)
-const scanStatusFilter = ref<string>('')
-const scanAutoRefresh = ref<number>(0)
-let scanRefreshTimer: NodeJS.Timeout | null = null
+const scanClusterFilter = ref<number | null>(null);
+const scanStatusFilter = ref<string>("");
+const scanAutoRefresh = ref<number>(0);
+let scanRefreshTimer: NodeJS.Timeout | null = null;
 
 // 分区相关数据
-const tableInfo = ref<any>(null)
-const partitions = ref<any[]>([])
-const selectedPartitions = ref<string[]>([])
-const partitionsLoading = ref(false)
+const tableInfo = ref<any>(null);
+const partitions = ref<any[]>([]);
+const selectedPartitions = ref<string[]>([]);
+const partitionsLoading = ref(false);
 
 // 表单数据
 const taskForm = ref<MergeTaskCreate>({
   cluster_id: 0,
-  task_name: '',
-  table_name: '',
-  database_name: '',
-  partition_filter: '',
-  merge_strategy: 'safe_merge'
-})
+  task_name: "",
+  table_name: "",
+  database_name: "",
+  partition_filter: "",
+  merge_strategy: "safe_merge",
+});
 
 const taskRules = {
-  cluster_id: [{ required: true, message: '请选择集群', trigger: 'change' }],
-  task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
-  database_name: [{ required: true, message: '请输入数据库名', trigger: 'blur' }],
-  table_name: [{ required: true, message: '请输入表名', trigger: 'blur' }]
-}
+  cluster_id: [{ required: true, message: "请选择集群", trigger: "change" }],
+  task_name: [{ required: true, message: "请输入任务名称", trigger: "blur" }],
+  database_name: [
+    { required: true, message: "请输入数据库名", trigger: "blur" },
+  ],
+  table_name: [{ required: true, message: "请输入表名", trigger: "blur" }],
+};
 
-const taskFormRef = ref()
+const taskFormRef = ref();
 
 // 计算属性
-const totalTasks = computed(() => tasks.value.length)
-const runningTasks = computed(() => tasks.value.filter(t => t.status === 'running').length)
-const successTasks = computed(() => tasks.value.filter(t => t.status === 'success').length)
-const failedTasks = computed(() => tasks.value.filter(t => t.status === 'failed').length)
+const totalTasks = computed(() => tasks.value.length);
+const runningTasks = computed(
+  () => tasks.value.filter((t) => t.status === "running").length,
+);
+const successTasks = computed(
+  () => tasks.value.filter((t) => t.status === "success").length,
+);
+const failedTasks = computed(
+  () => tasks.value.filter((t) => t.status === "failed").length,
+);
 
 const filteredTasks = computed(() => {
-  if (!taskSearchText.value) return tasks.value
-  const search = taskSearchText.value.toLowerCase()
-  return tasks.value.filter(task =>
-    task.task_name.toLowerCase().includes(search) ||
-    task.table_name.toLowerCase().includes(search) ||
-    task.database_name.toLowerCase().includes(search)
-  )
-})
+  if (!taskSearchText.value) return tasks.value;
+  const search = taskSearchText.value.toLowerCase();
+  return tasks.value.filter(
+    (task) =>
+      task.task_name.toLowerCase().includes(search) ||
+      task.table_name.toLowerCase().includes(search) ||
+      task.database_name.toLowerCase().includes(search),
+  );
+});
 
 // 方法
 const loadTasks = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    tasks.value = await tasksApi.list()
+    tasks.value = await tasksApi.list();
   } catch (error) {
-    console.error('Failed to load tasks:', error)
+    console.error("Failed to load tasks:", error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const loadScanTasks = async () => {
-  loadingScan.value = true
+  loadingScan.value = true;
   try {
-    const cid = scanClusterFilter.value || undefined
-    const status = scanStatusFilter.value || undefined
-    scanTasks.value = await scanTasksApi.list(cid as any, status)
+    const cid = scanClusterFilter.value || undefined;
+    const status = scanStatusFilter.value || undefined;
+    scanTasks.value = await scanTasksApi.list(cid as any, status);
   } catch (error) {
-    console.error('Failed to load scan tasks:', error)
+    console.error("Failed to load scan tasks:", error);
   } finally {
-    loadingScan.value = false
+    loadingScan.value = false;
   }
-}
+};
 
 const loadClusters = async () => {
   try {
-    clusters.value = await clustersApi.list()
+    clusters.value = await clustersApi.list();
   } catch (error) {
-    console.error('Failed to load clusters:', error)
+    console.error("Failed to load clusters:", error);
   }
-}
+};
 
 const createTask = async () => {
   try {
-    await taskFormRef.value.validate()
+    await taskFormRef.value.validate();
 
     // 准备任务数据
-    const taskData = { ...taskForm.value }
+    const taskData = { ...taskForm.value };
 
     // 处理分区选择
-    if (tableInfo.value?.is_partitioned && selectedPartitions.value.length > 0) {
+    if (
+      tableInfo.value?.is_partitioned &&
+      selectedPartitions.value.length > 0
+    ) {
       // 构建分区过滤器：多个分区用OR连接
-      const partitionFilters = selectedPartitions.value.map(partition => `(${partition})`)
-      taskData.partition_filter = partitionFilters.join(' OR ')
+      const partitionFilters = selectedPartitions.value.map(
+        (partition) => `(${partition})`,
+      );
+      taskData.partition_filter = partitionFilters.join(" OR ");
     }
 
-    await tasksApi.create(taskData)
+    await tasksApi.create(taskData);
 
-    ElMessage.success('任务创建成功')
-    showCreateDialog.value = false
-    resetTaskForm()
-    loadTasks()
+    ElMessage.success("任务创建成功");
+    showCreateDialog.value = false;
+    resetTaskForm();
+    loadTasks();
   } catch (error) {
-    console.error('Failed to create task:', error)
-    ElMessage.error('创建任务失败')
+    console.error("Failed to create task:", error);
+    ElMessage.error("创建任务失败");
   }
-}
+};
 
 const executeTask = async (task: MergeTask) => {
   try {
-    await tasksApi.execute(task.id)
-    ElMessage.success('任务执行已启动')
-    loadTasks()
+    await tasksApi.execute(task.id);
+    ElMessage.success("任务执行已启动");
+    loadTasks();
   } catch (error) {
-    console.error('Failed to execute task:', error)
+    console.error("Failed to execute task:", error);
   }
-}
+};
 
 const cancelTask = async (task: MergeTask) => {
   try {
     await ElMessageBox.confirm(
       `确定要取消任务 "${task.task_name}" 吗？`,
-      '确认取消',
+      "确认取消",
       {
-        confirmButtonText: '取消任务',
-        cancelButtonText: '不取消',
-        type: 'warning'
-      }
-    )
+        confirmButtonText: "取消任务",
+        cancelButtonText: "不取消",
+        type: "warning",
+      },
+    );
 
-    await tasksApi.cancel(task.id)
-    ElMessage.success('任务已取消')
-    loadTasks()
+    await tasksApi.cancel(task.id);
+    ElMessage.success("任务已取消");
+    loadTasks();
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('Failed to cancel task:', error)
+    if (error !== "cancel") {
+      console.error("Failed to cancel task:", error);
     }
   }
-}
+};
 
 const viewLogs = async (task: MergeTask) => {
   try {
-    taskLogs.value = await tasksApi.getLogs(task.id)
-    showLogsDialog.value = true
+    taskLogs.value = await tasksApi.getLogs(task.id);
+    showLogsDialog.value = true;
   } catch (error) {
-    console.error('Failed to load task logs:', error)
+    console.error("Failed to load task logs:", error);
   }
-}
+};
 
 const openScanLogs = (taskId: string) => {
-  selectedScanTaskId.value = taskId
-  showScanDialog.value = true
-}
+  selectedScanTaskId.value = taskId;
+  showScanDialog.value = true;
+};
 
 const resetTaskForm = () => {
   taskForm.value = {
     cluster_id: 0,
-    task_name: '',
-    table_name: '',
-    database_name: '',
-    partition_filter: '',
-    merge_strategy: 'safe_merge'
-  }
+    task_name: "",
+    table_name: "",
+    database_name: "",
+    partition_filter: "",
+    merge_strategy: "safe_merge",
+  };
   // 清空分区相关数据
-  tableInfo.value = null
-  partitions.value = []
-  selectedPartitions.value = []
-}
+  tableInfo.value = null;
+  partitions.value = [];
+  selectedPartitions.value = [];
+};
 
 const getStatusType = (status: string): string => {
   const statusMap: Record<string, string> = {
-    'pending': 'info',
-    'running': 'warning',
-    'success': 'success',
-    'failed': 'danger'
-  }
-  return statusMap[status] || 'info'
-}
+    pending: "info",
+    running: "warning",
+    success: "success",
+    failed: "danger",
+  };
+  return statusMap[status] || "info";
+};
 
 const getStatusText = (status: string): string => {
   const statusMap: Record<string, string> = {
-    'pending': '等待中',
-    'running': '运行中',
-    'success': '成功',
-    'failed': '失败'
-  }
-  return statusMap[status] || status
-}
+    pending: "等待中",
+    running: "运行中",
+    success: "成功",
+    failed: "失败",
+  };
+  return statusMap[status] || status;
+};
 
 const formatTime = (time: string): string => {
-  return dayjs(time).format('MM-DD HH:mm:ss')
-}
+  return dayjs(time).format("MM-DD HH:mm:ss");
+};
 
 // 显示文件数：统计失败或为空时显示 NaN
 const displayFiles = (value: number | null | undefined) => {
-  if (value === null || value === undefined) return 'NaN'
-  return value
-}
+  if (value === null || value === undefined) return "NaN";
+  return value;
+};
 
 const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+  if (bytes === 0) return "0";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
 
 const copyId = async (id: string) => {
-  try { await navigator.clipboard.writeText(id) } catch {}
-  ElMessage.success('任务ID已复制')
-}
+  try {
+    await navigator.clipboard.writeText(id);
+  } catch {}
+  ElMessage.success("任务ID已复制");
+};
 
 const shortId = (id: string) => {
-  if (!id) return '-'
-  return id.slice(0, 10) + '…' + id.slice(-6)
-}
+  if (!id) return "-";
+  return id.slice(0, 10) + "…" + id.slice(-6);
+};
 
 const getStrategyName = (strategy: string): string => {
   const strategyMap: Record<string, string> = {
-    'safe_merge': '安全合并',
-    'concatenate': '文件合并',
-    'insert_overwrite': '重写插入'
-  }
-  return strategyMap[strategy] || strategy
-}
+    safe_merge: "安全合并",
+    concatenate: "文件合并",
+    insert_overwrite: "重写插入",
+  };
+  return strategyMap[strategy] || strategy;
+};
 
 // 显示任务预览
 const showPreview = async (task: MergeTask) => {
   try {
-    previewingTask.value = task
-    previewData.value = null
-    showPreviewDialog.value = true
-    previewLoading.value = true
+    previewingTask.value = task;
+    previewData.value = null;
+    showPreviewDialog.value = true;
+    previewLoading.value = true;
 
-    const preview = await tasksApi.getTaskPreview(task.id)
-    previewData.value = preview
+    const preview = await tasksApi.getTaskPreview(task.id);
+    previewData.value = preview;
   } catch (error) {
-    console.error('Failed to load task preview:', error)
-    ElMessage.error('获取预览信息失败')
+    console.error("Failed to load task preview:", error);
+    ElMessage.error("获取预览信息失败");
   } finally {
-    previewLoading.value = false
+    previewLoading.value = false;
   }
-}
+};
 
 // 从预览对话框执行任务
 const executeTaskFromPreview = async () => {
   if (previewingTask.value) {
-    showPreviewDialog.value = false
-    await executeTask(previewingTask.value)
+    showPreviewDialog.value = false;
+    await executeTask(previewingTask.value);
   }
-}
+};
 
 // 检查表分区信息
 const checkTablePartitions = async () => {
-  if (!taskForm.value.cluster_id || !taskForm.value.database_name || !taskForm.value.table_name) {
-    return
+  if (
+    !taskForm.value.cluster_id ||
+    !taskForm.value.database_name ||
+    !taskForm.value.table_name
+  ) {
+    return;
   }
 
   try {
     tableInfo.value = await tasksApi.getTableInfo(
       taskForm.value.cluster_id,
       taskForm.value.database_name,
-      taskForm.value.table_name
-    )
+      taskForm.value.table_name,
+    );
     // 清空之前的分区数据
-    partitions.value = []
-    selectedPartitions.value = []
+    partitions.value = [];
+    selectedPartitions.value = [];
   } catch (error) {
-    console.error('Failed to get table info:', error)
-    tableInfo.value = null
+    console.error("Failed to get table info:", error);
+    tableInfo.value = null;
   }
-}
+};
 
 // 加载分区列表
 const loadPartitions = async () => {
-  if (!taskForm.value.cluster_id || !taskForm.value.database_name || !taskForm.value.table_name) {
-    ElMessage.warning('请先选择集群、数据库和表名')
-    return
+  if (
+    !taskForm.value.cluster_id ||
+    !taskForm.value.database_name ||
+    !taskForm.value.table_name
+  ) {
+    ElMessage.warning("请先选择集群、数据库和表名");
+    return;
   }
 
-  partitionsLoading.value = true
+  partitionsLoading.value = true;
   try {
     const response = await tasksApi.getTablePartitions(
       taskForm.value.cluster_id,
       taskForm.value.database_name,
-      taskForm.value.table_name
-    )
-    partitions.value = response.partitions || []
-    selectedPartitions.value = []
+      taskForm.value.table_name,
+    );
+    partitions.value = response.partitions || [];
+    selectedPartitions.value = [];
   } catch (error) {
-    console.error('Failed to load partitions:', error)
-    ElMessage.error('加载分区列表失败')
+    console.error("Failed to load partitions:", error);
+    ElMessage.error("加载分区列表失败");
   } finally {
-    partitionsLoading.value = false
+    partitionsLoading.value = false;
   }
-}
+};
 
 // 任务进度监控相关
-const pollingInterval = ref<NodeJS.Timeout | null>(null)
+const pollingInterval = ref<NodeJS.Timeout | null>(null);
 
 // 获取任务执行阶段
 const getExecutionPhase = (row: MergeTask): string => {
-  if (row.status !== 'running') return ''
+  if (row.status !== "running") return "";
 
   // 基于任务的详细信息判断当前执行阶段
   if (row.execution_phase) {
     const phaseMap: Record<string, string> = {
-      'initialization': '初始化中',
-      'connection_test': '连接测试',
-      'pre_validation': '预验证',
-      'file_analysis': '文件分析',
-      'temp_table_creation': '创建临时表',
-      'data_validation': '数据验证',
-      'atomic_swap': '原子切换',
-      'post_validation': '后验证',
-      'cleanup': '清理中',
-      'completion': '完成中'
-    }
-    return phaseMap[row.execution_phase] || row.execution_phase
+      initialization: "初始化中",
+      connection_test: "连接测试",
+      pre_validation: "预验证",
+      file_analysis: "文件分析",
+      temp_table_creation: "创建临时表",
+      data_validation: "数据验证",
+      atomic_swap: "原子切换",
+      post_validation: "后验证",
+      cleanup: "清理中",
+      completion: "完成中",
+    };
+    return phaseMap[row.execution_phase] || row.execution_phase;
   }
 
   // 默认基于状态返回阶段
-  return '执行中'
-}
+  return "执行中";
+};
 
 // 获取任务进度百分比
 const getTaskProgress = (row: MergeTask): number => {
-  if (row.status === 'success') return 100
-  if (row.status === 'failed') return 0
+  if (row.status === "success") return 100;
+  if (row.status === "failed") return 0;
 
   // 基于执行阶段计算进度
   if (row.execution_phase) {
     const progressMap: Record<string, number> = {
-      'initialization': 5,
-      'connection_test': 10,
-      'pre_validation': 15,
-      'file_analysis': 25,
-      'temp_table_creation': 45,
-      'data_validation': 65,
-      'atomic_swap': 80,
-      'post_validation': 90,
-      'cleanup': 95,
-      'completion': 98
-    }
-    return progressMap[row.execution_phase] || 50
+      initialization: 5,
+      connection_test: 10,
+      pre_validation: 15,
+      file_analysis: 25,
+      temp_table_creation: 45,
+      data_validation: 65,
+      atomic_swap: 80,
+      post_validation: 90,
+      cleanup: 95,
+      completion: 98,
+    };
+    return progressMap[row.execution_phase] || 50;
   }
 
   // 如果有具体进度信息，使用具体值
-  if (row.progress_percentage !== undefined && row.progress_percentage !== null) {
-    return row.progress_percentage
+  if (
+    row.progress_percentage !== undefined &&
+    row.progress_percentage !== null
+  ) {
+    return row.progress_percentage;
   }
 
-  return 50 // 默认进度
-}
+  return 50; // 默认进度
+};
 
 // 获取进度文本
 const getProgressText = (row: MergeTask): string => {
-  if (row.status !== 'running') return ''
+  if (row.status !== "running") return "";
 
-  const phase = getExecutionPhase(row)
-  const progress = getTaskProgress(row)
+  const phase = getExecutionPhase(row);
+  const progress = getTaskProgress(row);
 
   // 如果有估计剩余时间，显示剩余时间
   if (row.estimated_remaining_time) {
-    return `${phase} - ${progress}% (预计剩余 ${formatDuration(row.estimated_remaining_time)})`
+    return `${phase} - ${progress}% (预计剩余 ${formatDuration(row.estimated_remaining_time)})`;
   }
 
   // 如果有处理的文件数信息
   if (row.processed_files_count && row.total_files_count) {
-    return `${phase} - ${row.processed_files_count}/${row.total_files_count} 文件`
+    return `${phase} - ${row.processed_files_count}/${row.total_files_count} 文件`;
   }
 
-  return `${phase} - ${progress}%`
-}
+  return `${phase} - ${progress}%`;
+};
 
 // 检查是否有运行中的任务
 const hasRunningTasks = computed(() => {
-  return tasks.value.some(task => task.status === 'running')
-})
+  return tasks.value.some((task) => task.status === "running");
+});
 
 // 格式化持续时间
 const formatDuration = (seconds: number): string => {
-  if (seconds < 60) return `${Math.round(seconds)}秒`
-  if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`
-  return `${Math.round(seconds / 3600)}小时`
-}
+  if (seconds < 60) return `${Math.round(seconds)}秒`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`;
+  return `${Math.round(seconds / 3600)}小时`;
+};
 
 // 启动任务状态轮询
 const startPolling = () => {
-  if (pollingInterval.value) return
+  if (pollingInterval.value) return;
 
   pollingInterval.value = setInterval(() => {
     // 只有在有运行中任务时才轮询
     if (hasRunningTasks.value) {
-      loadTasks()
+      loadTasks();
     } else {
-      stopPolling() // 没有运行中的任务时停止轮询
+      stopPolling(); // 没有运行中的任务时停止轮询
     }
-  }, 3000) // 每3秒轮询一次
-}
+  }, 3000); // 每3秒轮询一次
+};
 
 // 停止任务状态轮询
 const stopPolling = () => {
   if (pollingInterval.value) {
-    clearInterval(pollingInterval.value)
-    pollingInterval.value = null
+    clearInterval(pollingInterval.value);
+    pollingInterval.value = null;
   }
-}
+};
 
 // 监听任务状态变化，自动启动/停止轮询
 watch(
   () => hasRunningTasks.value,
   (hasRunning) => {
     if (hasRunning) {
-      startPolling()
+      startPolling();
     } else {
-      stopPolling()
+      stopPolling();
     }
-  }
-)
+  },
+);
 
 onMounted(() => {
-  loadTasks()
-  loadClusters()
-  loadScanTasks()
+  loadTasks();
+  loadClusters();
+  loadScanTasks();
 
   // 如果有运行中的任务，启动轮询
   if (hasRunningTasks.value) {
-    startPolling()
+    startPolling();
   }
-  setupScanAutoRefresh()
-})
+  setupScanAutoRefresh();
+});
 
 // 组件卸载时清理轮询
 onBeforeUnmount(() => {
-  stopPolling()
-  if (scanRefreshTimer) { clearInterval(scanRefreshTimer); scanRefreshTimer = null }
-})
+  stopPolling();
+  if (scanRefreshTimer) {
+    clearInterval(scanRefreshTimer);
+    scanRefreshTimer = null;
+  }
+});
 
 const setupScanAutoRefresh = () => {
-  if (scanRefreshTimer) { clearInterval(scanRefreshTimer); scanRefreshTimer = null }
+  if (scanRefreshTimer) {
+    clearInterval(scanRefreshTimer);
+    scanRefreshTimer = null;
+  }
   if (scanAutoRefresh.value > 0) {
     scanRefreshTimer = setInterval(() => {
-      loadScanTasks()
-    }, scanAutoRefresh.value * 1000)
+      loadScanTasks();
+    }, scanAutoRefresh.value * 1000);
   }
-}
+};
 
-watch(scanAutoRefresh, setupScanAutoRefresh)
-watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
+watch(scanAutoRefresh, setupScanAutoRefresh);
+watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks());
 </script>
 
 <style scoped>
@@ -1079,7 +1311,9 @@ watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
   }
 }
 
-.mono { font-family: Menlo, Monaco, monospace; }
+.mono {
+  font-family: Menlo, Monaco, monospace;
+}
 .logs-container {
   max-height: 400px;
   overflow-y: auto;
@@ -1096,7 +1330,7 @@ watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
 
 .log-entry {
   margin-bottom: 8px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 12px;
   line-height: 1.4;
 }

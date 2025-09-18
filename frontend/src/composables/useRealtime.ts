@@ -1,84 +1,86 @@
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useMonitoringStore } from '@/stores/monitoring'
-import { useDashboardStore } from '@/stores/dashboard'
+import { ref, onMounted, onUnmounted, watch } from "vue";
+import { useMonitoringStore } from "@/stores/monitoring";
+import { useDashboardStore } from "@/stores/dashboard";
 
 export function useRealtime() {
-  const monitoringStore = useMonitoringStore()
-  const dashboardStore = useDashboardStore()
-  
-  const isRefreshing = ref(false)
-  const nextRefreshIn = ref(0)
-  const refreshTimer = ref<NodeJS.Timeout | null>(null)
-  const countdownTimer = ref<NodeJS.Timeout | null>(null)
+  const monitoringStore = useMonitoringStore();
+  const dashboardStore = useDashboardStore();
+
+  const isRefreshing = ref(false);
+  const nextRefreshIn = ref(0);
+  const refreshTimer = ref<NodeJS.Timeout | null>(null);
+  const countdownTimer = ref<NodeJS.Timeout | null>(null);
 
   // 开始自动刷新
   function startAutoRefresh() {
-    if (!monitoringStore.isAutoRefreshEnabled) return
-    
-    clearTimers()
-    
+    if (!monitoringStore.isAutoRefreshEnabled) return;
+
+    clearTimers();
+
     // 设置刷新定时器
     refreshTimer.value = setInterval(async () => {
-      await performRefresh()
-    }, monitoringStore.settings.refreshInterval * 1000)
-    
+      await performRefresh();
+    }, monitoringStore.settings.refreshInterval * 1000);
+
     // 开始倒计时
-    startCountdown()
+    startCountdown();
   }
 
   // 停止自动刷新
   function stopAutoRefresh() {
-    clearTimers()
-    nextRefreshIn.value = 0
+    clearTimers();
+    nextRefreshIn.value = 0;
   }
 
   // 手动刷新
   async function performRefresh() {
-    if (isRefreshing.value) return
-    
-    isRefreshing.value = true
-    
+    if (isRefreshing.value) return;
+
+    isRefreshing.value = true;
+
     try {
-      await dashboardStore.loadAllData(monitoringStore.settings.selectedCluster)
-      monitoringStore.lastRefreshTime = new Date()
-      
+      await dashboardStore.loadAllData(
+        monitoringStore.settings.selectedCluster,
+      );
+      monitoringStore.lastRefreshTime = new Date();
+
       // 重新开始倒计时
-      startCountdown()
+      startCountdown();
     } catch (error) {
-      console.error('刷新数据失败:', error)
+      console.error("刷新数据失败:", error);
     } finally {
-      isRefreshing.value = false
+      isRefreshing.value = false;
     }
   }
 
   // 开始倒计时
   function startCountdown() {
-    if (!monitoringStore.isAutoRefreshEnabled) return
-    
+    if (!monitoringStore.isAutoRefreshEnabled) return;
+
     if (countdownTimer.value) {
-      clearInterval(countdownTimer.value)
+      clearInterval(countdownTimer.value);
     }
-    
-    nextRefreshIn.value = monitoringStore.settings.refreshInterval
-    
+
+    nextRefreshIn.value = monitoringStore.settings.refreshInterval;
+
     countdownTimer.value = setInterval(() => {
-      nextRefreshIn.value--
+      nextRefreshIn.value--;
       if (nextRefreshIn.value <= 0) {
-        nextRefreshIn.value = monitoringStore.settings.refreshInterval
+        nextRefreshIn.value = monitoringStore.settings.refreshInterval;
       }
-    }, 1000)
+    }, 1000);
   }
 
   // 清理定时器
   function clearTimers() {
     if (refreshTimer.value) {
-      clearInterval(refreshTimer.value)
-      refreshTimer.value = null
+      clearInterval(refreshTimer.value);
+      refreshTimer.value = null;
     }
-    
+
     if (countdownTimer.value) {
-      clearInterval(countdownTimer.value)
-      countdownTimer.value = null
+      clearInterval(countdownTimer.value);
+      countdownTimer.value = null;
     }
   }
 
@@ -87,51 +89,51 @@ export function useRealtime() {
     () => monitoringStore.isAutoRefreshEnabled,
     (enabled) => {
       if (enabled) {
-        startAutoRefresh()
+        startAutoRefresh();
       } else {
-        stopAutoRefresh()
+        stopAutoRefresh();
       }
-    }
-  )
+    },
+  );
 
   // 监听刷新间隔变化
   watch(
     () => monitoringStore.settings.refreshInterval,
     () => {
       if (monitoringStore.isAutoRefreshEnabled) {
-        startAutoRefresh()
+        startAutoRefresh();
       }
-    }
-  )
+    },
+  );
 
   // 监听选中集群变化
   watch(
     () => monitoringStore.settings.selectedCluster,
     () => {
       // 立即刷新新集群数据
-      performRefresh()
-    }
-  )
+      performRefresh();
+    },
+  );
 
   // 生命周期
   onMounted(() => {
-    monitoringStore.initialize()
-    
+    monitoringStore.initialize();
+
     if (monitoringStore.isAutoRefreshEnabled) {
-      startAutoRefresh()
+      startAutoRefresh();
     }
-  })
+  });
 
   onUnmounted(() => {
-    clearTimers()
-    monitoringStore.cleanup()
-  })
+    clearTimers();
+    monitoringStore.cleanup();
+  });
 
   return {
     isRefreshing,
     nextRefreshIn,
     performRefresh,
     startAutoRefresh,
-    stopAutoRefresh
-  }
+    stopAutoRefresh,
+  };
 }

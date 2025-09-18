@@ -38,20 +38,26 @@
                   <div class="card-header">
                     <el-icon><Coin /></el-icon>
                     <span>Hive MetaStore</span>
-                    <el-tag :type="getStatusType(testResult.tests.metastore?.status)" size="small">
-                      {{ testResult.tests.metastore?.status || 'unknown' }}
+                    <el-tag
+                      :type="getStatusType(testResult.tests.metastore?.status)"
+                      size="small"
+                    >
+                      {{ testResult.tests.metastore?.status || "unknown" }}
                     </el-tag>
                   </div>
                 </template>
                 <div class="test-details">
                   <p v-if="testResult.tests.metastore?.mode">
-                    <strong>模式:</strong> {{ testResult.tests.metastore?.mode }}
+                    <strong>模式:</strong>
+                    {{ testResult.tests.metastore?.mode }}
                   </p>
                   <p v-if="testResult.tests.metastore?.message">
-                    <strong>消息:</strong> {{ testResult.tests.metastore?.message }}
+                    <strong>消息:</strong>
+                    {{ testResult.tests.metastore?.message }}
                   </p>
                   <p v-if="testResult.tests.metastore?.duration">
-                    <strong>耗时:</strong> {{ testResult.tests.metastore?.duration }}ms
+                    <strong>耗时:</strong>
+                    {{ testResult.tests.metastore?.duration }}ms
                   </p>
                 </div>
               </el-card>
@@ -62,7 +68,10 @@
                   <div class="card-header">
                     <el-icon><FolderOpened /></el-icon>
                     <span>HDFS</span>
-                    <el-tag :type="getStatusType(testResult.tests.hdfs?.status)" size="small">
+                    <el-tag
+                      :type="getStatusType(testResult.tests.hdfs?.status)"
+                      size="small"
+                    >
                       {{ testResult.tests.hdfs?.status }}
                     </el-tag>
                   </div>
@@ -75,7 +84,8 @@
                     <strong>消息:</strong> {{ testResult.tests.hdfs?.message }}
                   </p>
                   <p v-if="testResult.tests.hdfs?.duration">
-                    <strong>耗时:</strong> {{ testResult.tests.hdfs?.duration }}ms
+                    <strong>耗时:</strong>
+                    {{ testResult.tests.hdfs?.duration }}ms
                   </p>
                 </div>
               </el-card>
@@ -86,29 +96,57 @@
                   <div class="card-header">
                     <el-icon><Connection /></el-icon>
                     <span>Beeline/JDBC</span>
-                    <el-tag :type="getStatusType(testResult.tests.beeline?.status)" size="small">
+                    <el-tag
+                      :type="getStatusType(testResult.tests.beeline?.status)"
+                      size="small"
+                    >
                       {{ testResult.tests.beeline?.status }}
                     </el-tag>
                   </div>
                 </template>
                 <div class="test-details">
                   <p v-if="testResult.tests.beeline.connection_type">
-                    <strong>连接类型:</strong> {{ testResult.tests.beeline.connection_type }}
+                    <strong>连接类型:</strong>
+                    {{ testResult.tests.beeline.connection_type }}
                   </p>
                   <p v-if="testResult.tests.beeline.driver">
                     <strong>驱动:</strong> {{ testResult.tests.beeline.driver }}
                   </p>
                   <p v-if="testResult.tests.beeline.message">
-                    <strong>消息:</strong> {{ testResult.tests.beeline.message }}
+                    <strong>消息:</strong>
+                    {{ testResult.tests.beeline.message }}
                   </p>
-                  <p v-if="testResult.tests.beeline.details && testResult.tests.beeline.details.connection_info && testResult.tests.beeline.details.connection_info.response_time_ms">
-                    <strong>响应时间:</strong> {{ testResult.tests.beeline.details.connection_info.response_time_ms }}ms
+                  <p
+                    v-if="
+                      testResult.tests.beeline.details &&
+                      testResult.tests.beeline.details.connection_info &&
+                      testResult.tests.beeline.details.connection_info
+                        .response_time_ms
+                    "
+                  >
+                    <strong>响应时间:</strong>
+                    {{
+                      testResult.tests.beeline.details.connection_info
+                        .response_time_ms
+                    }}ms
                   </p>
                   <!-- 显示建议 -->
-                  <div v-if="testResult.tests.beeline.details && testResult.tests.beeline.details.suggestions" class="suggestions-inline">
+                  <div
+                    v-if="
+                      testResult.tests.beeline.details &&
+                      testResult.tests.beeline.details.suggestions
+                    "
+                    class="suggestions-inline"
+                  >
                     <p><strong>建议:</strong></p>
                     <ul class="suggestion-list">
-                      <li v-for="suggestion in testResult.tests.beeline.details.suggestions.slice(0, 2)" :key="suggestion">
+                      <li
+                        v-for="suggestion in testResult.tests.beeline.details.suggestions.slice(
+                          0,
+                          2,
+                        )"
+                        :key="suggestion"
+                      >
                         {{ suggestion }}
                       </li>
                     </ul>
@@ -120,7 +158,10 @@
         </div>
 
         <!-- 详细日志 -->
-        <div class="logs-section" v-if="testResult.logs && testResult.logs.length > 0">
+        <div
+          class="logs-section"
+          v-if="testResult.logs && testResult.logs.length > 0"
+        >
           <h4>详细日志</h4>
           <div class="logs-container">
             <div
@@ -128,15 +169,22 @@
               :key="index"
               :class="['log-entry', `log-${log.level?.toLowerCase()}`]"
             >
-              <el-tag :type="getLogTagType(log.level)" size="small">{{ log.level }}</el-tag>
+              <el-tag :type="getLogTagType(log.level)" size="small">{{
+                log.level
+              }}</el-tag>
               <span class="log-message">{{ log.message }}</span>
-              <span class="log-timestamp" v-if="log.timestamp">{{ formatTime(log.timestamp) }}</span>
+              <span class="log-timestamp" v-if="log.timestamp">{{
+                formatTime(log.timestamp)
+              }}</span>
             </div>
           </div>
         </div>
 
         <!-- 建议 -->
-        <div class="suggestions-section" v-if="testResult.suggestions && testResult.suggestions.length > 0">
+        <div
+          class="suggestions-section"
+          v-if="testResult.suggestions && testResult.suggestions.length > 0"
+        >
           <h4>诊断建议</h4>
           <el-alert
             v-for="(suggestion, index) in testResult.suggestions"
@@ -161,142 +209,167 @@
 
       <!-- 错误信息 -->
       <div v-if="error && !testing" class="error-section">
-        <el-alert
-          :title="error"
-          type="error"
-          :closable="false"
-          show-icon
-        />
+        <el-alert :title="error" type="error" :closable="false" show-icon />
       </div>
     </div>
 
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="handleClose">关闭</el-button>
-        <el-button type="primary" @click="retestConnection" :loading="testing">重新测试</el-button>
+        <el-button type="primary" @click="retestConnection" :loading="testing"
+          >重新测试</el-button
+        >
       </span>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ElDialog, ElTag, ElIcon, ElRow, ElCol, ElCard, ElAlert, ElButton } from 'element-plus'
-import { Loading, Coin, FolderOpened, Connection } from '@element-plus/icons-vue'
+import { ref, computed } from "vue";
+import {
+  ElDialog,
+  ElTag,
+  ElIcon,
+  ElRow,
+  ElCol,
+  ElCard,
+  ElAlert,
+  ElButton,
+} from "element-plus";
+import {
+  Loading,
+  Coin,
+  FolderOpened,
+  Connection,
+} from "@element-plus/icons-vue";
 
 interface TestResult {
-  overall_status: string
-  test_time: string
+  overall_status: string;
+  test_time: string;
   tests?: {
     metastore?: {
-      status: string
-      mode?: string
-      message?: string
-      duration?: number
-    }
+      status: string;
+      mode?: string;
+      message?: string;
+      duration?: number;
+    };
     hdfs?: {
-      status: string
-      mode?: string
-      message?: string
-      duration?: number
-    }
+      status: string;
+      mode?: string;
+      message?: string;
+      duration?: number;
+    };
     beeline?: {
-      status: string
-      connection_type?: string
-      driver?: string
-      message?: string
+      status: string;
+      connection_type?: string;
+      driver?: string;
+      message?: string;
       details?: {
-        port_connectivity?: any
-        jdbc_test?: any
+        port_connectivity?: any;
+        jdbc_test?: any;
         connection_info?: {
-          response_time_ms?: number
-          auth_method?: string
-          jdbc_url?: string
-        }
-        suggestions?: string[]
-      }
-    }
-  }
+          response_time_ms?: number;
+          auth_method?: string;
+          jdbc_url?: string;
+        };
+        suggestions?: string[];
+      };
+    };
+  };
   logs?: Array<{
-    level: string
-    message: string
-    timestamp?: string
-  }>
-  suggestions?: string[]
-  warning?: string
-  error?: string
+    level: string;
+    message: string;
+    timestamp?: string;
+  }>;
+  suggestions?: string[];
+  warning?: string;
+  error?: string;
 }
 
 interface Props {
-  visible: boolean
-  clusterConfig?: any
-  testResult?: TestResult | null
-  testing?: boolean
-  error?: string | null
+  visible: boolean;
+  clusterConfig?: any;
+  testResult?: TestResult | null;
+  testing?: boolean;
+  error?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   testResult: null,
   testing: false,
-  error: null
-})
+  error: null,
+});
 
 const emit = defineEmits<{
-  'update:visible': [value: boolean]
-  'retest': [clusterConfig: any]
-}>()
+  "update:visible": [value: boolean];
+  retest: [clusterConfig: any];
+}>();
 
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (value) => emit('update:visible', value)
-})
+  set: (value) => emit("update:visible", value),
+});
 
 const handleClose = () => {
-  emit('update:visible', false)
-}
+  emit("update:visible", false);
+};
 
 const retestConnection = () => {
   if (props.clusterConfig) {
-    emit('retest', props.clusterConfig)
+    emit("retest", props.clusterConfig);
   }
-}
+};
 
 const getStatusType = (status: string) => {
   switch (status) {
-    case 'success': return 'success'
-    case 'partial': return 'warning'
-    case 'failed': return 'danger'
-    default: return 'info'
+    case "success":
+      return "success";
+    case "partial":
+      return "warning";
+    case "failed":
+      return "danger";
+    default:
+      return "info";
   }
-}
+};
 
 const getStatusText = (status: string) => {
   switch (status) {
-    case 'success': return '连接成功'
-    case 'partial': return '部分成功'
-    case 'failed': return '连接失败'
-    default: return '状态未知'
+    case "success":
+      return "连接成功";
+    case "partial":
+      return "部分成功";
+    case "failed":
+      return "连接失败";
+    default:
+      return "状态未知";
   }
-}
+};
 
 const getLogTagType = (level: string) => {
   switch (level?.toLowerCase()) {
-    case 'error': return 'danger'
-    case 'warn': case 'warning': return 'warning'
-    case 'info': return 'info'
-    case 'debug': return ''
-    default: return 'info'
+    case "error":
+      return "danger";
+    case "warn":
+    case "warning":
+      return "warning";
+    case "info":
+      return "info";
+    case "debug":
+      return "";
+    default:
+      return "info";
   }
-}
+};
 
 const formatTime = (timestamp: string) => {
   try {
-    return new Date(timestamp).toLocaleString('zh-CN')
+    return new Date(timestamp).toLocaleString("zh-CN");
   } catch {
-    return timestamp
+    return timestamp;
   }
-}
+};
 </script>
 
 <style scoped>
@@ -392,7 +465,7 @@ const formatTime = (timestamp: string) => {
   gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 13px;
 }
 
@@ -404,7 +477,8 @@ const formatTime = (timestamp: string) => {
   background-color: var(--el-color-error-light-9);
 }
 
-.log-entry.log-warning, .log-entry.log-warn {
+.log-entry.log-warning,
+.log-entry.log-warn {
   background-color: var(--el-color-warning-light-9);
 }
 

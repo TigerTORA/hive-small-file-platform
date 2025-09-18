@@ -15,7 +15,7 @@
           <el-option label="失败" value="failed" />
         </el-select>
       </div>
-      
+
       <div class="actions">
         <el-button @click="refreshTasks">
           <el-icon><Refresh /></el-icon>
@@ -53,8 +53,16 @@
           </el-table-column>
           <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" @click="viewTaskDetail(row)">详情</el-button>
-              <el-button v-if="row.status === 'failed'" size="small" type="warning" @click="retryTask(row)">重试</el-button>
+              <el-button size="small" @click="viewTaskDetail(row)"
+                >详情</el-button
+              >
+              <el-button
+                v-if="row.status === 'failed'"
+                size="small"
+                type="warning"
+                @click="retryTask(row)"
+                >重试</el-button
+              >
             </template>
           </el-table-column>
         </el-table>
@@ -71,150 +79,163 @@
           <el-table-column prop="task_name" label="任务名称" min-width="200" />
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+              <el-tag :type="getStatusType(row.status)">{{
+                getStatusText(row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="进度" width="180">
             <template #default="{ row }">
-              <el-progress :percentage="row.progress_percentage || 0" :status="row.status === 'failed' ? 'exception' : undefined" />
+              <el-progress
+                :percentage="row.progress_percentage || 0"
+                :status="row.status === 'failed' ? 'exception' : undefined"
+              />
             </template>
           </el-table-column>
           <el-table-column prop="start_time" label="开始时间" width="180">
-            <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
+            <template #default="{ row }">{{
+              formatTime(row.start_time)
+            }}</template>
           </el-table-column>
           <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" @click="openScanLogs(row.task_id)">查看日志</el-button>
+              <el-button size="small" @click="openScanLogs(row.task_id)"
+                >查看日志</el-button
+              >
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
     </el-tabs>
 
-    <ScanProgressDialog v-model="showScanDialog" :task-id="selectedScanTaskId" @completed="onScanCompleted" />
+    <ScanProgressDialog
+      v-model="showScanDialog"
+      :task-id="selectedScanTaskId"
+      @completed="onScanCompleted"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
-import { tasksApi } from '@/api/tasks'
-import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
-import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
-import dayjs from 'dayjs'
+import { ref, computed, onMounted } from "vue";
+import { ElMessage } from "element-plus";
+import { Refresh } from "@element-plus/icons-vue";
+import { tasksApi } from "@/api/tasks";
+import { scanTasksApi, type ScanTask } from "@/api/scanTasks";
+import ScanProgressDialog from "@/components/ScanProgressDialog.vue";
+import dayjs from "dayjs";
 
 interface Props {
-  clusterId: number
+  clusterId: number;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 // Data
-const activeTab = ref('merge')
-const mergeTasks = ref<any[]>([])
-const scanTasks = ref<ScanTask[]>([])
-const loading = ref(false)
-const loadingScan = ref(false)
-const statusFilter = ref('')
-const showScanDialog = ref(false)
-const selectedScanTaskId = ref<string | null>(null)
+const activeTab = ref("merge");
+const mergeTasks = ref<any[]>([]);
+const scanTasks = ref<ScanTask[]>([]);
+const loading = ref(false);
+const loadingScan = ref(false);
+const statusFilter = ref("");
+const showScanDialog = ref(false);
+const selectedScanTaskId = ref<string | null>(null);
 
 // Computed
 const filteredMergeTasks = computed(() => {
-  if (!statusFilter.value) return mergeTasks.value
-  return mergeTasks.value.filter(task => task.status === statusFilter.value)
-})
+  if (!statusFilter.value) return mergeTasks.value;
+  return mergeTasks.value.filter((task) => task.status === statusFilter.value);
+});
 
 const filteredScanTasks = computed(() => {
-  if (!statusFilter.value) return scanTasks.value
-  return scanTasks.value.filter(task => task.status === statusFilter.value)
-})
+  if (!statusFilter.value) return scanTasks.value;
+  return scanTasks.value.filter((task) => task.status === statusFilter.value);
+});
 
 // Methods
 const loadMergeTasks = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    mergeTasks.value = await tasksApi.getByCluster(props.clusterId)
+    mergeTasks.value = await tasksApi.getByCluster(props.clusterId);
   } catch (error) {
-    console.error('Failed to load merge tasks:', error)
-    ElMessage.error('加载合并任务列表失败')
+    console.error("Failed to load merge tasks:", error);
+    ElMessage.error("加载合并任务列表失败");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const loadScanTasks = async () => {
-  loadingScan.value = true
+  loadingScan.value = true;
   try {
-    scanTasks.value = await scanTasksApi.list(props.clusterId)
+    scanTasks.value = await scanTasksApi.list(props.clusterId);
   } catch (error) {
-    console.error('Failed to load scan tasks:', error)
-    ElMessage.error('加载扫描任务列表失败')
+    console.error("Failed to load scan tasks:", error);
+    ElMessage.error("加载扫描任务列表失败");
   } finally {
-    loadingScan.value = false
+    loadingScan.value = false;
   }
-}
+};
 
 const refreshTasks = () => {
-  loadMergeTasks()
-  loadScanTasks()
-}
+  loadMergeTasks();
+  loadScanTasks();
+};
 
 const viewTaskDetail = (task: any) => {
   // TODO: Implement task detail view
-  ElMessage.info('任务详情功能开发中')
-}
+  ElMessage.info("任务详情功能开发中");
+};
 
 const retryTask = async (task: any) => {
   try {
-    await tasksApi.retry(task.id)
-    ElMessage.success('任务重试成功')
-    await loadMergeTasks()
+    await tasksApi.retry(task.id);
+    ElMessage.success("任务重试成功");
+    await loadMergeTasks();
   } catch (error) {
-    console.error('Failed to retry task:', error)
-    ElMessage.error('任务重试失败')
+    console.error("Failed to retry task:", error);
+    ElMessage.error("任务重试失败");
   }
-}
+};
 
 const getStatusType = (status: string) => {
   const statusMap = {
-    pending: '',
-    running: 'warning',
-    success: 'success',
-    failed: 'danger'
-  }
-  return statusMap[status as keyof typeof statusMap] || ''
-}
+    pending: "",
+    running: "warning",
+    success: "success",
+    failed: "danger",
+  };
+  return statusMap[status as keyof typeof statusMap] || "";
+};
 
 const getStatusText = (status: string) => {
   const statusMap = {
-    pending: '等待中',
-    running: '运行中',
-    success: '已完成',
-    failed: '失败'
-  }
-  return statusMap[status as keyof typeof statusMap] || status
-}
+    pending: "等待中",
+    running: "运行中",
+    success: "已完成",
+    failed: "失败",
+  };
+  return statusMap[status as keyof typeof statusMap] || status;
+};
 
 const formatTime = (time: string): string => {
-  return dayjs(time).format('MM-DD HH:mm:ss')
-}
+  return dayjs(time).format("MM-DD HH:mm:ss");
+};
 
 onMounted(() => {
-  loadMergeTasks()
-  loadScanTasks()
-})
+  loadMergeTasks();
+  loadScanTasks();
+});
 
 const openScanLogs = (taskId: string) => {
-  selectedScanTaskId.value = taskId
-  showScanDialog.value = true
-}
+  selectedScanTaskId.value = taskId;
+  showScanDialog.value = true;
+};
 
 const onScanCompleted = async () => {
-  ElMessage.success('扫描任务已完成')
-  await loadScanTasks()
-}
+  ElMessage.success("扫描任务已完成");
+  await loadScanTasks();
+};
 </script>
 
 <style scoped>

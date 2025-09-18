@@ -5,7 +5,11 @@
         <div class="card-header">
           <span>表管理</span>
           <div class="header-actions">
-            <el-select v-model="selectedCluster" placeholder="选择集群" style="width: 200px; margin-right: 10px;">
+            <el-select
+              v-model="selectedCluster"
+              placeholder="选择集群"
+              style="width: 200px; margin-right: 10px"
+            >
               <el-option
                 v-for="cluster in clusters"
                 :key="cluster.id"
@@ -13,7 +17,12 @@
                 :value="cluster.id"
               />
             </el-select>
-            <el-select v-model="selectedDatabase" placeholder="选择数据库" style="width: 220px; margin-right: 10px;" :disabled="!databases.length">
+            <el-select
+              v-model="selectedDatabase"
+              placeholder="选择数据库"
+              style="width: 220px; margin-right: 10px"
+              :disabled="!databases.length"
+            >
               <el-option
                 v-for="db in databases"
                 :key="db"
@@ -25,20 +34,28 @@
               v-model="strictReal"
               active-text="严格实连"
               inactive-text="允许Mock"
-              style="margin-right: 12px;"
+              style="margin-right: 12px"
             />
             <el-button type="primary" @click="triggerScan">
               <el-icon><Refresh /></el-icon>
               扫描
             </el-button>
-            <el-select v-model="maxPerDb" placeholder="每库表数" style="width: 120px; margin-left: 8px;">
+            <el-select
+              v-model="maxPerDb"
+              placeholder="每库表数"
+              style="width: 120px; margin-left: 8px"
+            >
               <el-option :value="0" label="不限制" />
               <el-option :value="10" label="10/库" />
               <el-option :value="20" label="20/库" />
               <el-option :value="50" label="50/库" />
               <el-option :value="100" label="100/库" />
             </el-select>
-            <el-button type="success" @click="triggerClusterScan" style="margin-left: 8px;">
+            <el-button
+              type="success"
+              @click="triggerClusterScan"
+              style="margin-left: 8px"
+            >
               <el-icon><Refresh /></el-icon>
               全库扫描(进度)
             </el-button>
@@ -50,7 +67,7 @@
         <el-table-column prop="database_name" label="数据库" width="120" />
         <el-table-column prop="table_name" label="表名" width="200">
           <template #default="{ row }">
-            <router-link 
+            <router-link
               :to="`/tables/${selectedCluster}/${row.database_name}/${row.table_name}`"
               class="table-name-link"
             >
@@ -72,7 +89,7 @@
               :percentage="calcSmallFilePercent(row)"
               :color="getProgressColor(calcSmallFilePercent(row))"
               :show-text="true"
-              style="width: 80px;"
+              style="width: 80px"
             />
           </template>
         </el-table-column>
@@ -83,12 +100,20 @@
         </el-table-column>
         <el-table-column prop="is_partitioned" label="分区表" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.is_partitioned ? 'success' : 'info'" size="small">
-              {{ row.is_partitioned ? '是' : '否' }}
+            <el-tag
+              :type="row.is_partitioned ? 'success' : 'info'"
+              size="small"
+            >
+              {{ row.is_partitioned ? "是" : "否" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="分区数" width="90" sortable :sort-by="partitionCountSortKey">
+        <el-table-column
+          label="分区数"
+          width="90"
+          sortable
+          :sort-by="partitionCountSortKey"
+        >
           <template #default="{ row }">
             {{ row.is_partitioned ? (row.partition_count ?? 0) : -1 }}
           </template>
@@ -100,7 +125,11 @@
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="createMergeTask(row)">
+            <el-button
+              type="primary"
+              size="small"
+              @click="createMergeTask(row)"
+            >
               创建合并任务
             </el-button>
           </template>
@@ -116,165 +145,190 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { tablesApi, type TableMetric } from '@/api/tables'
-import { clustersApi, type Cluster } from '@/api/clusters'
-import dayjs from 'dayjs'
-import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+import { ref, onMounted, watch } from "vue";
+import { ElMessage } from "element-plus";
+import { tablesApi, type TableMetric } from "@/api/tables";
+import { clustersApi, type Cluster } from "@/api/clusters";
+import dayjs from "dayjs";
+import ScanProgressDialog from "@/components/ScanProgressDialog.vue";
 
 // 数据
-const clusters = ref<Cluster[]>([])
-const tableMetrics = ref<TableMetric[]>([])
-const selectedCluster = ref<number | null>(null)
-const databases = ref<string[]>([])
-const selectedDatabase = ref<string | ''>('')
-const loading = ref(false)
-const strictReal = ref(true)
-const showProgress = ref(false)
-const currentTaskId = ref<string | null>(null)
-const maxPerDb = ref<number>(20)
+const clusters = ref<Cluster[]>([]);
+const tableMetrics = ref<TableMetric[]>([]);
+const selectedCluster = ref<number | null>(null);
+const databases = ref<string[]>([]);
+const selectedDatabase = ref<string | "">("");
+const loading = ref(false);
+const strictReal = ref(true);
+const showProgress = ref(false);
+const currentTaskId = ref<string | null>(null);
+const maxPerDb = ref<number>(20);
 
 // 方法
 const loadClusters = async () => {
   try {
-    clusters.value = await clustersApi.list()
+    clusters.value = await clustersApi.list();
     if (clusters.value.length > 0 && !selectedCluster.value) {
-      selectedCluster.value = clusters.value[0].id
+      selectedCluster.value = clusters.value[0].id;
     }
   } catch (error) {
-    console.error('Failed to load clusters:', error)
+    console.error("Failed to load clusters:", error);
   }
-}
+};
 
 const loadTableMetrics = async () => {
-  if (!selectedCluster.value) return
-  
-  loading.value = true
+  if (!selectedCluster.value) return;
+
+  loading.value = true;
   try {
-    tableMetrics.value = await tablesApi.getMetrics(selectedCluster.value, selectedDatabase.value || undefined)
+    tableMetrics.value = await tablesApi.getMetrics(
+      selectedCluster.value,
+      selectedDatabase.value || undefined,
+    );
   } catch (error) {
-    console.error('Failed to load table metrics:', error)
+    console.error("Failed to load table metrics:", error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const loadDatabases = async () => {
-  if (!selectedCluster.value) return
+  if (!selectedCluster.value) return;
   try {
-    const list = await tablesApi.getDatabases(selectedCluster.value)
+    const list = await tablesApi.getDatabases(selectedCluster.value);
     // API 返回 { databases: string[] }
-    databases.value = Array.isArray((list as any).databases) ? (list as any).databases : (list as any)
+    databases.value = Array.isArray((list as any).databases)
+      ? (list as any).databases
+      : (list as any);
     if (databases.value.length && !selectedDatabase.value) {
-      selectedDatabase.value = databases.value[0]
+      selectedDatabase.value = databases.value[0];
     }
   } catch (error) {
-    console.error('Failed to load databases:', error)
+    console.error("Failed to load databases:", error);
   }
-}
+};
 
 const triggerScan = async () => {
-  if (!selectedCluster.value) { ElMessage.warning('请先选择集群'); return }
-  if (!selectedDatabase.value) { ElMessage.warning('请先选择数据库'); return }
-  
+  if (!selectedCluster.value) {
+    ElMessage.warning("请先选择集群");
+    return;
+  }
+  if (!selectedDatabase.value) {
+    ElMessage.warning("请先选择数据库");
+    return;
+  }
+
   try {
-    await tablesApi.triggerScan(selectedCluster.value, selectedDatabase.value, undefined, strictReal.value)
-    ElMessage.success(`已启动扫描：${selectedDatabase.value}`)
+    await tablesApi.triggerScan(
+      selectedCluster.value,
+      selectedDatabase.value,
+      undefined,
+      strictReal.value,
+    );
+    ElMessage.success(`已启动扫描：${selectedDatabase.value}`);
     // 延迟刷新数据
     setTimeout(() => {
-      loadTableMetrics()
-    }, 2000)
+      loadTableMetrics();
+    }, 2000);
   } catch (error) {
-    console.error('Failed to trigger scan:', error)
+    console.error("Failed to trigger scan:", error);
   }
-}
+};
 
 // 触发全库扫描（带进度）
 const triggerClusterScan = async () => {
-  if (!selectedCluster.value) { ElMessage.warning('请先选择集群'); return }
+  if (!selectedCluster.value) {
+    ElMessage.warning("请先选择集群");
+    return;
+  }
   try {
-    const res = await tablesApi.scanAllDatabases(selectedCluster.value, strictReal.value, maxPerDb.value)
+    const res = await tablesApi.scanAllDatabases(
+      selectedCluster.value,
+      strictReal.value,
+      maxPerDb.value,
+    );
     if (res && res.task_id) {
-      currentTaskId.value = res.task_id
-      showProgress.value = true
+      currentTaskId.value = res.task_id;
+      showProgress.value = true;
     } else {
-      ElMessage.error('未获取到任务ID，无法追踪进度')
+      ElMessage.error("未获取到任务ID，无法追踪进度");
     }
   } catch (e) {
-    console.error('Failed to start cluster scan:', e)
-    ElMessage.error('启动全库扫描失败')
+    console.error("Failed to start cluster scan:", e);
+    ElMessage.error("启动全库扫描失败");
   }
-}
+};
 
 const onClusterScanCompleted = () => {
   // 任务完成后刷新表格
-  loadTableMetrics()
-}
+  loadTableMetrics();
+};
 
 const createMergeTask = (table: TableMetric) => {
   // TODO: 实现创建合并任务的逻辑
-  ElMessage.info(`准备为表 ${table.database_name}.${table.table_name} 创建合并任务`)
-}
+  ElMessage.info(
+    `准备为表 ${table.database_name}.${table.table_name} 创建合并任务`,
+  );
+};
 
 const formatSize = (bytes: number): string => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unitIndex = 0
-  
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unitIndex = 0;
+
   while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
+    size /= 1024;
+    unitIndex++;
   }
-  
-  return `${size.toFixed(1)} ${units[unitIndex]}`
-}
+
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
 
 const formatTime = (time: string): string => {
-  return dayjs(time).format('MM-DD HH:mm')
-}
+  return dayjs(time).format("MM-DD HH:mm");
+};
 
 // 排序：分区数（非分区为 -1）
 const partitionCountSortKey = (row: TableMetric): number => {
-  return row.is_partitioned ? (row.partition_count ?? 0) : -1
-}
+  return row.is_partitioned ? (row.partition_count ?? 0) : -1;
+};
 
 const getProgressColor = (percentage: number): string => {
-  if (percentage > 80) return '#f56c6c'
-  if (percentage > 50) return '#e6a23c'
-  if (percentage > 20) return '#1989fa'
-  return '#67c23a'
-}
+  if (percentage > 80) return "#f56c6c";
+  if (percentage > 50) return "#e6a23c";
+  if (percentage > 20) return "#1989fa";
+  return "#67c23a";
+};
 
 // 计算小文件比例（避免除以 0/NaN）
 const calcSmallFilePercent = (row: TableMetric): number => {
-  const total = Number(row.total_files || 0)
-  const small = Number(row.small_files || 0)
-  if (!total || total <= 0) return 0
-  const pct = (small / total) * 100
-  if (!isFinite(pct) || isNaN(pct)) return 0
-  return Math.max(0, Math.min(100, Math.round(pct)))
-}
+  const total = Number(row.total_files || 0);
+  const small = Number(row.small_files || 0);
+  if (!total || total <= 0) return 0;
+  const pct = (small / total) * 100;
+  if (!isFinite(pct) || isNaN(pct)) return 0;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+};
 
 // 监听集群变化
 watch(selectedCluster, () => {
   if (selectedCluster.value) {
-    selectedDatabase.value = ''
-    databases.value = []
-    loadDatabases().then(() => loadTableMetrics())
+    selectedDatabase.value = "";
+    databases.value = [];
+    loadDatabases().then(() => loadTableMetrics());
   }
-})
+});
 
 // 监听数据库变化
 watch(selectedDatabase, () => {
   if (selectedCluster.value) {
-    loadTableMetrics()
+    loadTableMetrics();
   }
-})
+});
 
 onMounted(() => {
-  loadClusters()
-})
+  loadClusters();
+});
 </script>
 
 <style scoped>

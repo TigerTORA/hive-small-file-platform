@@ -45,9 +45,9 @@
         <div class="progress-header">
           <span class="progress-title">监控进度</span>
           <div class="progress-actions">
-            <el-button 
-              type="text" 
-              size="small" 
+            <el-button
+              type="text"
+              size="small"
               @click="$emit('refresh')"
               :loading="loading"
             >
@@ -55,9 +55,9 @@
             </el-button>
           </div>
         </div>
-        
-        <el-progress 
-          :percentage="monitoringCoverage" 
+
+        <el-progress
+          :percentage="monitoringCoverage"
           :color="coverageColor"
           stroke-width="10"
           class="coverage-progress"
@@ -84,20 +84,16 @@
       </div>
 
       <div class="quick-actions" v-if="showActions">
-        <el-button 
-          type="primary" 
-          size="small" 
+        <el-button
+          type="primary"
+          size="small"
           @click="$emit('scan-tables')"
           :loading="scanning"
         >
           <el-icon><Search /></el-icon>
           扫描表
         </el-button>
-        <el-button 
-          type="default" 
-          size="small" 
-          @click="$emit('view-tables')"
-        >
+        <el-button type="default" size="small" @click="$emit('view-tables')">
           <el-icon><View /></el-icon>
           查看详情
         </el-button>
@@ -107,75 +103,78 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Grid, View, Refresh, Search } from '@element-plus/icons-vue'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useMonitoringStore } from '@/stores/monitoring'
+import { computed } from "vue";
+import { Grid, View, Refresh, Search } from "@element-plus/icons-vue";
+import { useDashboardStore } from "@/stores/dashboard";
+import { useMonitoringStore } from "@/stores/monitoring";
 
 interface Props {
-  showDetails?: boolean
-  showActions?: boolean
-  loading?: boolean
-  scanning?: boolean
+  showDetails?: boolean;
+  showActions?: boolean;
+  loading?: boolean;
+  scanning?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showDetails: true,
   showActions: true,
   loading: false,
-  scanning: false
-})
+  scanning: false,
+});
 
 defineEmits<{
-  refresh: []
-  'scan-tables': []
-  'view-tables': []
-}>()
+  refresh: [];
+  "scan-tables": [];
+  "view-tables": [];
+}>();
 
-const dashboardStore = useDashboardStore()
-const monitoringStore = useMonitoringStore()
+const dashboardStore = useDashboardStore();
+const monitoringStore = useMonitoringStore();
 
 // 计算属性
-const totalTables = computed(() => dashboardStore.summary.total_tables)
-const monitoredTables = computed(() => dashboardStore.summary.monitored_tables)
+const totalTables = computed(() => dashboardStore.summary.total_tables);
+const monitoredTables = computed(() => dashboardStore.summary.monitored_tables);
 
 const monitoringCoverage = computed(() => {
-  if (totalTables.value === 0) return 0
-  return Math.round((monitoredTables.value / totalTables.value) * 100)
-})
+  if (totalTables.value === 0) return 0;
+  return Math.round((monitoredTables.value / totalTables.value) * 100);
+});
 
 const coverageColor = computed(() => {
-  const coverage = monitoringCoverage.value
-  if (coverage >= 90) return '#67C23A'
-  if (coverage >= 70) return '#E6A23C'
-  if (coverage >= 50) return '#F56C6C'
-  return '#909399'
-})
+  const coverage = monitoringCoverage.value;
+  if (coverage >= 90) return "#67C23A";
+  if (coverage >= 70) return "#E6A23C";
+  if (coverage >= 50) return "#F56C6C";
+  return "#909399";
+});
 
 const avgFilesPerTable = computed(() => {
-  if (monitoredTables.value === 0) return '--'
-  const avgFiles = Math.round(dashboardStore.summary.total_files / monitoredTables.value)
-  return monitoringStore.formatNumber(avgFiles)
-})
+  if (monitoredTables.value === 0) return "--";
+  const avgFiles = Math.round(
+    dashboardStore.summary.total_files / monitoredTables.value,
+  );
+  return monitoringStore.formatNumber(avgFiles);
+});
 
 const avgTableSize = computed(() => {
-  if (monitoredTables.value === 0) return '--'
-  const avgSizeGB = dashboardStore.summary.total_size_gb / monitoredTables.value
+  if (monitoredTables.value === 0) return "--";
+  const avgSizeGB =
+    dashboardStore.summary.total_size_gb / monitoredTables.value;
   if (avgSizeGB >= 1) {
-    return `${avgSizeGB.toFixed(1)} GB`
+    return `${avgSizeGB.toFixed(1)} GB`;
   } else {
-    return `${(avgSizeGB * 1024).toFixed(0)} MB`
+    return `${(avgSizeGB * 1024).toFixed(0)} MB`;
   }
-})
+});
 
 const lastScanTime = computed(() => {
-  if (!monitoringStore.lastRefreshTime) return '--'
-  return monitoringStore.formatDate(monitoringStore.lastRefreshTime)
-})
+  if (!monitoringStore.lastRefreshTime) return "--";
+  return monitoringStore.formatDate(monitoringStore.lastRefreshTime);
+});
 
 // 方法
 function formatNumber(num: number): string {
-  return monitoringStore.formatNumber(num)
+  return monitoringStore.formatNumber(num);
 }
 </script>
 

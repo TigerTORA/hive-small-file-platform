@@ -20,21 +20,26 @@
       <div v-if="loading" class="chart-loading">
         <el-skeleton animated>
           <template #template>
-            <el-skeleton-item variant="circle" style="width: 200px; height: 200px; margin: 0 auto" />
+            <el-skeleton-item
+              variant="circle"
+              style="width: 200px; height: 200px; margin: 0 auto"
+            />
           </template>
         </el-skeleton>
       </div>
-      
+
       <div v-else-if="error" class="chart-error">
         <el-empty description="数据加载失败">
-          <el-button type="primary" @click="$emit('refresh')">重新加载</el-button>
+          <el-button type="primary" @click="$emit('refresh')"
+            >重新加载</el-button
+          >
         </el-empty>
       </div>
-      
+
       <div v-else-if="!data || data.length === 0" class="chart-empty">
         <el-empty description="暂无分布数据" />
       </div>
-      
+
       <v-chart
         v-else
         class="distribution-echarts"
@@ -49,7 +54,9 @@
       <div class="summary-stats">
         <div class="stat-item" v-for="item in summaryStats" :key="item.label">
           <div class="stat-label">{{ item.label }}</div>
-          <div class="stat-value" :style="{ color: item.color }">{{ item.value }}</div>
+          <div class="stat-value" :style="{ color: item.color }">
+            {{ item.value }}
+          </div>
         </div>
       </div>
     </div>
@@ -61,21 +68,24 @@
           <span class="header-item">文件数量</span>
           <span class="header-item">占比</span>
         </div>
-        <div 
-          class="table-row" 
-          v-for="(item, index) in distributionData" 
+        <div
+          class="table-row"
+          v-for="(item, index) in distributionData"
           :key="item.size_range"
           @click="handleRowClick(item, index)"
         >
           <span class="row-item range">
-            <span class="range-color" :style="{ backgroundColor: getItemColor(index) }"></span>
+            <span
+              class="range-color"
+              :style="{ backgroundColor: getItemColor(index) }"
+            ></span>
             {{ item.size_range }}
           </span>
           <span class="row-item count">{{ formatNumber(item.count) }}</span>
           <span class="row-item percentage">{{ getPercentage(item) }}%</span>
         </div>
       </div>
-      
+
       <div class="chart-actions">
         <el-button-group size="small">
           <el-button @click="handleExport" :loading="exporting">
@@ -91,47 +101,47 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart } from 'echarts/charts'
+import { computed, ref } from "vue";
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { PieChart } from "echarts/charts";
 import {
   TooltipComponent,
   LegendComponent,
-  TitleComponent
-} from 'echarts/components'
-import VChart from 'vue-echarts'
-import { Download, Refresh } from '@element-plus/icons-vue'
-import { useCharts } from '@/composables/useCharts'
-import { useMonitoringStore } from '@/stores/monitoring'
-import type { FileDistributionItem } from '@/api/dashboard'
+  TitleComponent,
+} from "echarts/components";
+import VChart from "vue-echarts";
+import { Download, Refresh } from "@element-plus/icons-vue";
+import { useCharts } from "@/composables/useCharts";
+import { useMonitoringStore } from "@/stores/monitoring";
+import type { FileDistributionItem } from "@/api/dashboard";
 
 use([
   CanvasRenderer,
   PieChart,
   TooltipComponent,
   LegendComponent,
-  TitleComponent
-])
+  TitleComponent,
+]);
 
 interface Props {
-  data: FileDistributionItem[]
-  title?: string
-  subtitle?: string
-  height?: number
-  showHeader?: boolean
-  showFooter?: boolean
-  showSummary?: boolean
-  loading?: boolean
-  error?: string | null
-  refreshing?: boolean
-  exporting?: boolean
-  theme?: 'light' | 'dark'
+  data: FileDistributionItem[];
+  title?: string;
+  subtitle?: string;
+  height?: number;
+  showHeader?: boolean;
+  showFooter?: boolean;
+  showSummary?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  refreshing?: boolean;
+  exporting?: boolean;
+  theme?: "light" | "dark";
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: '文件大小分布',
-  subtitle: '按文件大小范围显示文件数量分布',
+  title: "文件大小分布",
+  subtitle: "按文件大小范围显示文件数量分布",
   height: 400,
   showHeader: true,
   showFooter: true,
@@ -140,106 +150,109 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   refreshing: false,
   exporting: false,
-  theme: 'light'
-})
+  theme: "light",
+});
 
 const emit = defineEmits<{
-  refresh: []
-  export: []
-  'chart-click': [params: any]
-  'row-click': [item: FileDistributionItem, index: number]
-}>()
+  refresh: [];
+  export: [];
+  "chart-click": [params: any];
+  "row-click": [item: FileDistributionItem, index: number];
+}>();
 
-const { getDistributionChartOption } = useCharts()
-const monitoringStore = useMonitoringStore()
+const { getDistributionChartOption } = useCharts();
+const monitoringStore = useMonitoringStore();
 
-const showPercentage = ref(false)
+const showPercentage = ref(false);
 
 // 计算属性
 const containerStyle = computed(() => ({
   height: `${props.height}px`,
-  position: 'relative'
-}))
+  position: "relative",
+}));
 
-const distributionData = computed(() => props.data || [])
+const distributionData = computed(() => props.data || []);
 
 const totalCount = computed(() => {
-  return distributionData.value.reduce((sum, item) => sum + item.count, 0)
-})
+  return distributionData.value.reduce((sum, item) => sum + item.count, 0);
+});
 
 const chartOption = computed(() => {
   if (!distributionData.value || distributionData.value.length === 0) {
     return {
       title: {
-        text: '暂无数据',
-        left: 'center',
-        top: 'center',
+        text: "暂无数据",
+        left: "center",
+        top: "center",
         textStyle: {
           fontSize: 14,
-          color: '#999'
-        }
-      }
-    }
+          color: "#999",
+        },
+      },
+    };
   }
 
-  return getDistributionChartOption(distributionData.value)
-})
+  return getDistributionChartOption(distributionData.value);
+});
 
 const summaryStats = computed(() => {
-  if (!distributionData.value || distributionData.value.length === 0) return []
+  if (!distributionData.value || distributionData.value.length === 0) return [];
 
-  const smallFileThreshold = 128 // MB
-  const smallFiles = distributionData.value.filter(item => {
-    const range = item.size_range.toLowerCase()
-    return range.includes('mb') && parseFloat(range) < smallFileThreshold
-  })
-  
-  const smallFileCount = smallFiles.reduce((sum, item) => sum + item.count, 0)
-  const smallFileRatio = totalCount.value > 0 ? (smallFileCount / totalCount.value * 100).toFixed(1) : '0'
+  const smallFileThreshold = 128; // MB
+  const smallFiles = distributionData.value.filter((item) => {
+    const range = item.size_range.toLowerCase();
+    return range.includes("mb") && parseFloat(range) < smallFileThreshold;
+  });
+
+  const smallFileCount = smallFiles.reduce((sum, item) => sum + item.count, 0);
+  const smallFileRatio =
+    totalCount.value > 0
+      ? ((smallFileCount / totalCount.value) * 100).toFixed(1)
+      : "0";
 
   return [
     {
-      label: '总文件数',
+      label: "总文件数",
       value: formatNumber(totalCount.value),
-      color: '#409EFF'
+      color: "#409EFF",
     },
     {
-      label: '小文件数',
+      label: "小文件数",
       value: formatNumber(smallFileCount),
-      color: '#F56C6C'
+      color: "#F56C6C",
     },
     {
-      label: '小文件占比',
+      label: "小文件占比",
       value: `${smallFileRatio}%`,
-      color: '#E6A23C'
-    }
-  ]
-})
+      color: "#E6A23C",
+    },
+  ];
+});
 
 // 方法
 function formatNumber(num: number): string {
-  return monitoringStore.formatNumber(num)
+  return monitoringStore.formatNumber(num);
 }
 
 function getItemColor(index: number): string {
-  return monitoringStore.getChartColor(index)
+  return monitoringStore.getChartColor(index);
 }
 
 function getPercentage(item: FileDistributionItem): string {
-  if (totalCount.value === 0) return '0.0'
-  return ((item.count / totalCount.value) * 100).toFixed(1)
+  if (totalCount.value === 0) return "0.0";
+  return ((item.count / totalCount.value) * 100).toFixed(1);
 }
 
 function handleChartClick(params: any) {
-  emit('chart-click', params)
+  emit("chart-click", params);
 }
 
 function handleRowClick(item: FileDistributionItem, index: number) {
-  emit('row-click', item, index)
+  emit("row-click", item, index);
 }
 
 function handleExport() {
-  emit('export')
+  emit("export");
 }
 </script>
 

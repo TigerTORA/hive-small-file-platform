@@ -6,7 +6,9 @@
           <el-icon class="header-icon" :size="20">
             <Connection />
           </el-icon>
-          <span class="header-title">{{ showExtendedStats ? '集群概览' : '集群统计' }}</span>
+          <span class="header-title">{{
+            showExtendedStats ? "集群概览" : "集群统计"
+          }}</span>
         </div>
         <div class="header-right">
           <el-tag :type="statusType" size="small">
@@ -17,24 +19,28 @@
     </template>
 
     <div class="card-content">
-      <div class="metrics-grid" :class="{ 'extended': showExtendedStats }">
+      <div class="metrics-grid" :class="{ extended: showExtendedStats }">
         <div class="metric-item">
           <div class="metric-value">{{ formatNumber(totalClusters) }}</div>
           <div class="metric-label">总集群数</div>
         </div>
-        
+
         <div class="metric-item">
-          <div class="metric-value active">{{ formatNumber(activeClusters) }}</div>
+          <div class="metric-value active">
+            {{ formatNumber(activeClusters) }}
+          </div>
           <div class="metric-label">活跃集群</div>
         </div>
-        
+
         <!-- 扩展统计信息 -->
         <template v-if="showExtendedStats">
           <div class="metric-item">
-            <div class="metric-value table">{{ formatNumber(totalTables) }}</div>
+            <div class="metric-value table">
+              {{ formatNumber(totalTables) }}
+            </div>
             <div class="metric-label">总表数</div>
           </div>
-          
+
           <div class="metric-item">
             <div class="metric-value file">{{ formatNumber(totalFiles) }}</div>
             <div class="metric-label">总文件数</div>
@@ -47,8 +53,8 @@
           <span class="progress-label">集群活跃率</span>
           <span class="progress-percent">{{ activeRate }}%</span>
         </div>
-        <el-progress 
-          :percentage="activeRate" 
+        <el-progress
+          :percentage="activeRate"
           :color="progressColor"
           :show-text="false"
           stroke-width="8"
@@ -85,78 +91,80 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Connection, Clock } from '@element-plus/icons-vue'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useMonitoringStore } from '@/stores/monitoring'
+import { computed } from "vue";
+import { Connection, Clock } from "@element-plus/icons-vue";
+import { useDashboardStore } from "@/stores/dashboard";
+import { useMonitoringStore } from "@/stores/monitoring";
 
 interface Props {
-  showSelector?: boolean
-  showFooter?: boolean
-  showExtendedStats?: boolean
+  showSelector?: boolean;
+  showFooter?: boolean;
+  showExtendedStats?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showSelector: true,
   showFooter: true,
-  showExtendedStats: false
-})
+  showExtendedStats: false,
+});
 
 const emit = defineEmits<{
-  clusterChange: [clusterId: number]
-}>()
+  clusterChange: [clusterId: number];
+}>();
 
-const dashboardStore = useDashboardStore()
-const monitoringStore = useMonitoringStore()
+const dashboardStore = useDashboardStore();
+const monitoringStore = useMonitoringStore();
 
 // 计算属性
-const totalClusters = computed(() => dashboardStore.summary.total_clusters)
-const activeClusters = computed(() => dashboardStore.summary.active_clusters)
-const totalTables = computed(() => dashboardStore.summary.total_tables || 0)
-const totalFiles = computed(() => dashboardStore.summary.total_files || 0)
+const totalClusters = computed(() => dashboardStore.summary.total_clusters);
+const activeClusters = computed(() => dashboardStore.summary.active_clusters);
+const totalTables = computed(() => dashboardStore.summary.total_tables || 0);
+const totalFiles = computed(() => dashboardStore.summary.total_files || 0);
 
 const activeRate = computed(() => {
-  if (totalClusters.value === 0) return 0
-  return Math.round((activeClusters.value / totalClusters.value) * 100)
-})
+  if (totalClusters.value === 0) return 0;
+  return Math.round((activeClusters.value / totalClusters.value) * 100);
+});
 
 const statusType = computed(() => {
-  const rate = activeRate.value
-  if (rate >= 80) return 'success'
-  if (rate >= 60) return 'warning'
-  return 'danger'
-})
+  const rate = activeRate.value;
+  if (rate >= 80) return "success";
+  if (rate >= 60) return "warning";
+  return "danger";
+});
 
 const statusText = computed(() => {
-  const rate = activeRate.value
-  if (rate >= 80) return '良好'
-  if (rate >= 60) return '一般'
-  return '异常'
-})
+  const rate = activeRate.value;
+  if (rate >= 80) return "良好";
+  if (rate >= 60) return "一般";
+  return "异常";
+});
 
 const progressColor = computed(() => {
-  const rate = activeRate.value
-  if (rate >= 80) return '#67C23A'
-  if (rate >= 60) return '#E6A23C'
-  return '#F56C6C'
-})
+  const rate = activeRate.value;
+  if (rate >= 80) return "#67C23A";
+  if (rate >= 60) return "#E6A23C";
+  return "#F56C6C";
+});
 
-const clusters = computed(() => dashboardStore.clusterStats)
-const selectedClusterId = computed(() => monitoringStore.settings.selectedCluster)
+const clusters = computed(() => dashboardStore.clusterStats);
+const selectedClusterId = computed(
+  () => monitoringStore.settings.selectedCluster,
+);
 
 const lastUpdateTime = computed(() => {
-  if (!monitoringStore.lastRefreshTime) return '--'
-  return monitoringStore.formatDate(monitoringStore.lastRefreshTime)
-})
+  if (!monitoringStore.lastRefreshTime) return "--";
+  return monitoringStore.formatDate(monitoringStore.lastRefreshTime);
+});
 
 // 方法
 function formatNumber(num: number): string {
-  return monitoringStore.formatNumber(num)
+  return monitoringStore.formatNumber(num);
 }
 
 function handleClusterChange(clusterId: number) {
-  monitoringStore.setSelectedCluster(clusterId)
-  emit('clusterChange', clusterId)
+  monitoringStore.setSelectedCluster(clusterId);
+  emit("clusterChange", clusterId);
 }
 </script>
 
@@ -184,7 +192,7 @@ function handleClusterChange(clusterId: number) {
 }
 
 .header-icon {
-  color: #409EFF;
+  color: #409eff;
 }
 
 .header-title {
@@ -220,16 +228,16 @@ function handleClusterChange(clusterId: number) {
 .metric-value {
   font-size: 28px;
   font-weight: bold;
-  color: #409EFF;
+  color: #409eff;
   margin-bottom: 4px;
 }
 
 .metric-value.active {
-  color: #67C23A;
+  color: #67c23a;
 }
 
 .metric-value.table {
-  color: #E6A23C;
+  color: #e6a23c;
 }
 
 .metric-value.file {
@@ -294,11 +302,11 @@ function handleClusterChange(clusterId: number) {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  
+
   .metric-item {
     padding: 12px;
   }
-  
+
   .metric-value {
     font-size: 24px;
   }

@@ -6,8 +6,8 @@
         <p class="chart-subtitle" v-if="subtitle">{{ subtitle }}</p>
       </div>
       <div class="header-right">
-        <el-radio-group 
-          v-model="selectedPeriod" 
+        <el-radio-group
+          v-model="selectedPeriod"
           size="small"
           @change="handlePeriodChange"
         >
@@ -22,17 +22,22 @@
       <div v-if="loading" class="chart-loading">
         <el-skeleton animated>
           <template #template>
-            <el-skeleton-item variant="rect" style="width: 100%; height: 100%" />
+            <el-skeleton-item
+              variant="rect"
+              style="width: 100%; height: 100%"
+            />
           </template>
         </el-skeleton>
       </div>
-      
+
       <div v-else-if="error" class="chart-error">
         <el-empty description="数据加载失败">
-          <el-button type="primary" @click="$emit('refresh')">重新加载</el-button>
+          <el-button type="primary" @click="$emit('refresh')"
+            >重新加载</el-button
+          >
         </el-empty>
       </div>
-      
+
       <v-chart
         v-else
         class="trend-echarts"
@@ -46,12 +51,15 @@
     <div class="chart-footer" v-if="showFooter">
       <div class="chart-legend">
         <div class="legend-item" v-for="item in legendItems" :key="item.name">
-          <span class="legend-color" :style="{ backgroundColor: item.color }"></span>
+          <span
+            class="legend-color"
+            :style="{ backgroundColor: item.color }"
+          ></span>
           <span class="legend-text">{{ item.name }}</span>
           <span class="legend-value">{{ item.value }}</span>
         </div>
       </div>
-      
+
       <div class="chart-actions">
         <el-button-group size="small">
           <el-button @click="handleExport" :loading="exporting">
@@ -70,23 +78,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
+import { computed, ref, watch } from "vue";
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { LineChart, BarChart } from "echarts/charts";
 import {
   GridComponent,
   TooltipComponent,
   LegendComponent,
   TitleComponent,
   DataZoomComponent,
-  ToolboxComponent
-} from 'echarts/components'
-import VChart from 'vue-echarts'
-import { Download, FullScreen, Refresh } from '@element-plus/icons-vue'
-import { useCharts } from '@/composables/useCharts'
-import { useMonitoringStore } from '@/stores/monitoring'
-import type { TrendPoint } from '@/api/dashboard'
+  ToolboxComponent,
+} from "echarts/components";
+import VChart from "vue-echarts";
+import { Download, FullScreen, Refresh } from "@element-plus/icons-vue";
+import { useCharts } from "@/composables/useCharts";
+import { useMonitoringStore } from "@/stores/monitoring";
+import type { TrendPoint } from "@/api/dashboard";
 
 use([
   CanvasRenderer,
@@ -97,26 +105,26 @@ use([
   LegendComponent,
   TitleComponent,
   DataZoomComponent,
-  ToolboxComponent
-])
+  ToolboxComponent,
+]);
 
 interface Props {
-  data: TrendPoint[]
-  title?: string
-  subtitle?: string
-  height?: number
-  showHeader?: boolean
-  showFooter?: boolean
-  loading?: boolean
-  error?: string | null
-  refreshing?: boolean
-  exporting?: boolean
-  theme?: 'light' | 'dark'
+  data: TrendPoint[];
+  title?: string;
+  subtitle?: string;
+  height?: number;
+  showHeader?: boolean;
+  showFooter?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  refreshing?: boolean;
+  exporting?: boolean;
+  theme?: "light" | "dark";
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: '小文件趋势分析',
-  subtitle: '显示文件数量和小文件占比的变化趋势',
+  title: "小文件趋势分析",
+  subtitle: "显示文件数量和小文件占比的变化趋势",
   height: 400,
   showHeader: true,
   showFooter: true,
@@ -124,84 +132,84 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   refreshing: false,
   exporting: false,
-  theme: 'light'
-})
+  theme: "light",
+});
 
 const emit = defineEmits<{
-  refresh: []
-  export: []
-  fullscreen: []
-  'period-change': [period: number]
-  'chart-click': [params: any]
-}>()
+  refresh: [];
+  export: [];
+  fullscreen: [];
+  "period-change": [period: number];
+  "chart-click": [params: any];
+}>();
 
-const { getTrendChartOption } = useCharts()
-const monitoringStore = useMonitoringStore()
+const { getTrendChartOption } = useCharts();
+const monitoringStore = useMonitoringStore();
 
-const selectedPeriod = ref<string>('30')
+const selectedPeriod = ref<string>("30");
 
 // 计算属性
 const containerStyle = computed(() => ({
   height: `${props.height}px`,
-  position: 'relative'
-}))
+  position: "relative",
+}));
 
 const chartOption = computed(() => {
   if (!props.data || props.data.length === 0) {
     return {
       title: {
-        text: '暂无数据',
-        left: 'center',
-        top: 'center',
+        text: "暂无数据",
+        left: "center",
+        top: "center",
         textStyle: {
           fontSize: 14,
-          color: '#999'
-        }
-      }
-    }
+          color: "#999",
+        },
+      },
+    };
   }
-  
-  return getTrendChartOption(props.data)
-})
+
+  return getTrendChartOption(props.data);
+});
 
 const legendItems = computed(() => {
-  if (!props.data || props.data.length === 0) return []
-  
-  const latest = props.data[props.data.length - 1]
+  if (!props.data || props.data.length === 0) return [];
+
+  const latest = props.data[props.data.length - 1];
   return [
     {
-      name: '总文件数',
+      name: "总文件数",
       color: monitoringStore.getChartColor(0),
-      value: monitoringStore.formatNumber(latest.total_files)
+      value: monitoringStore.formatNumber(latest.total_files),
     },
     {
-      name: '小文件数',
+      name: "小文件数",
       color: monitoringStore.getChartColor(3),
-      value: monitoringStore.formatNumber(latest.small_files)
+      value: monitoringStore.formatNumber(latest.small_files),
     },
     {
-      name: '小文件占比',
+      name: "小文件占比",
       color: monitoringStore.getChartColor(2),
-      value: `${latest.ratio.toFixed(1)}%`
-    }
-  ]
-})
+      value: `${latest.ratio.toFixed(1)}%`,
+    },
+  ];
+});
 
 // 方法
 function handlePeriodChange(value: string) {
-  emit('period-change', parseInt(value))
+  emit("period-change", parseInt(value));
 }
 
 function handleExport() {
-  emit('export')
+  emit("export");
 }
 
 function handleFullscreen() {
-  emit('fullscreen')
+  emit("fullscreen");
 }
 
 function handleChartClick(params: any) {
-  emit('chart-click', params)
+  emit("chart-click", params);
 }
 
 // 监听主题变化
@@ -210,8 +218,8 @@ watch(
   () => {
     // 主题变化时图表会自动重新渲染
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 </script>
 
 <style scoped>

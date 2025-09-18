@@ -1,5 +1,5 @@
 // 卡片组件
-export * from './cards'
+export * from "./cards";
 
 // 图表组件
-export * from './charts'
+export * from "./charts";

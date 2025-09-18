@@ -1,39 +1,34 @@
-import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
-import path from 'path'
+import { defineConfig } from "vitest/config";
+import vue from "@vitejs/plugin-vue";
+import path from "path";
 
 export default defineConfig({
-  plugins: [vue({
-    template: {
-      compilerOptions: {
-        isCustomElement: (tag) => {
-          return tag.startsWith('el-') || 
-                 tag === 'v-chart' ||
-                 tag === 'router-link' ||
-                 tag === 'router-view'
-        }
-      }
-    }
-  })],
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => {
+            return (
+              tag.startsWith("el-") ||
+              tag === "v-chart" ||
+              tag === "router-link" ||
+              tag === "router-view"
+            );
+          },
+        },
+      },
+    }),
+  ],
   test: {
-    environment: 'happy-dom',
+    environment: "happy-dom",
     globals: true,
-    setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.ts', 'src/test/**/*.test.ts'],
-    exclude: [
-      'node_modules',
-      'dist',
-      'src/test/e2e/**'
-    ],
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.ts", "src/test/**/*.test.ts"],
+    exclude: ["node_modules", "dist", "src/test/e2e/**"],
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'src/test/',
-        '**/*.d.ts',
-        'src/main.ts'
-      ],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
+      exclude: ["node_modules/", "src/test/", "**/*.d.ts", "src/main.ts"],
       thresholds: {
         lines: 80,
         functions: 85,
@@ -44,15 +39,15 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
-    }
+      "@": path.resolve(__dirname, "./src"),
+    },
   },
   define: {
     __VUE_OPTIONS_API__: true,
     __VUE_PROD_DEVTOOLS__: false,
-    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
   },
   esbuild: {
-    target: 'node14'
-  }
-})
+    target: "node14",
+  },
+});
