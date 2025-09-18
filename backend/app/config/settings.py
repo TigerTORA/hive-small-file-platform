@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     RELOAD: bool = True
 
     # Database
-    DATABASE_URL: str = "sqlite:///./hive_small_file_db.db"
-
+    # Default to engineered local path (under backend/var/data)
+    DATABASE_URL: str = "sqlite:///./var/data/hive_small_file_db.db"
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
