@@ -36,7 +36,7 @@ format:
 
 check:
 	@echo "Running quality checks..."
-	cd backend && black --check . && isort -c . && flake8 . --count --max-line-length=100 --statistics
+	cd backend && black --check . && isort -c . && flake8 . --count --statistics
 	cd frontend && npm run lint 2>/dev/null || echo "Frontend linting not available"
 
 test:
