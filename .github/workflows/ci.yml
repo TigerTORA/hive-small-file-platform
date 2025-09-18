@@ -36,10 +36,14 @@ jobs:
       - name: Run backend tests (CI)
         working-directory: backend
         run: |
-          # Temporary smoke subset to stabilize CI; will expand and raise gate in follow-ups
+          # Phase-in: curate stable unit subset and raise coverage gate to 10%
           python -m pytest \
-            tests/unit/test_ci_verification.py test_simple.py test_scanner.py \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=0 -v --tb=short
+            test_performance_baseline.py \
+            test_scanner.py \
+            tests/unit/test_engine_factory_extra.py \
+            tests/unit/utils/test_encryption.py \
+            tests/unit/test_ci_verification.py \
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=10 -v --tb=short
 
       - name: Upload backend coverage
         if: always()
