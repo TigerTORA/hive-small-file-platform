@@ -73,6 +73,16 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Prettier formatting check
+        working-directory: frontend
+        run: |
+          # Prefer project script if present; fallback to npx
+          if npm run -s lint:format >/dev/null 2>&1; then
+            npm run lint:format
+          else
+            npx --yes prettier --check .
+          fi
+
       - name: Run frontend unit tests
         working-directory: frontend
         run: npm run test:run
