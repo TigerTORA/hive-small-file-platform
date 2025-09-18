@@ -51,6 +51,7 @@ jobs:
             tests/unit/engines/test_base_engine_helpers.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
             tests/unit/monitor/test_mysql_hive_connector.py \
+            tests/unit/utils/test_table_lock_manager.py \
             tests/unit/test_ci_verification.py \
             --cov=app --cov-report=xml:coverage.xml --cov-fail-under=25 -v --tb=short
 
