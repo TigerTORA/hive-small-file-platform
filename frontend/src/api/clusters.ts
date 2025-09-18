@@ -107,15 +107,18 @@ export const clustersApi = {
     test_mode: string
     overall_status: string
     total_test_time_ms: number
-    tests: Record<string, {
-      status: string
-      response_time_ms: number
-      failure_type?: string
-      error_message?: string
-      attempt_count: number
-      retry_count: number
-    }>
-    logs: Array<{level: string, message: string}>
+    tests: Record<
+      string,
+      {
+        status: string
+        response_time_ms: number
+        failure_type?: string
+        error_message?: string
+        attempt_count: number
+        retry_count: number
+      }
+    >
+    logs: Array<{ level: string; message: string }>
     suggestions: string[]
   }> {
     const params = new URLSearchParams()
@@ -131,7 +134,10 @@ export const clustersApi = {
   },
 
   // 获取连接统计
-  getConnectionStatistics(id: number, hours: number = 24): Promise<{
+  getConnectionStatistics(
+    id: number,
+    hours: number = 24
+  ): Promise<{
     cluster_id: number
     cluster_name: string
     total_tests: number
@@ -145,7 +151,10 @@ export const clustersApi = {
   },
 
   // 获取连接历史
-  getConnectionHistory(id: number, limit: number = 50): Promise<{
+  getConnectionHistory(
+    id: number,
+    limit: number = 50
+  ): Promise<{
     cluster_id: number
     cluster_name: string
     total_records: number
@@ -170,11 +179,14 @@ export const clustersApi = {
     status: string
     health_status: string
     last_health_check?: string
-    connections: Record<string, {
-      status: string
-      last_check?: string
-      cached: boolean
-    }>
+    connections: Record<
+      string,
+      {
+        status: string
+        last_check?: string
+        cached: boolean
+      }
+    >
   }> {
     return api.get(`/clusters/${id}/status`)
   },

@@ -7,6 +7,7 @@
 ## 📋 功能特性
 
 ### ✨ 核心功能
+
 - **按钮功能测试** - 测试所有页面的按钮点击、状态变化、交互效果
 - **表单验证测试** - 测试表单字段验证、提交流程、错误处理
 - **页面导航测试** - 测试路由导航、深度链接、浏览器前进后退
@@ -15,6 +16,7 @@
 - **综合报告生成** - 生成HTML、JSON、XML、CSV格式的测试报告
 
 ### 🛠️ 高级特性
+
 - **并行测试执行** - 支持并行运行测试以提高效率
 - **截图和错误捕获** - 自动截图记录测试过程和错误
 - **智能重试机制** - 网络异常时自动重试
@@ -26,12 +28,13 @@
 ### 1. 环境准备
 
 确保以下服务正在运行：
+
 ```bash
 # 启动后端服务
 cd backend
 uvicorn app.main:app --reload --port 8000
 
-# 启动前端服务 
+# 启动前端服务
 cd frontend
 npm run dev
 ```
@@ -83,18 +86,18 @@ frontend/
 ```javascript
 const TEST_CONFIG = {
   app: {
-    baseUrl: 'http://localhost:3002',      // 前端应用地址
-    apiBaseUrl: 'http://localhost:8000',   // 后端API地址
-    timeout: 30000                         // 默认超时时间
+    baseUrl: 'http://localhost:3002', // 前端应用地址
+    apiBaseUrl: 'http://localhost:8000', // 后端API地址
+    timeout: 30000 // 默认超时时间
   },
-  
+
   options: {
-    headless: false,     // 是否无头模式
-    slowMo: 100,         // 操作延迟
-    screenshot: true,    // 是否截图
+    headless: false, // 是否无头模式
+    slowMo: 100, // 操作延迟
+    screenshot: true, // 是否截图
     viewport: { width: 1280, height: 720 }
   }
-};
+}
 ```
 
 ### 测试场景配置
@@ -106,7 +109,7 @@ scenarios: {
     { page: 'clusters', buttons: ['addButton', 'editButton', 'testButton'] },
     { page: 'dashboard', buttons: ['refreshButton', 'exportButton'] }
   ],
-  
+
   // 表单验证测试场景
   formTests: [
     {
@@ -123,6 +126,7 @@ scenarios: {
 ## 🧪 测试用例覆盖
 
 ### 按钮功能测试
+
 - ✅ 按钮存在性检查
 - ✅ 按钮可见性验证
 - ✅ 按钮启用状态检查
@@ -132,6 +136,7 @@ scenarios: {
 - ✅ 按钮状态变化（悬停、焦点、加载）
 
 ### 表单验证测试
+
 - ✅ 必填字段验证
 - ✅ 数据格式验证（URL、邮箱等）
 - ✅ 表单提交流程
@@ -140,6 +145,7 @@ scenarios: {
 - ✅ 成功提交处理
 
 ### 页面导航测试
+
 - ✅ 基本页面导航
 - ✅ 参数化路由（集群详情、表详情）
 - ✅ 浏览器前进后退
@@ -148,6 +154,7 @@ scenarios: {
 - ✅ 导航守卫和重定向
 
 ### API连接测试
+
 - ✅ 所有API端点连通性
 - ✅ HTTP状态码验证
 - ✅ 响应时间测试
@@ -158,12 +165,14 @@ scenarios: {
 ## 📊 测试报告
 
 ### 报告格式
+
 - **HTML报告** - 美观的可视化报告，包含图表和交互功能
 - **JSON报告** - 结构化数据，便于程序处理
 - **XML报告** - JUnit格式，支持CI/CD集成
 - **CSV报告** - 表格数据，便于数据分析
 
 ### 报告内容
+
 - 📈 测试执行统计（总数、通过、失败、成功率）
 - 📋 各测试套件详细结果
 - ❌ 错误详情和堆栈追踪
@@ -176,15 +185,15 @@ scenarios: {
 ### 自定义测试配置
 
 ```javascript
-const suite = new ComprehensiveTestSuite();
+const suite = new ComprehensiveTestSuite()
 const results = await suite.runComprehensiveTests({
-  setupData: true,        // 是否设置测试数据
-  cleanupData: true,      // 是否清理测试数据
-  parallel: false,        // 是否并行执行
+  setupData: true, // 是否设置测试数据
+  cleanupData: true, // 是否清理测试数据
+  parallel: false, // 是否并行执行
   continueOnFailure: true, // 失败后是否继续
-  generateReport: true,    // 是否生成报告
-  takeScreenshots: true    // 是否截图
-});
+  generateReport: true, // 是否生成报告
+  takeScreenshots: true // 是否截图
+})
 ```
 
 ### 单独运行测试模块
@@ -218,18 +227,21 @@ node test-data-manager.js cleanup
 ### 常见问题
 
 1. **浏览器启动失败**
+
    ```bash
    # 检查Playwright安装
    npx playwright install
    ```
 
 2. **API连接失败**
+
    ```bash
    # 检查后端服务状态
    curl http://localhost:8000/health
    ```
 
 3. **前端页面无法访问**
+
    ```bash
    # 检查前端服务状态
    curl http://localhost:3002
@@ -246,11 +258,11 @@ node test-data-manager.js cleanup
 // 开启详细日志
 const TEST_CONFIG = {
   options: {
-    headless: false,    // 显示浏览器
-    slowMo: 500,        // 增加操作延迟
-    screenshot: true    // 开启截图
+    headless: false, // 显示浏览器
+    slowMo: 500, // 增加操作延迟
+    screenshot: true // 开启截图
   }
-};
+}
 ```
 
 ## 📈 持续集成
@@ -269,21 +281,21 @@ jobs:
       - uses: actions/setup-node@v2
         with:
           node-version: '18'
-      
+
       - name: Install dependencies
         run: |
           cd frontend && npm install
           cd ../backend && pip install -r requirements.txt
-      
+
       - name: Start services
         run: |
           cd backend && uvicorn app.main:app --port 8000 &
           cd frontend && npm run dev &
           sleep 10
-      
+
       - name: Run tests
         run: cd frontend && node comprehensive-test-suite.js full
-      
+
       - name: Upload test reports
         uses: actions/upload-artifact@v2
         with:

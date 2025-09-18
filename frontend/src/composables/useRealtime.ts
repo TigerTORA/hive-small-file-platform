@@ -5,7 +5,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 export function useRealtime() {
   const monitoringStore = useMonitoringStore()
   const dashboardStore = useDashboardStore()
-  
+
   const isRefreshing = ref(false)
   const nextRefreshIn = ref(0)
   const refreshTimer = ref<NodeJS.Timeout | null>(null)
@@ -14,14 +14,14 @@ export function useRealtime() {
   // 开始自动刷新
   function startAutoRefresh() {
     if (!monitoringStore.isAutoRefreshEnabled) return
-    
+
     clearTimers()
-    
+
     // 设置刷新定时器
     refreshTimer.value = setInterval(async () => {
       await performRefresh()
     }, monitoringStore.settings.refreshInterval * 1000)
-    
+
     // 开始倒计时
     startCountdown()
   }
@@ -35,13 +35,13 @@ export function useRealtime() {
   // 手动刷新
   async function performRefresh() {
     if (isRefreshing.value) return
-    
+
     isRefreshing.value = true
-    
+
     try {
       await dashboardStore.loadAllData(monitoringStore.settings.selectedCluster)
       monitoringStore.lastRefreshTime = new Date()
-      
+
       // 重新开始倒计时
       startCountdown()
     } catch (error) {
@@ -54,13 +54,13 @@ export function useRealtime() {
   // 开始倒计时
   function startCountdown() {
     if (!monitoringStore.isAutoRefreshEnabled) return
-    
+
     if (countdownTimer.value) {
       clearInterval(countdownTimer.value)
     }
-    
+
     nextRefreshIn.value = monitoringStore.settings.refreshInterval
-    
+
     countdownTimer.value = setInterval(() => {
       nextRefreshIn.value--
       if (nextRefreshIn.value <= 0) {
@@ -75,7 +75,7 @@ export function useRealtime() {
       clearInterval(refreshTimer.value)
       refreshTimer.value = null
     }
-    
+
     if (countdownTimer.value) {
       clearInterval(countdownTimer.value)
       countdownTimer.value = null
@@ -85,7 +85,7 @@ export function useRealtime() {
   // 监听自动刷新设置变化
   watch(
     () => monitoringStore.isAutoRefreshEnabled,
-    (enabled) => {
+    enabled => {
       if (enabled) {
         startAutoRefresh()
       } else {
@@ -116,7 +116,7 @@ export function useRealtime() {
   // 生命周期
   onMounted(() => {
     monitoringStore.initialize()
-    
+
     if (monitoringStore.isAutoRefreshEnabled) {
       startAutoRefresh()
     }

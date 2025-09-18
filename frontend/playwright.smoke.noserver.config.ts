@@ -1,22 +1,22 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
-  testDir: "./src/test/e2e",
+  testDir: './src/test/e2e',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: "line",
+  reporter: 'line',
   use: {
-    baseURL: "http://127.0.0.1:4173",
-    trace: "off",
+    baseURL: 'http://127.0.0.1:4173',
+    trace: 'off',
     actionTimeout: 30000,
-    navigationTimeout: 30000,
+    navigationTimeout: 30000
   },
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
-});
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] }
+    }
+  ]
+})

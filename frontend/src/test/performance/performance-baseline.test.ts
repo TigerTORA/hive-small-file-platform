@@ -148,7 +148,7 @@ describe('性能基准测试', () => {
 
       // 填充大量数据
       store.trends = Array.from({ length: 5000 }, (_, i) => ({
-        date: `2023-12-${String(i % 30 + 1).padStart(2, '0')}`,
+        date: `2023-12-${String((i % 30) + 1).padStart(2, '0')}`,
         small_files: Math.floor(Math.random() * 1000),
         total_size: Math.floor(Math.random() * 10000)
       }))
@@ -208,20 +208,26 @@ describe('性能基准测试', () => {
       const { dashboardApi } = await import('@/api/dashboard')
 
       // Mock API响应时间
-      ;(dashboardApi.getSummary as any).mockImplementation(() =>
-        new Promise(resolve =>
-          setTimeout(() => resolve({
-            total_clusters: 5,
-            active_clusters: 3,
-            total_tables: 100,
-            monitored_tables: 80,
-            total_files: 50000,
-            total_small_files: 15000,
-            small_file_ratio: 30,
-            total_size_gb: 1000,
-            small_file_size_gb: 50
-          }), 50) // 模拟50ms API延迟
-        )
+      ;(dashboardApi.getSummary as any).mockImplementation(
+        () =>
+          new Promise(
+            resolve =>
+              setTimeout(
+                () =>
+                  resolve({
+                    total_clusters: 5,
+                    active_clusters: 3,
+                    total_tables: 100,
+                    monitored_tables: 80,
+                    total_files: 50000,
+                    total_small_files: 15000,
+                    small_file_ratio: 30,
+                    total_size_gb: 1000,
+                    small_file_size_gb: 50
+                  }),
+                50
+              ) // 模拟50ms API延迟
+          )
       )
 
       const startTime = performance.now()
@@ -243,23 +249,23 @@ describe('性能基准测试', () => {
 
       // Mock所有API
       const mockDelay = 30
-      ;(dashboardApi.getSummary as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({}), mockDelay))
+      ;(dashboardApi.getSummary as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve({}), mockDelay))
       )
-      ;(dashboardApi.getTrends as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
+      ;(dashboardApi.getTrends as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
       )
-      ;(dashboardApi.getFileDistribution as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
+      ;(dashboardApi.getFileDistribution as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
       )
-      ;(dashboardApi.getTopTables as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
+      ;(dashboardApi.getTopTables as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
       )
-      ;(dashboardApi.getRecentTasks as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
+      ;(dashboardApi.getRecentTasks as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve([]), mockDelay))
       )
-      ;(dashboardApi.getClusterStats as any).mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({ clusters: [] }), mockDelay))
+      ;(dashboardApi.getClusterStats as any).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve({ clusters: [] }), mockDelay))
       )
 
       const startTime = performance.now()
@@ -280,8 +286,14 @@ describe('性能基准测试', () => {
       const monitoringStore = useMonitoringStore()
 
       const testSizes = [
-        0, 1024, 1024 * 1024, 1024 * 1024 * 1024,
-        1536, 2048000, 5368709120, 1099511627776
+        0,
+        1024,
+        1024 * 1024,
+        1024 * 1024 * 1024,
+        1536,
+        2048000,
+        5368709120,
+        1099511627776
       ]
 
       const startTime = performance.now()
@@ -305,9 +317,7 @@ describe('性能基准测试', () => {
     it('数字格式化性能', () => {
       const monitoringStore = useMonitoringStore()
 
-      const testNumbers = [
-        0, 999, 1000, 1500, 1000000, 1500000, 2500000, 999999999
-      ]
+      const testNumbers = [0, 999, 1000, 1500, 1000000, 1500000, 2500000, 999999999]
 
       const startTime = performance.now()
 
@@ -460,7 +470,7 @@ describe('性能基准测试', () => {
 
         // 填充数据
         store.trends = Array.from({ length: 1000 }, (_, i) => ({
-          date: `2023-12-${String(i % 30 + 1).padStart(2, '0')}`,
+          date: `2023-12-${String((i % 30) + 1).padStart(2, '0')}`,
           small_files: Math.floor(Math.random() * 1000),
           total_size: Math.floor(Math.random() * 10000)
         }))

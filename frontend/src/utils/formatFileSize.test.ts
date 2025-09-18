@@ -3,7 +3,7 @@ import { formatFileSize } from './formatFileSize'
 
 /**
  * 文件大小格式化工具函数测试
- * 
+ *
  * TDD演示：这些测试用例定义了我们期望的行为
  * 注意：此时 formatFileSize 函数还不存在，测试会失败
  */
