@@ -107,6 +107,8 @@ pip install -r requirements.txt
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env 文件，设置数据库连接等配置
+# 本地开发推荐将 SQLite 放在工程化路径下（无需 sudo）
+# DATABASE_URL=sqlite:///./var/data/hive_small_file_db.db
 
 # 初始化数据库
 alembic upgrade head
@@ -162,7 +164,7 @@ GitHub Actions 会构建并推送镜像到 GHCR，并创建 Release。
 
 ## 文档索引
 
-- 汇总入口：`docs/README.md`
+- 汇总入口：`docs/README.md`（根目录的大体量文档已归档到 docs/）
 - 架构决策：`docs/adr/README.md`
  - 开发联调用例与脚本：`scripts/dev/`（原本散落在根目录的测试/演示脚本已归档）
 
@@ -199,6 +201,10 @@ GitHub Actions 会构建并推送镜像到 GHCR，并创建 Release。
 
 ```env
 # 数据库配置
+# 开发（SQLite，工程化路径，跨平台，无需 sudo）
+# DATABASE_URL=sqlite:///./var/data/hive_small_file_db.db
+
+# 生产（建议使用 PostgreSQL 或 MySQL）
 DATABASE_URL=postgresql://user:password@localhost/hive_small_file_db
 
 # Redis 配置
