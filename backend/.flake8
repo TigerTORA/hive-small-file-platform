@@ -1,0 +1,27 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, E501
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .eggs,
+    *.egg,
+    .venv,
+    venv,
+    .mypy_cache,
+    .pytest_cache
+per-file-ignores =
+    __init__.py:F401
+    */migrations/*:E501
+    */tests/*:S101,D103
+max-complexity = 10
+max-doc-length = 72
+
+# 安全相关
+select = E,W,F,C,S
+# S 是来自 flake8-bandit 的安全检查
+
+# 文档相关 (flake8-docstrings)
+docstring-convention = google
