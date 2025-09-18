@@ -36,14 +36,18 @@ jobs:
       - name: Run backend tests (CI)
         working-directory: backend
         run: |
-          # Phase-in: curate stable unit subset and raise coverage gate to 10%
+          # Phase-in: expand unit subset and raise coverage gate to 25%
           python -m pytest \
             test_performance_baseline.py \
             test_scanner.py \
             tests/unit/test_engine_factory_extra.py \
             tests/unit/utils/test_encryption.py \
+            tests/unit/services/test_path_resolver.py \
+            tests/unit/engines/test_base_engine_helpers.py \
+            tests/unit/monitor/test_mock_hdfs_scanner.py \
+            tests/unit/models/test_cluster.py \
             tests/unit/test_ci_verification.py \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=10 -v --tb=short
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=25 -v --tb=short
 
       - name: Upload backend coverage
         if: always()
