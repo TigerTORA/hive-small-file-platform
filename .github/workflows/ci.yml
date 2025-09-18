@@ -36,7 +36,7 @@ jobs:
       - name: Run backend tests (CI)
         working-directory: backend
         run: |
-          # Phase-in: expand unit subset and raise coverage gate to 25%
+          # Phase-in: expand unit subset and raise coverage gate to 60%
           python -m pytest \
             test_performance_baseline.py \
             test_scanner.py \
@@ -45,15 +45,10 @@ jobs:
             tests/unit/services/test_path_resolver.py \
             tests/unit/engines/test_base_engine_helpers.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
+            tests/unit/monitor/test_mysql_hive_connector.py \
             tests/unit/models/test_cluster.py \
             tests/unit/test_ci_verification.py \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=25 -v --tb=short
-            tests/unit/services/test_path_resolver.py \
-            tests/unit/engines/test_base_engine_helpers.py \
-            tests/unit/monitor/test_mock_hdfs_scanner.py \
-            tests/unit/models/test_cluster.py \
-            tests/unit/test_ci_verification.py \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=25 -v --tb=short
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=60 -v --tb=short
 
       - name: Upload backend coverage
         if: always()
@@ -123,7 +118,6 @@ jobs:
         run: |
           npx http-server dist -p 4173 -a 127.0.0.1 >/dev/null 2>&1 &
           sleep 3
-          npx playwright test -c playwright.smoke.noserver.config.ts src/test/e2e/smoke.spec.ts --project=chromium --reporter=line || echo "E2E smoke failed (non-blocking)"
           npx playwright test -c playwright.smoke.noserver.config.ts src/test/e2e/smoke.spec.ts --project=chromium --reporter=line || echo "E2E smoke failed (non-blocking)"
 
   status:
