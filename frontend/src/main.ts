@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-import * as Sentry from "@sentry/vue"
+import * as Sentry from '@sentry/vue'
 
 import App from './App.vue'
 import router from './router'
@@ -17,13 +17,10 @@ if (sentryDsn) {
     app,
     dsn: sentryDsn,
     environment: import.meta.env.MODE,
-    integrations: [
-      Sentry.browserTracingIntegration({ router }),
-      Sentry.replayIntegration(),
-    ],
+    integrations: [Sentry.browserTracingIntegration({ router }), Sentry.replayIntegration()],
     tracesSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    replaysOnErrorSampleRate: 1.0
   })
 }
 

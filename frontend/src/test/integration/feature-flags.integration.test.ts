@@ -108,9 +108,9 @@ describe('Feature Flags Integration Tests', () => {
     it('应该从环境变量读取特性配置', () => {
       // 模拟环境变量
       const mockEnv = {
-        'VITE_FEATURE_REALTIME_MONITORING': 'false',
-        'VITE_FEATURE_ADVANCED_CHARTS': 'true',
-        'VITE_FEATURE_DEMO_MODE': '1'
+        VITE_FEATURE_REALTIME_MONITORING: 'false',
+        VITE_FEATURE_ADVANCED_CHARTS: 'true',
+        VITE_FEATURE_DEMO_MODE: '1'
       }
 
       vi.stubGlobal('import', {

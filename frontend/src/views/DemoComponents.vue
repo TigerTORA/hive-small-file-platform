@@ -92,14 +92,41 @@
     <section class="demo-section">
       <h2>表格组件</h2>
       <div class="cloudera-table">
-        <el-table :data="tableData" stripe>
-          <el-table-column prop="name" label="表名" width="200" />
-          <el-table-column prop="database" label="数据库" width="150" />
-          <el-table-column prop="size" label="大小" width="120" />
-          <el-table-column prop="files" label="文件数" width="100" />
-          <el-table-column prop="status" label="状态" width="120">
+        <el-table
+          :data="tableData"
+          stripe
+        >
+          <el-table-column
+            prop="name"
+            label="表名"
+            width="200"
+          />
+          <el-table-column
+            prop="database"
+            label="数据库"
+            width="150"
+          />
+          <el-table-column
+            prop="size"
+            label="大小"
+            width="120"
+          />
+          <el-table-column
+            prop="files"
+            label="文件数"
+            width="100"
+          />
+          <el-table-column
+            prop="status"
+            label="状态"
+            width="120"
+          >
             <template #default="{ row }">
-              <span class="cloudera-tag" :class="row.statusType">{{ row.status }}</span>
+              <span
+                class="cloudera-tag"
+                :class="row.statusType"
+                >{{ row.status }}</span
+              >
             </template>
           </el-table-column>
         </el-table>
@@ -144,169 +171,169 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { TrendCharts, Warning, Document, Connection } from '@element-plus/icons-vue'
+  import { ref } from 'vue'
+  import { TrendCharts, Warning, Document, Connection } from '@element-plus/icons-vue'
 
-const tableData = ref([
-  {
-    name: 'user_behavior_logs',
-    database: 'analytics',
-    size: '2.3 GB',
-    files: 1247,
-    status: '正常',
-    statusType: 'success'
-  },
-  {
-    name: 'transaction_records',
-    database: 'finance',
-    size: '856 MB',
-    files: 523,
-    status: '警告',
-    statusType: 'warning'
-  },
-  {
-    name: 'system_logs',
-    database: 'monitoring',
-    size: '4.1 GB',
-    files: 2891,
-    status: '错误',
-    statusType: 'danger'
-  },
-  {
-    name: 'customer_data',
-    database: 'crm',
-    size: '1.8 GB',
-    files: 892,
-    status: '正常',
-    statusType: 'success'
-  }
-])
+  const tableData = ref([
+    {
+      name: 'user_behavior_logs',
+      database: 'analytics',
+      size: '2.3 GB',
+      files: 1247,
+      status: '正常',
+      statusType: 'success'
+    },
+    {
+      name: 'transaction_records',
+      database: 'finance',
+      size: '856 MB',
+      files: 523,
+      status: '警告',
+      statusType: 'warning'
+    },
+    {
+      name: 'system_logs',
+      database: 'monitoring',
+      size: '4.1 GB',
+      files: 2891,
+      status: '错误',
+      statusType: 'danger'
+    },
+    {
+      name: 'customer_data',
+      database: 'crm',
+      size: '1.8 GB',
+      files: 892,
+      status: '正常',
+      statusType: 'success'
+    }
+  ])
 </script>
 
 <style scoped>
-.demo-page {
-  padding: var(--space-6);
-  min-height: calc(100vh - 64px);
-  overflow-y: auto;
-  background: var(--bg-gradient);
-}
-
-.demo-header {
-  text-align: center;
-  margin-bottom: var(--space-8);
-  padding: var(--space-8);
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-2);
-}
-
-.demo-header h1 {
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  color: var(--gray-900);
-  margin-bottom: var(--space-3);
-}
-
-.demo-header p {
-  font-size: var(--text-lg);
-  color: var(--gray-600);
-  margin: 0;
-}
-
-.demo-section {
-  margin-bottom: var(--space-10);
-  padding: var(--space-6);
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--gray-200);
-  box-shadow: var(--elevation-1);
-}
-
-.demo-section h2 {
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  color: var(--gray-900);
-  margin-bottom: var(--space-6);
-  padding-bottom: var(--space-3);
-  border-bottom: 2px solid var(--primary-500);
-}
-
-.button-demo {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.tag-demo {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.status-demo {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-4);
-}
-
-.status-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--gray-50);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--gray-200);
-}
-
-.glass-demo {
-  padding: var(--space-8);
-  background: linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%);
-  border-radius: var(--radius-xl);
-  display: flex;
-  justify-content: center;
-}
-
-.glass-demo .glass-card {
-  max-width: 400px;
-  padding: var(--space-6);
-  text-align: center;
-}
-
-.glass-demo h3 {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--gray-900);
-  margin-bottom: var(--space-3);
-}
-
-.glass-demo p {
-  color: var(--gray-700);
-  margin-bottom: var(--space-6);
-  line-height: var(--leading-relaxed);
-}
-
-/* 响应式适配 */
-@media (max-width: 768px) {
   .demo-page {
-    padding: var(--space-4);
+    padding: var(--space-6);
+    min-height: calc(100vh - 64px);
+    overflow-y: auto;
+    background: var(--bg-gradient);
   }
 
   .demo-header {
-    padding: var(--space-6);
+    text-align: center;
+    margin-bottom: var(--space-8);
+    padding: var(--space-8);
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-2);
+  }
+
+  .demo-header h1 {
+    font-size: var(--text-3xl);
+    font-weight: var(--font-bold);
+    color: var(--gray-900);
+    margin-bottom: var(--space-3);
+  }
+
+  .demo-header p {
+    font-size: var(--text-lg);
+    color: var(--gray-600);
+    margin: 0;
   }
 
   .demo-section {
-    padding: var(--space-4);
+    margin-bottom: var(--space-10);
+    padding: var(--space-6);
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--elevation-1);
+  }
+
+  .demo-section h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--primary-500);
   }
 
   .button-demo {
-    flex-direction: column;
+    display: flex;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .tag-demo {
+    display: flex;
+    gap: var(--space-4);
+    flex-wrap: wrap;
   }
 
   .status-demo {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
   }
-}
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--gray-50);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200);
+  }
+
+  .glass-demo {
+    padding: var(--space-8);
+    background: linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%);
+    border-radius: var(--radius-xl);
+    display: flex;
+    justify-content: center;
+  }
+
+  .glass-demo .glass-card {
+    max-width: 400px;
+    padding: var(--space-6);
+    text-align: center;
+  }
+
+  .glass-demo h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    margin-bottom: var(--space-3);
+  }
+
+  .glass-demo p {
+    color: var(--gray-700);
+    margin-bottom: var(--space-6);
+    line-height: var(--leading-relaxed);
+  }
+
+  /* 响应式适配 */
+  @media (max-width: 768px) {
+    .demo-page {
+      padding: var(--space-4);
+    }
+
+    .demo-header {
+      padding: var(--space-6);
+    }
+
+    .demo-section {
+      padding: var(--space-4);
+    }
+
+    .button-demo {
+      flex-direction: column;
+    }
+
+    .status-demo {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

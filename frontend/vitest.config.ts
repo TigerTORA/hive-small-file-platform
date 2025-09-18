@@ -3,44 +3,39 @@ import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [vue({
-    template: {
-      compilerOptions: {
-        isCustomElement: (tag) => {
-          return tag.startsWith('el-') || 
-                 tag === 'v-chart' ||
-                 tag === 'router-link' ||
-                 tag === 'router-view'
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: tag => {
+            return (
+              tag.startsWith('el-') ||
+              tag === 'v-chart' ||
+              tag === 'router-link' ||
+              tag === 'router-view'
+            )
+          }
         }
       }
-    }
-  })],
+    })
+  ],
   test: {
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts', 'src/test/**/*.test.ts'],
-    exclude: [
-      'node_modules',
-      'dist',
-      'src/test/e2e/**'
-    ],
+    exclude: ['node_modules', 'dist', 'src/test/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'src/test/',
-        '**/*.d.ts',
-        'src/main.ts'
-      ],
+      exclude: ['node_modules/', 'src/test/', '**/*.d.ts', 'src/main.ts'],
       thresholds: {
         lines: 80,
         functions: 85,
         branches: 75,
-        statements: 80,
-      },
-    },
+        statements: 80
+      }
+    }
   },
   resolve: {
     alias: {

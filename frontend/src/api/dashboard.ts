@@ -62,12 +62,12 @@ export interface ClusterStats {
 }
 
 export interface TableFileCountItem {
-  table_id: string  // cluster_id:database:table format
+  table_id: string // cluster_id:database:table format
   cluster_name: string
   database_name: string
   table_name: string
   current_files: number
-  trend_7d: number  // percentage change
+  trend_7d: number // percentage change
   trend_30d: number
   last_scan: string
 }
@@ -126,7 +126,7 @@ export const dashboardApi = {
   },
 
   // 获取集群统计详情
-  getClusterStats(): Promise<{ 
+  getClusterStats(): Promise<{
     clusters: ClusterStats[]
     summary: {
       total_clusters: number

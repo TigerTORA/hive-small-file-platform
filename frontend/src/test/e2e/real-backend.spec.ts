@@ -18,4 +18,3 @@ test('对接真实后端：创建集群并可见', async ({ page }) => {
   // 断言：集群卡片出现
   await expect(page.getByText('E2E-REAL')).toBeVisible()
 })
-

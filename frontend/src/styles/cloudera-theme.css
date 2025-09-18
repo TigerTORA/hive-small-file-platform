@@ -62,8 +62,13 @@
 }
 
 @keyframes logoGlow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .sidebar-brand .brand-text {
@@ -273,13 +278,15 @@
 }
 
 .cloudera-metric-card {
-  background: #ffffff !important;  /* 强制纯白背景 */
+  background: #ffffff !important; /* 强制纯白背景 */
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-xl);
   padding: var(--space-8);
   position: relative;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.1);
   min-height: 160px;
   display: flex;
   flex-direction: column;
@@ -288,9 +295,11 @@
 
 .cloudera-metric-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.05),
+    0 2px 4px rgba(0, 0, 0, 0.1);
   border-color: var(--gray-300);
-  background: #ffffff !important;  /* 保持纯白 */
+  background: #ffffff !important; /* 保持纯白 */
 }
 
 .metric-header {
@@ -602,12 +611,24 @@
   transform: translateY(20px);
 }
 
-.stagger-item:nth-child(1) { animation-delay: 0.1s; }
-.stagger-item:nth-child(2) { animation-delay: 0.2s; }
-.stagger-item:nth-child(3) { animation-delay: 0.3s; }
-.stagger-item:nth-child(4) { animation-delay: 0.4s; }
-.stagger-item:nth-child(5) { animation-delay: 0.5s; }
-.stagger-item:nth-child(6) { animation-delay: 0.6s; }
+.stagger-item:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.stagger-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.stagger-item:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.stagger-item:nth-child(4) {
+  animation-delay: 0.4s;
+}
+.stagger-item:nth-child(5) {
+  animation-delay: 0.5s;
+}
+.stagger-item:nth-child(6) {
+  animation-delay: 0.6s;
+}
 
 @keyframes staggerIn {
   to {

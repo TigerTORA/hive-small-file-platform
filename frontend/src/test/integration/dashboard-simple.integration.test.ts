@@ -18,7 +18,10 @@ class DashboardDataProcessor {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  static calculateTrend(currentValue: number, previousValue: number): {
+  static calculateTrend(
+    currentValue: number,
+    previousValue: number
+  ): {
     trend: 'up' | 'down' | 'stable'
     percentage: number
   } {
@@ -55,7 +58,9 @@ class DashboardDataProcessor {
     const grouped = this.groupTablesBySmallFileRatio(tables)
 
     if (grouped.high.length > 0) {
-      recommendations.push(`发现 ${grouped.high.length} 个表小文件比例超过70%，建议优先执行合并操作`)
+      recommendations.push(
+        `发现 ${grouped.high.length} 个表小文件比例超过70%，建议优先执行合并操作`
+      )
     }
 
     if (grouped.medium.length > 0) {
@@ -259,7 +264,10 @@ describe('Dashboard组件集成测试 - 简化版本', () => {
 
       expect(chartData.heatmap).toHaveLength(24)
       expect(chartData.distribution).toHaveLength(4)
-      expect(chartData.distribution.reduce((sum, item) => sum + item.percentage, 0)).toBeCloseTo(100, 1)
+      expect(chartData.distribution.reduce((sum, item) => sum + item.percentage, 0)).toBeCloseTo(
+        100,
+        1
+      )
     })
 
     it('高级图表应该支持交互功能', () => {
@@ -278,7 +286,12 @@ describe('Dashboard组件集成测试 - 简化版本', () => {
       chartInteraction.tooltip({ x: 150, y: 300 })
 
       expect(chartInteraction.zoom).toHaveBeenCalledWith({ start: 0, end: 12 })
-      expect(chartInteraction.brush).toHaveBeenCalledWith({ x: 100, y: 200, width: 300, height: 150 })
+      expect(chartInteraction.brush).toHaveBeenCalledWith({
+        x: 100,
+        y: 200,
+        width: 300,
+        height: 150
+      })
       expect(chartInteraction.tooltip).toHaveBeenCalledWith({ x: 150, y: 300 })
     })
   })
@@ -298,7 +311,7 @@ describe('Dashboard组件集成测试 - 简化版本', () => {
         return false
       }
 
-      expect(toggleFullscreen()).toBe(true)  // 进入全屏
+      expect(toggleFullscreen()).toBe(true) // 进入全屏
       expect(toggleFullscreen()).toBe(false) // 退出全屏
 
       // 禁用全屏功能
@@ -390,8 +403,8 @@ describe('Dashboard组件集成测试 - 简化版本', () => {
 
       const performanceThresholds = {
         componentRender: 100, // ms
-        dataFetch: 1000,     // ms
-        chartRender: 500     // ms
+        dataFetch: 1000, // ms
+        chartRender: 500 // ms
       }
 
       const checkPerformanceAlert = (metric: string, value: number): boolean => {

@@ -44,7 +44,7 @@ describe('Dashboard Store', () => {
         total_size_gb: 0,
         small_file_size_gb: 0
       })
-      
+
       expect(store.trends).toEqual([])
       expect(store.fileDistribution).toEqual([])
       expect(store.topTables).toEqual([])
@@ -167,14 +167,14 @@ describe('Dashboard Store', () => {
       const store = useDashboardStore()
       let resolvePromise: (value: any) => void
 
-      const promise = new Promise((resolve) => {
+      const promise = new Promise(resolve => {
         resolvePromise = resolve
       })
 
       vi.mocked(dashboardApi.getSummary).mockReturnValue(promise as any)
 
       const loadPromise = store.loadSummary()
-      
+
       expect(store.loading.summary).toBe(true)
 
       resolvePromise!({})
@@ -187,9 +187,7 @@ describe('Dashboard Store', () => {
   describe('loadTrends', () => {
     it('should load trends with default parameters', async () => {
       const store = useDashboardStore()
-      const mockTrends = [
-        { date: '2023-12-01', total_files: 1000, small_files: 300, ratio: 30.0 }
-      ]
+      const mockTrends = [{ date: '2023-12-01', total_files: 1000, small_files: 300, ratio: 30.0 }]
 
       vi.mocked(dashboardApi.getTrends).mockResolvedValue(mockTrends)
 
@@ -265,7 +263,7 @@ describe('Dashboard Store', () => {
   describe('refresh', () => {
     it('should call loadAllData', async () => {
       const store = useDashboardStore()
-      
+
       // Mock all the API calls that loadAllData uses
       vi.mocked(dashboardApi.getSummary).mockResolvedValue({} as any)
       vi.mocked(dashboardApi.getTrends).mockResolvedValue([])
@@ -273,7 +271,7 @@ describe('Dashboard Store', () => {
       vi.mocked(dashboardApi.getTopTables).mockResolvedValue([])
       vi.mocked(dashboardApi.getRecentTasks).mockResolvedValue([])
       vi.mocked(dashboardApi.getClusterStats).mockResolvedValue({ clusters: [] })
-      
+
       await store.refresh(1)
 
       // Verify the individual API calls that loadAllData makes

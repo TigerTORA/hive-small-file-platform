@@ -18,15 +18,15 @@ export interface MergeTask {
   created_time: string
   started_time?: string
   completed_time?: string
-  
+
   // 执行进度相关字段
-  execution_phase?: string  // 当前执行阶段
-  progress_percentage?: number  // 执行进度百分比
-  estimated_remaining_time?: number  // 预计剩余时间（秒）
-  processed_files_count?: number  // 已处理文件数
-  total_files_count?: number  // 总文件数
-  yarn_application_id?: string  // YARN任务ID
-  current_operation?: string  // 当前操作描述
+  execution_phase?: string // 当前执行阶段
+  progress_percentage?: number // 执行进度百分比
+  estimated_remaining_time?: number // 预计剩余时间（秒）
+  processed_files_count?: number // 已处理文件数
+  total_files_count?: number // 总文件数
+  yarn_application_id?: string // YARN任务ID
+  current_operation?: string // 当前操作描述
 }
 
 export interface MergeTaskCreate {
@@ -108,7 +108,12 @@ export const tasksApi = {
   },
 
   // 获取合并预览
-  getMergePreview(clusterId: number, databaseName: string, tableName: string, partitionFilter?: string): Promise<any> {
+  getMergePreview(
+    clusterId: number,
+    databaseName: string,
+    tableName: string,
+    partitionFilter?: string
+  ): Promise<any> {
     const params = partitionFilter ? `?partition_filter=${encodeURIComponent(partitionFilter)}` : ''
     return api.post(`/tables/${clusterId}/${databaseName}/${tableName}/merge-preview${params}`)
   },

@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { 
-  dashboardApi, 
-  type DashboardSummary, 
-  type TrendPoint, 
+import {
+  dashboardApi,
+  type DashboardSummary,
+  type TrendPoint,
   type FileDistributionItem,
   type TopTable,
   type RecentTask,
@@ -24,13 +24,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
     total_size_gb: 0,
     small_file_size_gb: 0
   })
-  
+
   const trends = ref<TrendPoint[]>([])
   const fileDistribution = ref<FileDistributionItem[]>([])
   const topTables = ref<TopTable[]>([])
   const recentTasks = ref<RecentTask[]>([])
   const clusterStats = ref<ClusterStats[]>([])
-  
+
   // 加载状态
   const loading = ref({
     summary: false,
@@ -40,7 +40,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentTasks: false,
     clusterStats: false
   })
-  
+
   // 错误状态
   const errors = ref({
     summary: null as string | null,
@@ -69,7 +69,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadSummary() {
     loading.value.summary = true
     errors.value.summary = null
-    
+
     try {
       const data = await dashboardApi.getSummary()
       summary.value = data
@@ -84,7 +84,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadTrends(clusterId?: number, days: number = 30) {
     loading.value.trends = true
     errors.value.trends = null
-    
+
     try {
       const data = await dashboardApi.getTrends(clusterId, days)
       trends.value = data
@@ -99,7 +99,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadFileDistribution(clusterId?: number) {
     loading.value.fileDistribution = true
     errors.value.fileDistribution = null
-    
+
     try {
       const data = await dashboardApi.getFileDistribution(clusterId)
       fileDistribution.value = data
@@ -114,7 +114,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadTopTables(clusterId?: number, limit: number = 10) {
     loading.value.topTables = true
     errors.value.topTables = null
-    
+
     try {
       const data = await dashboardApi.getTopTables(clusterId, limit)
       topTables.value = data
@@ -129,7 +129,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadRecentTasks(limit: number = 20, status?: string) {
     loading.value.recentTasks = true
     errors.value.recentTasks = null
-    
+
     try {
       const data = await dashboardApi.getRecentTasks(limit, status)
       recentTasks.value = data
@@ -144,7 +144,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function loadClusterStats() {
     loading.value.clusterStats = true
     errors.value.clusterStats = null
-    
+
     try {
       const data = await dashboardApi.getClusterStats()
       clusterStats.value = data.clusters
@@ -211,12 +211,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     clusterStats,
     loading,
     errors,
-    
+
     // 计算属性
     isLoading,
     hasErrors,
     smallFileRatio,
-    
+
     // 操作方法
     loadSummary,
     loadTrends,

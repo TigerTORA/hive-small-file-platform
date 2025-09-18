@@ -18,13 +18,13 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     theme: 'light',
     chartColors: [
       '#409EFF', // 蓝色
-      '#67C23A', // 绿色  
+      '#67C23A', // 绿色
       '#E6A23C', // 橙色
       '#F56C6C', // 红色
       '#909399', // 灰色
       '#5470C6', // 深蓝
       '#91CC75', // 浅绿
-      '#EE6666'  // 浅红
+      '#EE6666' // 浅红
     ]
   })
 
@@ -52,7 +52,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   function updateSettings(newSettings: Partial<MonitoringSettings>) {
     Object.assign(settings.value, newSettings)
     saveSettings()
-    
+
     // 如果自动刷新设置改变，重新设置定时器
     if ('autoRefresh' in newSettings || 'refreshInterval' in newSettings) {
       setupAutoRefresh()
@@ -79,7 +79,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   function setTheme(theme: 'light' | 'dark') {
     settings.value.theme = theme
     saveSettings()
-    
+
     // 应用主题到文档
     document.documentElement.className = theme
   }
@@ -87,9 +87,9 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   // 自动刷新相关
   function setupAutoRefresh(callback?: () => void) {
     clearAutoRefresh()
-    
+
     if (!settings.value.autoRefresh || !callback) return
-    
+
     autoRefreshTimer.value = setInterval(() => {
       callback()
       lastRefreshTime.value = new Date()
@@ -108,7 +108,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
       callback()
     }
     lastRefreshTime.value = new Date()
-    
+
     // 重新设置定时器
     if (settings.value.autoRefresh) {
       setupAutoRefresh(callback)
@@ -156,11 +156,11 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   // 格式化工具
   function formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 B'
-    
+
     const k = 1024
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
@@ -199,37 +199,37 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     // 状态
     settings,
     lastRefreshTime,
-    
+
     // 计算属性
     refreshIntervalOptions,
     isAutoRefreshEnabled,
     timeUntilNextRefresh,
-    
+
     // 操作方法
     updateSettings,
     setSelectedCluster,
     toggleAutoRefresh,
     setRefreshInterval,
     setTheme,
-    
+
     // 自动刷新
     setupAutoRefresh,
     clearAutoRefresh,
     triggerRefresh,
-    
+
     // 持久化
     saveSettings,
     loadSettings,
-    
+
     // 图表主题
     getChartTheme,
     getChartColor,
-    
+
     // 格式化工具
     formatFileSize,
     formatNumber,
     formatDate,
-    
+
     // 生命周期
     initialize,
     cleanup

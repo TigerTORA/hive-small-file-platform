@@ -105,7 +105,7 @@ test.describe('关键用户场景测试', () => {
 
       // 步骤3：查看任务状态
       const taskItems = page.locator('.task-item, .task-row')
-      if (await taskItems.count() > 0) {
+      if ((await taskItems.count()) > 0) {
         // 验证任务信息显示
         await expect(taskItems.first()).toContainText(/扫描|合并/)
         await expect(taskItems.first()).toContainText(/completed|running|pending/)
@@ -358,7 +358,9 @@ test.describe('关键用户场景测试', () => {
       await page.waitForLoadState('networkidle')
 
       // 测试操作反馈
-      const actionButton = page.locator('button:has-text("创建任务"), button:has-text("刷新")').first()
+      const actionButton = page
+        .locator('button:has-text("创建任务"), button:has-text("刷新")')
+        .first()
       if (await actionButton.isVisible()) {
         await actionButton.click()
 
@@ -405,8 +407,8 @@ test.describe('关键用户场景测试', () => {
 
 // 辅助函数
 async function waitForApiResponse(page: Page, apiPath: string) {
-  return page.waitForResponse(response =>
-    response.url().includes(apiPath) && response.status() === 200
+  return page.waitForResponse(
+    response => response.url().includes(apiPath) && response.status() === 200
   )
 }
 
