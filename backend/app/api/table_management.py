@@ -54,25 +54,31 @@ async def get_small_file_summary(
     database_name: str = Query(None),
     db: Session = Depends(get_db),
 ):
-    """获取小文件统计摘要"""
-    query = db.query(TableMetric).filter(TableMetric.cluster_id == cluster_id)
+    """获取小文件统计摘要（保持与旧接口一致的返回结构）"""
+    from sqlalchemy import func
+
+    base = db.query(
+        func.count(TableMetric.id).label("total_tables"),
+        func.sum(TableMetric.total_files).label("total_files"),
+        func.sum(TableMetric.small_files).label("total_small_files"),
+        func.avg(TableMetric.avg_file_size).label("avg_file_size"),
+    ).filter(TableMetric.cluster_id == cluster_id)
 
     if database_name:
-        query = query.filter(TableMetric.database_name == database_name)
+        base = base.filter(TableMetric.database_name == database_name)
 
-    metrics = query.all()
+    result = base.first()
 
-    total_tables = len(metrics)
-    tables_with_small_files = len([m for m in metrics if m.small_files > 0])
-    total_small_files = sum(m.small_files for m in metrics)
+    total_files = result.total_files or 0
+    total_small_files = result.total_small_files or 0
+    ratio_percent = (total_small_files / total_files * 100) if total_files else 0
 
     return {
-        "total_tables": total_tables,
-        "tables_with_small_files": tables_with_small_files,
-        "total_small_files": total_small_files,
-        "small_file_ratio": (
-            tables_with_small_files / total_tables if total_tables > 0 else 0
-        ),
+        "total_tables": int(result.total_tables or 0),
+        "total_files": int(total_files),
+        "total_small_files": int(total_small_files),
+        "avg_file_size": float(result.avg_file_size or 0.0),
+        "small_file_ratio": ratio_percent,
     }
 
 
