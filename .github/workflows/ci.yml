@@ -37,21 +37,58 @@ jobs:
         working-directory: backend
         run: |
           export DATABASE_URL="sqlite:////tmp/hive_small_file_db.db"
-          # Phase-in: expand unit subset and raise coverage gate to 40%
+          # Phase-in: expand unit subset and raise coverage gate to 55%
           python -m pytest \
             test_performance_baseline.py \
             test_scanner.py \
             tests/unit/test_engine_factory_extra.py \
             tests/unit/utils/test_encryption.py \
+            tests/unit/utils/test_encryption_extra.py \
+            tests/unit/utils/test_encryption_more.py \
+            tests/unit/utils/test_encryption_none_inputs.py \
+            tests/unit/utils/test_encryption_is_encrypted.py \
+            tests/unit/utils/test_merge_logger_extra.py \
+            tests/unit/utils/test_table_lock_manager_unit.py \
             tests/unit/services/test_path_resolver.py \
+            tests/unit/services/test_path_resolver_extra.py \
+            tests/unit/services/test_path_resolver_hs2_error.py \
             tests/unit/services/test_websocket_service.py \
             tests/unit/services/test_enhanced_connection_service_helpers.py \
+            tests/unit/services/test_enhanced_connection_service_stats.py \
+            tests/unit/services/test_enhanced_connection_service_retry.py \
+            tests/unit/services/test_enhanced_connection_service_connectors.py \
+            tests/unit/services/test_cluster_status_service.py \
+            tests/unit/services/test_cluster_status_service_metrics.py \
+            tests/unit/services/test_cluster_status_service_edges.py \
+            tests/unit/services/test_scan_task_manager_unit.py \
             tests/unit/api/test_websocket_api_unit.py \
+            tests/unit/api/test_websocket_api_endpoints.py \
+            tests/unit/api/test_websocket_handle_client_message.py \
+            tests/unit/api/test_ws_broadcast_invalid_payload.py \
+            tests/unit/api/test_websocket_endpoint_errors.py \
+            tests/unit/api/test_main_health.py \
+            tests/unit/api/test_dashboard_extra_endpoints.py \
+            tests/unit/api/test_dashboard_summary_more.py \
+            tests/unit/api/test_dashboard_table_file_counts_trends.py \
+            tests/unit/api/test_tables_module_direct.py \
+            tests/unit/api/test_tables_module_more.py \
+            tests/unit/api/test_table_scanning_api_direct.py \
+            tests/unit/api/test_table_management_api_direct.py \
+            tests/unit/api/test_table_archiving_api_direct.py \
+            tests/unit/api/test_clusters_api_direct.py \
+            tests/unit/api/test_clusters_api_more.py \
+            tests/unit/api/test_scan_tasks_api_extra.py \
+            tests/unit/api/test_tasks_api_extra.py \
+            tests/unit/api/test_errors_api_unit.py \
             tests/unit/engines/test_base_engine_helpers.py \
+            tests/unit/engines/test_safe_hive_engine_refactored.py \
+            tests/unit/engines/test_base_engine_helpers_extra.py \
+            tests/unit/engines/test_connection_manager_unit.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
             tests/unit/monitor/test_mysql_hive_connector.py \
+            tests/unit/engines/test_validation_service_unit.py \
             tests/unit/test_ci_verification.py \
-            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=20 -v --tb=short
+            --cov=app --cov-report=xml:coverage.xml --cov-fail-under=55 -v --tb=short
 
       - name: Upload backend coverage
         if: always()
