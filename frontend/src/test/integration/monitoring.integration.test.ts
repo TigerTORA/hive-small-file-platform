@@ -25,7 +25,7 @@ describe('Monitoring Store Integration Tests', () => {
     it('应该有正确的默认设置', () => {
       expect(store.settings.autoRefresh).toBe(true)
       expect(store.settings.refreshInterval).toBe(60)
-      expect(store.settings.selectedCluster).toBe(1)
+      expect(store.settings.selectedCluster).toBe(null) // 默认为null，因为没有localStorage数据
       expect(store.settings.theme).toBe('light')
       expect(store.settings.chartColors).toHaveLength(8)
     })
@@ -208,22 +208,45 @@ describe('Monitoring Store Integration Tests', () => {
       const savedSettings = {
         autoRefresh: false,
         refreshInterval: 300,
-        selectedCluster: 3,
+        selectedCluster: 3, // 与单独存储的selectedCluster保持一致
         theme: 'dark',
         chartColors: ['#FF0000']
       }
 
-      const mockGetItem = vi
-        .spyOn(Storage.prototype, 'getItem')
-        .mockReturnValue(JSON.stringify(savedSettings))
+      // 使用 vi.stubGlobal 来mock localStorage
+      const mockLocalStorage = {
+        getItem: vi.fn((key: string) => {
+          if (key === 'monitoring-settings') {
+            return JSON.stringify(savedSettings)
+          }
+          if (key === 'selectedCluster') {
+            return '3'
+          }
+          return null
+        }),
+        setItem: vi.fn(),
+        removeItem: vi.fn()
+      }
 
-      store.loadSettings()
+      vi.stubGlobal('localStorage', mockLocalStorage)
 
-      expect(store.settings.autoRefresh).toBe(false)
-      expect(store.settings.refreshInterval).toBe(300)
-      expect(store.settings.selectedCluster).toBe(3)
-      expect(store.settings.theme).toBe('dark')
-      expect(store.settings.chartColors).toEqual(['#FF0000'])
+      // 创建新的pinia实例
+      setActivePinia(createPinia())
+
+      // 重新创建store，这样在初始化时就会使用mock的localStorage
+      const newStore = useMonitoringStore()
+
+      // 手动调用loadSettings来从localStorage加载设置
+      newStore.loadSettings()
+
+      expect(newStore.settings.autoRefresh).toBe(false)
+      expect(newStore.settings.refreshInterval).toBe(300)
+      expect(newStore.settings.selectedCluster).toBe(3)
+      expect(newStore.settings.theme).toBe('dark')
+      expect(newStore.settings.chartColors).toEqual(['#FF0000'])
+
+      // 清理mock
+      vi.unstubAllGlobals()
     })
   })
 
