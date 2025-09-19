@@ -158,12 +158,11 @@ class PasswordEncryptor:
         if not password:
             return False
 
+        # 尝试解密；仅当能成功解密出非 None 文本时，认为是加密串
         try:
-            # 尝试解密，如果成功说明是加密的
-            cls.decrypt_password(password)
-            return True
-        except:
-            # 解密失败，可能是明文
+            decrypted = cls.decrypt_password(password)
+            return decrypted is not None
+        except Exception:
             return False
 
 

@@ -26,3 +26,4 @@ def test_test_manual_error_endpoint(client, monkeypatch):
     r = client.get("/api/v1/errors/test-manual-error")
     assert r.status_code == 200
     assert r.json()["message"].startswith("Manual error message")
+
