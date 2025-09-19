@@ -448,6 +448,339 @@ class WebHDFSClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    def create_directory(self, path: str, permission: str = "755") -> Tuple[bool, str]:
+        """
+        创建目录
+
+        Args:
+            path: 目录路径
+            permission: 目录权限，默认755
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Creating directory: {path}")
+            last_err = None
+            for base in self._alt_bases():
+                url = self._build_url(path, "MKDIRS", permission=permission).replace(self.webhdfs_base, base, 1)
+                try:
+                    response = self.session.put(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('boolean'):
+                            logger.info(f"Directory created successfully: {path}")
+                            return True, f"目录创建成功: {path}"
+                        else:
+                            return False, f"目录创建失败: {path}"
+                    last_err = f"HTTP {response.status_code}: {response.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            logger.error(f"Failed to create directory {path}: {last_err}")
+            return False, last_err or "未知错误"
+        except Exception as e:
+            error_msg = f"创建目录异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def copy_file(self, source_path: str, dest_path: str, overwrite: bool = False) -> Tuple[bool, str]:
+        """
+        复制文件（通过读取和写入实现）
+
+        Args:
+            source_path: 源文件路径
+            dest_path: 目标文件路径
+            overwrite: 是否覆盖现有文件
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Copying file from {source_path} to {dest_path}")
+
+            # 检查源文件是否存在
+            source_info = self.get_file_status(source_path)
+            if not source_info:
+                return False, f"源文件不存在: {source_path}"
+
+            if source_info.is_directory:
+                return False, f"源路径是目录，不能复制: {source_path}"
+
+            # 检查目标文件是否存在
+            if not overwrite:
+                dest_info = self.get_file_status(dest_path)
+                if dest_info:
+                    return False, f"目标文件已存在: {dest_path}"
+
+            # 读取源文件内容
+            read_success, content = self.read_file(source_path)
+            if not read_success:
+                return False, f"读取源文件失败: {content}"
+
+            # 写入目标文件
+            write_success, write_msg = self.write_file(dest_path, content, overwrite)
+            if not write_success:
+                return False, f"写入目标文件失败: {write_msg}"
+
+            logger.info(f"File copied successfully from {source_path} to {dest_path}")
+            return True, f"文件复制成功: {source_path} -> {dest_path}"
+
+        except Exception as e:
+            error_msg = f"文件复制异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def move_file(self, source_path: str, dest_path: str) -> Tuple[bool, str]:
+        """
+        移动/重命名文件
+
+        Args:
+            source_path: 源文件路径
+            dest_path: 目标文件路径
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Moving file from {source_path} to {dest_path}")
+            last_err = None
+            for base in self._alt_bases():
+                url = self._build_url(source_path, "RENAME", destination=dest_path).replace(self.webhdfs_base, base, 1)
+                try:
+                    response = self.session.put(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('boolean'):
+                            logger.info(f"File moved successfully from {source_path} to {dest_path}")
+                            return True, f"文件移动成功: {source_path} -> {dest_path}"
+                        else:
+                            return False, f"文件移动失败: {source_path} -> {dest_path}"
+                    last_err = f"HTTP {response.status_code}: {response.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            logger.error(f"Failed to move file from {source_path} to {dest_path}: {last_err}")
+            return False, last_err or "未知错误"
+        except Exception as e:
+            error_msg = f"文件移动异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def delete_file(self, path: str, recursive: bool = False) -> Tuple[bool, str]:
+        """
+        删除文件或目录
+
+        Args:
+            path: 文件或目录路径
+            recursive: 是否递归删除目录
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Deleting {'recursively' if recursive else ''}: {path}")
+            last_err = None
+            for base in self._alt_bases():
+                url = self._build_url(path, "DELETE", recursive="true" if recursive else "false").replace(self.webhdfs_base, base, 1)
+                try:
+                    response = self.session.delete(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('boolean'):
+                            logger.info(f"Deleted successfully: {path}")
+                            return True, f"删除成功: {path}"
+                        else:
+                            return False, f"删除失败: {path}"
+                    last_err = f"HTTP {response.status_code}: {response.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            logger.error(f"Failed to delete {path}: {last_err}")
+            return False, last_err or "未知错误"
+        except Exception as e:
+            error_msg = f"删除异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def read_file(self, path: str, offset: int = 0, length: Optional[int] = None) -> Tuple[bool, bytes]:
+        """
+        读取文件内容
+
+        Args:
+            path: 文件路径
+            offset: 读取偏移量
+            length: 读取长度
+
+        Returns:
+            (是否成功, 文件内容或错误信息)
+        """
+        try:
+            logger.debug(f"Reading file: {path}")
+            last_err = None
+            for base in self._alt_bases():
+                params = {"offset": offset}
+                if length is not None:
+                    params["length"] = length
+                url = self._build_url(path, "OPEN", **params).replace(self.webhdfs_base, base, 1)
+                try:
+                    response = self.session.get(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        logger.debug(f"File read successfully: {path}")
+                        return True, response.content
+                    last_err = f"HTTP {response.status_code}: {response.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            logger.error(f"Failed to read file {path}: {last_err}")
+            return False, last_err or "未知错误"
+        except Exception as e:
+            error_msg = f"读取文件异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def write_file(self, path: str, content: bytes, overwrite: bool = False,
+                   blocksize: Optional[int] = None, replication: Optional[int] = None,
+                   permission: str = "644") -> Tuple[bool, str]:
+        """
+        写入文件内容
+
+        Args:
+            path: 文件路径
+            content: 文件内容
+            overwrite: 是否覆盖现有文件
+            blocksize: 块大小
+            replication: 副本数
+            permission: 文件权限
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Writing file: {path}")
+            last_err = None
+            for base in self._alt_bases():
+                params = {
+                    "overwrite": "true" if overwrite else "false",
+                    "permission": permission
+                }
+                if blocksize:
+                    params["blocksize"] = blocksize
+                if replication:
+                    params["replication"] = replication
+
+                # 第一步：创建文件
+                create_url = self._build_url(path, "CREATE", **params).replace(self.webhdfs_base, base, 1)
+                try:
+                    create_response = self.session.put(create_url, timeout=self.timeout, allow_redirects=False)
+                    if create_response.status_code == 307:
+                        # 第二步：写入数据到重定向的DataNode
+                        redirect_url = create_response.headers.get('Location')
+                        if redirect_url:
+                            write_response = self.session.put(redirect_url, data=content, timeout=self.timeout)
+                            if write_response.status_code == 201:
+                                logger.info(f"File written successfully: {path}")
+                                return True, f"文件写入成功: {path}"
+                            else:
+                                last_err = f"Write failed - HTTP {write_response.status_code}: {write_response.text}"
+                        else:
+                            last_err = "No redirect location in response"
+                    else:
+                        last_err = f"Create failed - HTTP {create_response.status_code}: {create_response.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            logger.error(f"Failed to write file {path}: {last_err}")
+            return False, last_err or "未知错误"
+        except Exception as e:
+            error_msg = f"写入文件异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def archive_directory(self, source_path: str, archive_path: str,
+                         create_archive_dir: bool = True) -> Tuple[bool, str]:
+        """
+        归档目录（移动到归档位置）
+
+        Args:
+            source_path: 源目录路径
+            archive_path: 归档目录路径
+            create_archive_dir: 是否创建归档目录
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Archiving directory from {source_path} to {archive_path}")
+
+            # 检查源目录是否存在
+            source_info = self.get_file_status(source_path)
+            if not source_info:
+                return False, f"源目录不存在: {source_path}"
+
+            if not source_info.is_directory:
+                return False, f"源路径不是目录: {source_path}"
+
+            # 创建归档目录的父目录
+            if create_archive_dir:
+                import os
+                archive_parent = os.path.dirname(archive_path)
+                if archive_parent and archive_parent != '/':
+                    create_success, create_msg = self.create_directory(archive_parent)
+                    if not create_success and "已存在" not in create_msg:
+                        return False, f"创建归档父目录失败: {create_msg}"
+
+            # 移动目录
+            move_success, move_msg = self.move_file(source_path, archive_path)
+            if move_success:
+                return True, f"目录归档成功: {source_path} -> {archive_path}"
+            else:
+                return False, f"目录归档失败: {move_msg}"
+
+        except Exception as e:
+            error_msg = f"目录归档异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    def restore_directory(self, archive_path: str, restore_path: str) -> Tuple[bool, str]:
+        """
+        恢复目录（从归档位置移动回原位置）
+
+        Args:
+            archive_path: 归档目录路径
+            restore_path: 恢复目录路径
+
+        Returns:
+            (是否成功, 错误信息或成功信息)
+        """
+        try:
+            logger.info(f"Restoring directory from {archive_path} to {restore_path}")
+
+            # 检查归档目录是否存在
+            archive_info = self.get_file_status(archive_path)
+            if not archive_info:
+                return False, f"归档目录不存在: {archive_path}"
+
+            if not archive_info.is_directory:
+                return False, f"归档路径不是目录: {archive_path}"
+
+            # 检查恢复位置是否已存在
+            restore_info = self.get_file_status(restore_path)
+            if restore_info:
+                return False, f"恢复位置已存在: {restore_path}"
+
+            # 移动目录
+            move_success, move_msg = self.move_file(archive_path, restore_path)
+            if move_success:
+                return True, f"目录恢复成功: {archive_path} -> {restore_path}"
+            else:
+                return False, f"目录恢复失败: {move_msg}"
+
+        except Exception as e:
+            error_msg = f"目录恢复异常: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
     def close(self):
         """关闭客户端连接"""
         if hasattr(self, 'session'):

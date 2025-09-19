@@ -474,3 +474,79 @@ class MySQLHiveMetastoreConnector(BaseMetastoreConnector):
                 logger.warning(f"Invalid timestamp {timestamp}: {e}")
                 return None
         return None
+
+    def get_partition_access_info(self, database_name: Optional[str] = None,
+                                table_name: Optional[str] = None) -> List[Dict]:
+        """
+        获取分区的访问时间信息
+        Args:
+            database_name: 数据库名称，为空则获取所有数据库
+            table_name: 表名称，为空则获取指定数据库的所有表
+        Returns:
+            包含分区访问时间信息的字典列表
+        """
+        if not self._connection:
+            raise ConnectionError("Not connected to MetaStore")
+
+        try:
+            with self._connection.cursor() as cursor:
+                # 查询分区信息，包括分区访问时间和大小信息
+                base_query = """
+                SELECT DISTINCT
+                    d.NAME as database_name,
+                    t.TBL_NAME as table_name,
+                    p.PART_NAME as partition_name,
+                    sd.LOCATION as partition_path,
+                    p.LAST_ACCESS_TIME,
+                    p.CREATE_TIME,
+                    COALESCE(ps.PARAM_VALUE, '0') as partition_size
+                FROM PARTITIONS p
+                JOIN TBLS t ON p.TBL_ID = t.TBL_ID
+                JOIN DBS d ON t.DB_ID = d.DB_ID
+                JOIN SDS sd ON p.SD_ID = sd.SD_ID
+                LEFT JOIN PARTITION_PARAMS ps ON p.PART_ID = ps.PART_ID AND ps.PARAM_KEY = 'totalSize'
+                """
+
+                conditions = []
+                params = []
+
+                if database_name:
+                    conditions.append("d.NAME = %s")
+                    params.append(database_name)
+
+                if table_name:
+                    conditions.append("t.TBL_NAME = %s")
+                    params.append(table_name)
+
+                if conditions:
+                    base_query += " WHERE " + " AND ".join(conditions)
+
+                base_query += " ORDER BY d.NAME, t.TBL_NAME, p.PART_NAME"
+
+                cursor.execute(base_query, params)
+                results = cursor.fetchall()
+
+                partition_list = []
+                for row in results:
+                    try:
+                        partition_size = int(row.get('partition_size', 0))
+                    except (ValueError, TypeError):
+                        partition_size = 0
+
+                    partition_info = {
+                        'database_name': row['database_name'],
+                        'table_name': row['table_name'],
+                        'partition_name': row['partition_name'],
+                        'partition_path': row['partition_path'],
+                        'last_access_time': self._timestamp_to_datetime(row['LAST_ACCESS_TIME']),
+                        'create_time': self._timestamp_to_datetime(row['CREATE_TIME']),
+                        'partition_size': partition_size
+                    }
+                    partition_list.append(partition_info)
+
+                logger.info(f"Retrieved access info for {len(partition_list)} partitions")
+                return partition_list
+
+        except Exception as e:
+            logger.error(f"Failed to get partition access info: {e}")
+            return []
