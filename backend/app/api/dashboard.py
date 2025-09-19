@@ -12,6 +12,7 @@ from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.models.partition_metric import PartitionMetric
 from app.models.merge_task import MergeTask
+# Remove import as we'll implement validation inline
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -76,8 +77,35 @@ class TableFileCountItem(BaseModel):
     table_name: str
     current_files: int
     trend_7d: float  # percentage change
-    trend_30d: float
-    last_scan: datetime
+
+class ColdDataItem(BaseModel):
+    cluster_name: str
+    database_name: str
+    table_name: str
+    partition_name: Optional[str]
+    last_access_time: Optional[datetime]
+    days_since_last_access: Optional[int]
+    total_size_gb: float
+    file_count: int
+
+class FileClassificationItem(BaseModel):
+    category: str
+    count: int
+    size_gb: float
+    percentage: float
+    description: str
+
+class DetailedColdnessStats(BaseModel):
+    partitions: Dict[str, int]
+    tables: Dict[str, int]
+    total_size_gb: float
+
+class EnhancedColdnessDistribution(BaseModel):
+    cluster_id: int
+    cluster_name: str
+    distribution: Dict[str, DetailedColdnessStats]
+    summary: Dict[str, Any]
+    distribution_timestamp: str
 
 @router.get("/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummary:
@@ -496,5 +524,322 @@ async def get_table_file_trends(
             small_files=metric.small_files,
             ratio=round(small_file_ratio, 2)
         ))
-    
+
+    return result
+
+@router.get("/file-classification", response_model=List[FileClassificationItem])
+async def get_file_classification(
+    cluster_id: Optional[int] = Query(None, description="Filter by cluster ID"),
+    db: Session = Depends(get_db)
+) -> List[FileClassificationItem]:
+    """
+    Get file classification statistics based on compressibility
+    """
+    # Base query for tables
+    query = db.query(TableMetric)
+    if cluster_id:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if not cluster:
+            raise HTTPException(status_code=404, detail="Cluster not found")
+        query = query.filter(TableMetric.cluster_id == cluster_id)
+
+    tables = query.filter(TableMetric.scan_time.isnot(None)).all()
+
+    # Initialize statistics
+    compressible_small_files = 0
+    uncompressible_acid = 0
+    uncompressible_datalake = 0
+    uncompressible_single_partition = 0
+    normal_large_files = 0
+
+    compressible_size = 0.0
+    acid_size = 0.0
+    datalake_size = 0.0
+    single_partition_size = 0.0
+    large_files_size = 0.0
+
+    for table in tables:
+        # Simple classification based on storage format and properties
+        input_format = (table.input_format or "").lower()
+        serde_lib = (table.serde_lib or "").lower()
+
+        # Check for unsupported table types based on available fields
+        is_acid = "acid" in input_format
+        is_datalake = any(x in input_format or x in serde_lib for x in ["hudi", "iceberg", "delta"])
+
+        if is_acid:
+            uncompressible_acid += table.small_files or 0
+            acid_size += (table.total_size or 0) / (1024 ** 3)
+        elif is_datalake:
+            uncompressible_datalake += table.small_files or 0
+            datalake_size += (table.total_size or 0) / (1024 ** 3)
+        else:
+            # Check if files are small or large
+            if table.small_files and table.small_files > 0:
+                compressible_small_files += table.small_files
+                # Calculate small file size portion
+                small_file_ratio = table.small_files / table.total_files if table.total_files > 0 else 0
+                compressible_size += (table.total_size or 0) * small_file_ratio / (1024 ** 3)
+
+            # Large files
+            large_files = (table.total_files or 0) - (table.small_files or 0)
+            if large_files > 0:
+                normal_large_files += large_files
+                large_file_ratio = large_files / table.total_files if table.total_files > 0 else 0
+                large_files_size += (table.total_size or 0) * large_file_ratio / (1024 ** 3)
+
+    # Calculate totals for percentages
+    total_files = (compressible_small_files + uncompressible_acid +
+                  uncompressible_datalake + uncompressible_single_partition + normal_large_files)
+
+    categories = [
+        {
+            "category": "可压缩小文件",
+            "count": compressible_small_files,
+            "size_gb": round(compressible_size, 2),
+            "description": "可以进行合并优化的小文件"
+        },
+        {
+            "category": "不可压缩-ACID表",
+            "count": uncompressible_acid,
+            "size_gb": round(acid_size, 2),
+            "description": "事务表，不支持合并"
+        },
+        {
+            "category": "不可压缩-数据湖表",
+            "count": uncompressible_datalake,
+            "size_gb": round(datalake_size, 2),
+            "description": "Hudi/Iceberg/Delta表"
+        },
+        {
+            "category": "不可压缩-其他",
+            "count": uncompressible_single_partition,
+            "size_gb": round(single_partition_size, 2),
+            "description": "其他不支持压缩的情况"
+        },
+        {
+            "category": "正常大文件",
+            "count": normal_large_files,
+            "size_gb": round(large_files_size, 2),
+            "description": ">=128MB的文件"
+        }
+    ]
+
+    result = []
+    for cat in categories:
+        percentage = (cat["count"] / total_files * 100) if total_files > 0 else 0
+        result.append(FileClassificationItem(
+            category=cat["category"],
+            count=cat["count"],
+            size_gb=cat["size_gb"],
+            percentage=round(percentage, 1),
+            description=cat["description"]
+        ))
+
+    return result
+
+@router.get("/enhanced-coldness-distribution", response_model=EnhancedColdnessDistribution)
+async def get_enhanced_coldness_distribution(
+    cluster_id: Optional[int] = Query(None, description="Filter by cluster ID"),
+    db: Session = Depends(get_db)
+) -> EnhancedColdnessDistribution:
+    """
+    Get enhanced coldness distribution with 7 time ranges and partition/table breakdown
+    """
+    # Verify cluster if specified
+    cluster_name = "All Clusters"
+    if cluster_id:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if not cluster:
+            raise HTTPException(status_code=404, detail="Cluster not found")
+        cluster_name = cluster.name
+        cluster_id_filter = cluster_id
+    else:
+        cluster_id_filter = None
+
+    # Define time ranges in days
+    time_ranges = {
+        "within_1_day": (0, 1),
+        "day_1_to_7": (1, 7),
+        "week_1_to_month": (7, 30),
+        "month_1_to_3": (30, 90),
+        "month_3_to_6": (90, 180),
+        "month_6_to_12": (180, 365),
+        "year_1_to_3": (365, 1095),
+        "over_3_years": (1095, 999999)
+    }
+
+    distribution = {}
+    total_partitions = 0
+    total_tables = 0
+    total_size = 0.0
+
+    # Process partition data
+    partition_query = db.query(PartitionMetric)
+    if cluster_id_filter:
+        partition_query = partition_query.join(TableMetric).filter(
+            TableMetric.cluster_id == cluster_id_filter
+        )
+
+    partitions = partition_query.filter(
+        PartitionMetric.days_since_last_access.isnot(None)
+    ).all()
+
+    # Process table data (non-partitioned tables)
+    table_query = db.query(TableMetric)
+    if cluster_id_filter:
+        table_query = table_query.filter(TableMetric.cluster_id == cluster_id_filter)
+
+    # Assume non-partitioned if no partition metrics exist
+    tables = table_query.filter(
+        TableMetric.days_since_last_access.isnot(None),
+        ~db.query(PartitionMetric).filter(
+            PartitionMetric.table_metric_id == TableMetric.id
+        ).exists()
+    ).all()
+
+    # Initialize distribution
+    for range_name in time_ranges:
+        distribution[range_name] = DetailedColdnessStats(
+            partitions={"count": 0, "size_gb": 0},
+            tables={"count": 0, "size_gb": 0},
+            total_size_gb=0.0
+        )
+
+    # Categorize partitions
+    for partition in partitions:
+        days = partition.days_since_last_access or 0
+        size_gb = (partition.total_size or 0) / (1024 ** 3)
+
+        for range_name, (min_days, max_days) in time_ranges.items():
+            if min_days <= days < max_days:
+                distribution[range_name].partitions["count"] += 1
+                distribution[range_name].partitions["size_gb"] += size_gb
+                distribution[range_name].total_size_gb += size_gb
+                break
+
+        total_partitions += 1
+        total_size += size_gb
+
+    # Categorize tables
+    for table in tables:
+        days = table.days_since_last_access or 0
+        size_gb = (table.total_size or 0) / (1024 ** 3)
+
+        for range_name, (min_days, max_days) in time_ranges.items():
+            if min_days <= days < max_days:
+                distribution[range_name].tables["count"] += 1
+                distribution[range_name].tables["size_gb"] += size_gb
+                distribution[range_name].total_size_gb += size_gb
+                break
+
+        total_tables += 1
+        total_size += size_gb
+
+    # Round all size values
+    for range_stats in distribution.values():
+        range_stats.partitions["size_gb"] = round(range_stats.partitions["size_gb"], 2)
+        range_stats.tables["size_gb"] = round(range_stats.tables["size_gb"], 2)
+        range_stats.total_size_gb = round(range_stats.total_size_gb, 2)
+
+    return EnhancedColdnessDistribution(
+        cluster_id=cluster_id_filter or 0,
+        cluster_name=cluster_name,
+        distribution=distribution,
+        summary={
+            "total_partitions": total_partitions,
+            "total_tables": total_tables,
+            "total_size_gb": round(total_size, 2)
+        },
+        distribution_timestamp=datetime.now().isoformat()
+    )
+
+@router.get("/coldest-data", response_model=List[ColdDataItem])
+async def get_coldest_data(
+    cluster_id: Optional[int] = Query(None, description="Filter by cluster ID"),
+    limit: int = Query(10, ge=1, le=50, description="Number of coldest data entries to return"),
+    db: Session = Depends(get_db)
+) -> List[ColdDataItem]:
+    """
+    Get coldest data ranking (longest time since last access)
+    """
+    result = []
+
+    # Get coldest partitions first
+    partition_query = db.query(
+        PartitionMetric,
+        TableMetric.cluster_id,
+        TableMetric.database_name,
+        TableMetric.table_name,
+        Cluster.name.label("cluster_name")
+    ).join(
+        TableMetric, PartitionMetric.table_metric_id == TableMetric.id
+    ).join(
+        Cluster, TableMetric.cluster_id == Cluster.id
+    ).filter(
+        PartitionMetric.days_since_last_access.isnot(None),
+        PartitionMetric.days_since_last_access > 0
+    )
+
+    # Apply cluster filter if specified
+    if cluster_id:
+        cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if not cluster:
+            raise HTTPException(status_code=404, detail="Cluster not found")
+        partition_query = partition_query.filter(TableMetric.cluster_id == cluster_id)
+
+    # Get coldest partitions
+    cold_partitions = partition_query.order_by(
+        desc(PartitionMetric.days_since_last_access)
+    ).limit(limit).all()
+
+    for partition, cluster_id_val, database_name, table_name, cluster_name in cold_partitions:
+        total_size_gb = (partition.total_size or 0) / (1024 ** 3)
+
+        result.append(ColdDataItem(
+            cluster_name=cluster_name,
+            database_name=database_name,
+            table_name=table_name,
+            partition_name=partition.partition_name,
+            last_access_time=partition.last_access_time,
+            days_since_last_access=partition.days_since_last_access,
+            total_size_gb=round(total_size_gb, 2),
+            file_count=partition.file_count or 0
+        ))
+
+    # If we don't have enough partition data, supplement with table data
+    if len(result) < limit:
+        remaining_limit = limit - len(result)
+
+        table_query = db.query(
+            TableMetric,
+            Cluster.name.label("cluster_name")
+        ).join(
+            Cluster, TableMetric.cluster_id == Cluster.id
+        ).filter(
+            TableMetric.days_since_last_access.isnot(None),
+            TableMetric.days_since_last_access > 0
+        )
+
+        if cluster_id:
+            table_query = table_query.filter(TableMetric.cluster_id == cluster_id)
+
+        cold_tables = table_query.order_by(
+            desc(TableMetric.days_since_last_access)
+        ).limit(remaining_limit).all()
+
+        for table, cluster_name in cold_tables:
+            total_size_gb = (table.total_size or 0) / (1024 ** 3)
+
+            result.append(ColdDataItem(
+                cluster_name=cluster_name,
+                database_name=table.database_name,
+                table_name=table.table_name,
+                partition_name=None,  # Table level, no partition
+                last_access_time=table.last_access_time,
+                days_since_last_access=table.days_since_last_access,
+                total_size_gb=round(total_size_gb, 2),
+                file_count=table.total_files or 0
+            ))
+
     return result
