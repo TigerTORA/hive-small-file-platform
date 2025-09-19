@@ -18,8 +18,10 @@
 
           <!-- 导航菜单 -->
           <nav class="sidebar-nav">
-            <div class="nav-section">
+            <!-- 核心功能 - 仅在选择集群后且不在集群管理页面时显示 -->
+            <div class="nav-section" v-if="monitoringStore.hasSelectedCluster && !isInClusterManagement">
               <div class="nav-section-title">核心功能</div>
+              <!-- 监控中心 -->
               <div class="nav-item">
                 <router-link
                   to="/"
@@ -32,18 +34,20 @@
                   <span class="nav-text">监控中心</span>
                 </router-link>
               </div>
+              <!-- 表管理 -->
               <div class="nav-item">
                 <router-link
-                  to="/clusters"
+                  to="/tables"
                   class="nav-link"
-                  :class="{ active: $route.path.startsWith('/clusters') }"
+                  :class="{ active: $route.path.startsWith('/tables') }"
                 >
                   <div class="nav-icon">
-                    <el-icon><Connection /></el-icon>
+                    <el-icon><Grid /></el-icon>
                   </div>
-                  <span class="nav-text">集群管理</span>
+                  <span class="nav-text">表管理</span>
                 </router-link>
               </div>
+              <!-- 任务管理 -->
               <div class="nav-item">
                 <router-link
                   to="/tasks"
@@ -60,6 +64,19 @@
 
             <div class="nav-section">
               <div class="nav-section-title">系统管理</div>
+              <!-- 集群管理 - 总是显示 -->
+              <div class="nav-item">
+                <router-link
+                  to="/clusters"
+                  class="nav-link"
+                  :class="{ active: $route.path.startsWith('/clusters') }"
+                >
+                  <div class="nav-icon">
+                    <el-icon><Connection /></el-icon>
+                  </div>
+                  <span class="nav-text">集群管理</span>
+                </router-link>
+              </div>
               <div class="nav-item">
                 <router-link
                   to="/settings"
@@ -70,18 +87,6 @@
                     <el-icon><Setting /></el-icon>
                   </div>
                   <span class="nav-text">系统设置</span>
-                </router-link>
-              </div>
-              <div class="nav-item">
-                <router-link
-                  to="/demo"
-                  class="nav-link"
-                  :class="{ active: $route.path === '/demo' }"
-                >
-                  <div class="nav-icon">
-                    <el-icon><DataBoard /></el-icon>
-                  </div>
-                  <span class="nav-text">组件演示</span>
                 </router-link>
               </div>
             </div>
@@ -204,9 +209,11 @@
     Fold
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
+  import { useMonitoringStore } from '@/stores/monitoring'
 
   const route = useRoute()
   const router = useRouter()
+  const monitoringStore = useMonitoringStore()
 
   // 侧边栏状态
   const sidebarCollapsed = ref(false)
@@ -214,6 +221,9 @@
   // 全屏状态
   const isFullscreen = ref(false)
   const isDarkTheme = ref(false)
+
+  // 检查是否在集群管理页面
+  const isInClusterManagement = computed(() => route.path.startsWith('/clusters'))
 
   // 页面标题计算
   const currentPageTitle = computed(() => {

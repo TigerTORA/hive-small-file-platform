@@ -9,12 +9,27 @@ export interface MonitoringSettings {
   chartColors: string[]
 }
 
+// 从本地存储加载集群选择
+const loadSelectedCluster = (): number | null => {
+  const saved = localStorage.getItem('selectedCluster')
+  return saved ? parseInt(saved, 10) : null
+}
+
+// 保存集群选择到本地存储
+const saveSelectedCluster = (clusterId: number | null) => {
+  if (clusterId === null) {
+    localStorage.removeItem('selectedCluster')
+  } else {
+    localStorage.setItem('selectedCluster', clusterId.toString())
+  }
+}
+
 export const useMonitoringStore = defineStore('monitoring', () => {
   // 状态
   const settings = ref<MonitoringSettings>({
     autoRefresh: true,
     refreshInterval: 60, // 默认60秒
-    selectedCluster: 1, // 默认选择第一个集群
+    selectedCluster: loadSelectedCluster(), // 从本地存储加载，无默认值
     theme: 'light',
     chartColors: [
       '#409EFF', // 蓝色
@@ -42,6 +57,8 @@ export const useMonitoringStore = defineStore('monitoring', () => {
 
   const isAutoRefreshEnabled = computed(() => settings.value.autoRefresh)
 
+  const hasSelectedCluster = computed(() => settings.value.selectedCluster !== null)
+
   const timeUntilNextRefresh = computed(() => {
     if (!lastRefreshTime.value || !settings.value.autoRefresh) return 0
     const elapsed = Math.floor((Date.now() - lastRefreshTime.value.getTime()) / 1000)
@@ -61,6 +78,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
 
   function setSelectedCluster(clusterId: number | null) {
     settings.value.selectedCluster = clusterId
+    saveSelectedCluster(clusterId) // 保存到本地存储
     saveSettings()
   }
 
@@ -203,6 +221,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     // 计算属性
     refreshIntervalOptions,
     isAutoRefreshEnabled,
+    hasSelectedCluster,
     timeUntilNextRefresh,
 
     // 操作方法

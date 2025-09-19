@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { useMonitoringStore } from '@/stores/monitoring'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -7,7 +8,7 @@ const router = createRouter({
       path: '/',
       name: 'Dashboard',
       component: () => import('@/views/Dashboard.vue'),
-      meta: { title: '监控中心' }
+      meta: { title: '监控中心', requiresCluster: true }
     },
     {
       path: '/clusters',
@@ -26,20 +27,20 @@ const router = createRouter({
       path: '/tables',
       name: 'Tables',
       component: () => import('@/views/Tables.vue'),
-      meta: { title: '表管理' }
+      meta: { title: '表管理', requiresCluster: true }
     },
     {
       path: '/tables/:clusterId/:database/:tableName',
       name: 'TableDetail',
       component: () => import('@/views/TableDetail.vue'),
-      meta: { title: '表详情' },
+      meta: { title: '表详情', requiresCluster: true },
       props: true
     },
     {
       path: '/tasks',
       name: 'Tasks',
       component: () => import('@/views/Tasks.vue'),
-      meta: { title: '任务管理' }
+      meta: { title: '任务管理', requiresCluster: true }
     },
     {
       path: '/settings',
@@ -52,21 +53,29 @@ const router = createRouter({
       name: 'BigScreen',
       component: () => import('@/views/BigScreen.vue'),
       meta: { title: '实时监控大屏', fullscreen: true }
-    },
-    {
-      path: '/demo',
-      name: 'DemoComponents',
-      component: () => import('@/views/DemoComponents.vue'),
-      meta: { title: 'DataNova 组件库展示' }
     }
   ]
 })
 
-// 设置页面标题
+// 路由守卫：检查集群选择和设置页面标题
 router.beforeEach((to, from, next) => {
+  // 设置页面标题
   if (to.meta?.title) {
     document.title = `${to.meta.title} - DataNova`
   }
+
+  // 检查是否需要集群权限
+  if (to.meta?.requiresCluster) {
+    const monitoringStore = useMonitoringStore()
+
+    // 如果没有选择集群，重定向到集群管理页面
+    if (!monitoringStore.hasSelectedCluster) {
+      const targetPath = encodeURIComponent(to.fullPath)
+      next(`/clusters?redirect=${targetPath}`)
+      return
+    }
+  }
+
   next()
 })
 

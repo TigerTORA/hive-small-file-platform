@@ -410,6 +410,7 @@
     MoreFilled
   } from '@element-plus/icons-vue'
   import { clustersApi, type Cluster, type ClusterCreate } from '@/api/clusters'
+  import { useMonitoringStore } from '@/stores/monitoring'
   import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
   import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
   import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator.vue'
@@ -417,6 +418,7 @@
   import dayjs from 'dayjs'
 
   const router = useRouter()
+  const monitoringStore = useMonitoringStore()
 
   // 数据
   const clusters = ref<Cluster[]>([])
@@ -634,7 +636,10 @@
   }
 
   const enterCluster = (clusterId: number) => {
-    router.push(`/clusters/${clusterId}`)
+    // 设置选中的集群并跳转到监控中心
+    monitoringStore.setSelectedCluster(clusterId)
+    ElMessage.success('集群选择成功，正在跳转...')
+    router.push('/')  // 跳转到监控中心
   }
 
   const getStatusType = (status: string) => {
