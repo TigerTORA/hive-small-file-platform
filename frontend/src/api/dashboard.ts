@@ -83,10 +83,75 @@ export interface TableFileCountPoint {
 }
 
 // API 接口
+// New interfaces for enhanced dashboard
+export interface FileClassificationItem {
+  category: string
+  count: number
+  size_gb: number
+  percentage: number
+  description: string
+}
+
+export interface ColdDataItem {
+  cluster_name: string
+  database_name: string
+  table_name: string
+  partition_name?: string
+  last_access_time?: string
+  days_since_last_access?: number
+  total_size_gb: number
+  file_count: number
+}
+
+export interface DetailedColdnessStats {
+  partitions: { count: number; size_gb: number }
+  tables: { count: number; size_gb: number }
+  total_size_gb: number
+}
+
+export interface EnhancedColdnessDistribution {
+  cluster_id: number
+  cluster_name: string
+  distribution: {
+    within_1_day: DetailedColdnessStats
+    day_1_to_7: DetailedColdnessStats
+    week_1_to_month: DetailedColdnessStats
+    month_1_to_3: DetailedColdnessStats
+    month_3_to_6: DetailedColdnessStats
+    month_6_to_12: DetailedColdnessStats
+    year_1_to_3: DetailedColdnessStats
+    over_3_years: DetailedColdnessStats
+  }
+  summary: {
+    total_partitions: number
+    total_tables: number
+    total_size_gb: number
+  }
+  distribution_timestamp: string
+}
+
 export const dashboardApi = {
   // 获取仪表盘概要统计
   getSummary(): Promise<DashboardSummary> {
     return api.get('/dashboard/summary')
+  },
+
+  // 获取文件分类统计
+  getFileClassification(clusterId?: number): Promise<FileClassificationItem[]> {
+    const params: any = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/file-classification', { params })
+  },
+
+  // 获取增强的冷数据分布
+  getEnhancedColdnessDistribution(clusterId?: number): Promise<EnhancedColdnessDistribution> {
+    const params: any = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/enhanced-coldness-distribution', { params })
   },
 
   // 获取小文件趋势数据
@@ -149,5 +214,11 @@ export const dashboardApi = {
   getTableFileTrends(tableId: string, days: number = 30): Promise<TableFileCountPoint[]> {
     const params = { days }
     return api.get(`/dashboard/table-file-trends/${encodeURIComponent(tableId)}`, { params })
+  },
+
+  // 获取冷数据排行榜
+  getColdestData(limit: number = 10): Promise<ColdDataItem[]> {
+    const params = { limit }
+    return api.get('/dashboard/coldest-data', { params })
   }
 }

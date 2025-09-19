@@ -1,582 +1,657 @@
 <template>
   <div class="dashboard">
-    <!-- Cloudera风格指标网格 -->
-    <div class="cloudera-metrics-grid">
-      <div
-        v-for="(metric, index) in keyMetrics"
-        :key="metric.key"
-        class="cloudera-metric-card"
-      >
-        <div class="metric-header">
-          <div
-            class="metric-icon"
-            :class="metric.type"
-          >
-            <el-icon><component :is="metric.icon" /></el-icon>
-          </div>
-          <div
-            class="metric-status"
-            v-if="metric.trend"
-          >
-            <el-icon><component :is="metric.trend.icon" /></el-icon>
-            <span
-              class="metric-trend"
-              :class="metric.trend.type"
-              >{{ metric.trend.value }}</span
-            >
-          </div>
+    <!-- 顶部概览统计卡片区域 -->
+    <div class="overview-stats">
+      <div class="stat-card" v-loading="isLoadingCharts">
+        <div class="stat-icon">
+          <el-icon><Files /></el-icon>
         </div>
-        <div class="metric-value">{{ metric.value }}</div>
-        <div class="metric-label">{{ metric.label }}</div>
+        <div class="stat-content">
+          <div class="stat-value">{{ dashboardSummary?.total_files?.toLocaleString() || '-' }}</div>
+          <div class="stat-label">总文件数</div>
+        </div>
       </div>
 
-      <!-- 集群状态卡片 -->
-      <div class="cloudera-metric-card cluster-status-card">
-        <div class="metric-header">
-          <div class="metric-icon info">
-            <el-icon><Connection /></el-icon>
-          </div>
-          <div class="metric-status">
-            <div
-              class="status-dot"
-              :class="clusterStatusClass"
-            ></div>
-            <span class="cluster-status-text">{{ clusterStatusText }}</span>
-          </div>
+      <div class="stat-card" v-loading="isLoadingCharts">
+        <div class="stat-icon small-files">
+          <el-icon><Warning /></el-icon>
         </div>
-        <div class="metric-value">{{ currentClusterName }}</div>
-        <div class="metric-label">集群状态</div>
+        <div class="stat-content">
+          <div class="stat-value">{{ dashboardSummary?.small_file_ratio?.toFixed(1) || '-' }}%</div>
+          <div class="stat-label">小文件比例</div>
+        </div>
       </div>
 
-      <!-- 刷新状态卡片 -->
-      <div
-        v-if="monitoringStore.isAutoRefreshEnabled"
-        class="cloudera-metric-card refresh-card"
-      >
-        <div class="metric-header">
-          <div class="metric-icon info">
-            <el-icon><Timer /></el-icon>
-          </div>
-          <el-button
-            size="small"
-            @click="performRefresh"
-            :loading="isRefreshing"
-            class="cloudera-btn secondary"
-          >
-            刷新
-          </el-button>
+      <div class="stat-card" v-loading="isLoadingCharts">
+        <div class="stat-icon storage">
+          <el-icon><Coin /></el-icon>
         </div>
-        <div class="metric-value">{{ nextRefreshText || '实时' }}</div>
-        <div class="metric-label">自动刷新</div>
-        <div
-          class="refresh-progress"
-          v-if="refreshProgress > 0"
-        >
-          <div
-            class="progress-bar"
-            :style="{ width: refreshProgress + '%' }"
-          ></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ dashboardSummary?.total_size_gb?.toFixed(2) || '-' }}GB</div>
+          <div class="stat-label">总存储空间</div>
+        </div>
+      </div>
+
+      <div class="stat-card" v-loading="isLoadingCharts">
+        <div class="stat-icon clusters">
+          <el-icon><Monitor /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ dashboardSummary?.monitored_tables?.toLocaleString() || '-' }}</div>
+          <div class="stat-label">监控表数</div>
         </div>
       </div>
     </div>
 
-    <!-- 快速操作区域 -->
-    <div class="action-section">
-      <h3 class="section-title">
-        <el-icon><Operation /></el-icon>
-        快速操作
-      </h3>
-      <div class="action-grid">
-        <el-button
-          type="success"
-          @click="performBatchScan"
-          :loading="isBatchScanning"
-          :icon="Search"
-          size="large"
-          class="cloudera-btn success"
-        >
-          {{ isBatchScanning ? '批量扫描中...' : '批量扫描' }}
-        </el-button>
+    <!-- 双饼状图布局 -->
+    <div class="pie-charts-section">
 
-        <el-button
-          type="danger"
-          @click="handleStartMerge"
-          :loading="mergingFiles"
-          :icon="Operation"
-          size="large"
-          class="cloudera-btn danger"
-        >
-          开始合并
-        </el-button>
+      <!-- 双饼状图容器 -->
+      <div class="dual-pie-charts">
+        <!-- 文件压缩性分析饼状图 -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>
+              <el-icon><Files /></el-icon>
+              文件压缩性分析
+            </h3>
+            <el-tag size="small" type="info">
+              总文件：{{ fileClassificationTotal.toLocaleString() }}
+            </el-tag>
+          </div>
+          <div class="chart-content">
+            <PieChart
+              :data="fileClassificationData"
+              :height="320"
+              :color-scheme="compressionColorScheme"
+              @sector-click="onFileClassificationClick"
+            />
+          </div>
+        </div>
 
-        <el-button
-          type="warning"
-          @click="handleAnalyzeFiles"
-          :loading="analyzingFiles"
-          :icon="TrendCharts"
-          size="large"
-          class="cloudera-btn warning"
-        >
-          深度分析
-        </el-button>
-
-        <el-button
-          v-if="isEnabled('fullscreenMode')"
-          :icon="FullScreen"
-          @click="enterBigScreenMode"
-          size="large"
-          class="cloudera-btn secondary"
-        >
-          大屏模式
-        </el-button>
+        <!-- 冷数据时间分布饼状图 -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>
+              <el-icon><Clock /></el-icon>
+              冷数据时间分布
+            </h3>
+            <el-tag size="small" type="warning">
+              总大小：{{ coldDataTotal.toFixed(2) }}GB
+            </el-tag>
+          </div>
+          <div class="chart-content">
+            <PieChart
+              :data="coldnessDistributionData"
+              :height="320"
+              :color-scheme="coldnessColorScheme"
+              :tooltip-formatter="formatColdnessTooltip"
+              @sector-click="onColdnessDistributionClick"
+            />
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 主要监控面板 -->
-    <div class="main-monitoring-panel">
-      <div class="panel-left">
-        <div class="cloudera-table">
-          <TableFileCountChart
-            :cluster-id="monitoringStore.settings.selectedCluster"
-            :refreshing="isRefreshing"
-            @refresh="performRefresh"
-            @table-analyze="handleTableAnalysis"
-            class="main-chart"
-          />
-        </div>
-      </div>
+    <!-- 排行榜区域 -->
+    <div class="rankings-section">
 
-      <div class="panel-right">
-        <!-- 最近任务面板 -->
-        <div class="cloudera-table recent-tasks-panel">
-          <div class="panel-header">
-            <div class="header-title">
-              <el-icon><List /></el-icon>
-              <span>最近任务</span>
+      <!-- 双排行榜容器 -->
+      <div class="dual-rankings">
+          <!-- 问题表排行榜 -->
+          <div class="ranking-card">
+            <div class="ranking-header">
+              <h3>
+                <el-icon><Warning /></el-icon>
+                问题表排行榜
+              </h3>
+              <el-tag size="small" type="danger">
+                小文件最多TOP10
+              </el-tag>
             </div>
-            <el-button
+            <div class="ranking-content">
+            <el-table
+              :data="topTables"
               size="small"
-              @click="handleViewAllTasks"
-              class="cloudera-btn secondary"
+              :show-header="true"
+              max-height="300"
             >
-              查看全部
-            </el-button>
+              <el-table-column prop="cluster_name" label="集群" width="80" />
+              <el-table-column prop="database_name" label="数据库" width="120" />
+              <el-table-column prop="table_name" label="表名" min-width="150" show-overflow-tooltip />
+              <el-table-column label="小文件数" width="100" align="right">
+                <template #default="scope">
+                  <el-text type="danger" size="small">
+                    {{ scope.row.small_files.toLocaleString() }}
+                  </el-text>
+                </template>
+              </el-table-column>
+              <el-table-column label="占比" width="80" align="right">
+                <template #default="scope">
+                  <el-text size="small">
+                    {{ scope.row.small_file_ratio.toFixed(1) }}%
+                  </el-text>
+                </template>
+              </el-table-column>
+              <el-table-column label="大小" width="90" align="right">
+                <template #default="scope">
+                  <el-text size="small">
+                    {{ scope.row.total_size_gb.toFixed(2) }}GB
+                  </el-text>
+                </template>
+              </el-table-column>
+            </el-table>
+            </div>
           </div>
 
-          <div class="task-list">
-            <div
-              v-for="task in dashboardStore.recentTasks.slice(0, 5)"
-              :key="task.id"
-              class="task-item"
-              @click="handleViewTask(task)"
-            >
-              <div class="task-info">
-                <div class="task-name">{{ task.task_name }}</div>
-                <div class="task-table">{{ task.table_name }}</div>
-              </div>
-              <div class="task-status">
-                <span
-                  class="cloudera-tag"
-                  :class="getStatusType(task.status)"
-                >
-                  {{ getStatusText(task.status) }}
-                </span>
-              </div>
+          <!-- 冷数据排行榜 -->
+          <div class="ranking-card">
+            <div class="ranking-header">
+              <h3>
+                <el-icon><Timer /></el-icon>
+                冷数据排行榜
+              </h3>
+              <el-tag size="small" type="info">
+                最久未访问TOP10
+              </el-tag>
             </div>
-
-            <div
-              v-if="!dashboardStore.recentTasks.length"
-              class="no-tasks"
-            >
-              <el-icon><InfoFilled /></el-icon>
-              <span>暂无任务记录</span>
+            <div class="ranking-content">
+              <el-table
+                :data="coldestData"
+                size="small"
+                :show-header="true"
+                max-height="300"
+              >
+                <el-table-column prop="cluster_name" label="集群" width="80" />
+                <el-table-column prop="database_name" label="数据库" width="120" />
+                <el-table-column prop="table_name" label="表名" min-width="150" show-overflow-tooltip />
+                <el-table-column label="未访问天数" width="100" align="right">
+                  <template #default="scope">
+                    <el-text type="warning" size="small">
+                      {{ scope.row.days_since_last_access }}天
+                    </el-text>
+                  </template>
+                </el-table-column>
+                <el-table-column label="大小" width="90" align="right">
+                  <template #default="scope">
+                    <el-text size="small">
+                      {{ scope.row.total_size_gb.toFixed(2) }}GB
+                    </el-text>
+                  </template>
+                </el-table-column>
+                <el-table-column label="文件数" width="80" align="right">
+                  <template #default="scope">
+                    <el-text size="small">
+                      {{ scope.row.file_count }}
+                    </el-text>
+                  </template>
+                </el-table-column>
+              </el-table>
             </div>
           </div>
         </div>
-      </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, ref, inject } from 'vue'
-  import { useRouter } from 'vue-router'
+  import { computed, onMounted, ref, watch, nextTick } from 'vue'
   import {
-    Timer,
     Refresh,
+    PieChart as PieChartIcon,
+    Files,
+    Clock,
     TrendCharts,
-    List,
-    Connection,
-    Operation,
-    Search,
-    CircleCheckFilled,
-    FullScreen,
-    Grid,
     Warning,
-    Document,
-    ArrowUp,
-    ArrowDown,
-    InfoFilled
+    Timer,
+    Coin,
+    Monitor,
+    List,
+    DataAnalysis
   } from '@element-plus/icons-vue'
-  import { ElMessage, ElMessageBox } from 'element-plus'
-  import {
-    ClusterCard,
-    TableCard,
-    FileCard,
-    SmallFileCard,
-    TrendChart,
-    DistributionChart,
-    TableFileCountChart
-  } from '@/components'
-  import DraggableGrid from '@/components/layout/DraggableGrid.vue'
-  import { useDashboardStore } from '@/stores/dashboard'
-  import { useMonitoringStore } from '@/stores/monitoring'
-  import { useDashboardLayoutStore, type GridItemLayout } from '@/stores/dashboardLayout'
-  import { useRealtime } from '@/composables/useRealtime'
-  import { tasksApi } from '@/api/tasks'
+  import { ElMessage } from 'element-plus'
+  import PieChart from '@/components/charts/PieChart.vue'
+  import { dashboardApi, type FileClassificationItem, type EnhancedColdnessDistribution, type TopTable, type ColdDataItem, type DashboardSummary, type RecentTask, type FileDistributionItem, type TrendPoint } from '@/api/dashboard'
 
-  // 注入特性开关
-  const featureFlagContext = inject('featureFlags') as any
-  const isEnabled = featureFlagContext?.isEnabled || (() => false)
+  // 双饼状图相关数据
+  const selectedClusterId = ref<number | null>(null)
+  const isLoadingCharts = ref(false)
+  const fileClassificationItems = ref<FileClassificationItem[]>([])
+  const coldnessDistribution = ref<EnhancedColdnessDistribution | null>(null)
+  const topTables = ref<TopTable[]>([])
+  const coldestData = ref<ColdDataItem[]>([])
+  const dashboardSummary = ref<DashboardSummary | null>(null)
+  const recentTasks = ref<RecentTask[]>([])
+  const fileDistribution = ref<FileDistributionItem[]>([])
+  const trendData = ref<TrendPoint[]>([])
+  const trendChartRef = ref<HTMLCanvasElement>()
 
-  const router = useRouter()
-  const dashboardStore = useDashboardStore()
-  const monitoringStore = useMonitoringStore()
-  const layoutStore = useDashboardLayoutStore()
+  // 简单的集群列表
+  const availableClusters = ref([
+    { id: 1, name: 'CDP-14' },
+    { id: 2, name: 'CDP-15' },
+    { id: 3, name: 'CDP-16' }
+  ])
 
-  const { isRefreshing, nextRefreshIn, performRefresh, startAutoRefresh, stopAutoRefresh } =
-    useRealtime()
-
-  // 计算属性
-  const nextRefreshText = computed(() => {
-    if (!monitoringStore.isAutoRefreshEnabled) return ''
-    if (nextRefreshIn.value <= 0) return '刷新中...'
-    return `${nextRefreshIn.value}秒后刷新`
+  // 文件分类数据转换为饼状图数据
+  const fileClassificationData = computed(() => {
+    return fileClassificationItems.value.map(item => ({
+      name: item.category,
+      value: item.count,
+      description: item.description,
+      details: {
+        count: item.count,
+        size_gb: item.size_gb
+      }
+    }))
   })
 
-  // 刷新进度百分比
-  const refreshProgress = computed(() => {
-    if (!monitoringStore.isAutoRefreshEnabled) return 0
-    const total = 30 // 假设30秒刷新间隔
-    const remaining = nextRefreshIn.value
-    return Math.max(0, ((total - remaining) / total) * 100)
+  // 文件分类总数
+  const fileClassificationTotal = computed(() => {
+    return fileClassificationItems.value.reduce((sum, item) => sum + item.count, 0)
   })
 
-  // 关键指标数据
-  const keyMetrics = computed(() => {
-    const summary = dashboardStore.summary
-    return [
-      {
-        key: 'total_tables',
-        label: '总表数',
-        value: formatNumber(summary.total_tables),
-        icon: Grid,
-        type: 'info',
-        trend: {
-          type: 'up',
-          icon: ArrowUp,
-          value: '+12%'
+  // 冷数据分布数据转换为饼状图数据（5档）
+  const coldnessDistributionData = computed(() => {
+    if (!coldnessDistribution.value) return []
+
+    const dist = coldnessDistribution.value.distribution
+
+    // 合并为5个时间段
+    const merged = {
+      recent: {
+        name: '1-7天',
+        total_size_gb: (dist.within_1_day?.total_size_gb || 0) + (dist.day_1_to_7?.total_size_gb || 0),
+        partitions: {
+          count: (dist.within_1_day?.partitions?.count || 0) + (dist.day_1_to_7?.partitions?.count || 0),
+          size_gb: (dist.within_1_day?.partitions?.size_gb || 0) + (dist.day_1_to_7?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.within_1_day?.tables?.count || 0) + (dist.day_1_to_7?.tables?.count || 0),
+          size_gb: (dist.within_1_day?.tables?.size_gb || 0) + (dist.day_1_to_7?.tables?.size_gb || 0)
         }
       },
-      {
-        key: 'problem_tables',
-        label: '问题表',
-        value: formatNumber(summary.problem_tables || 0),
-        icon: Warning,
-        type: 'danger',
-        trend: {
-          type: 'down',
-          icon: ArrowDown,
-          value: '-8%'
+      month: {
+        name: '1周-1月',
+        total_size_gb: dist.week_1_to_month?.total_size_gb || 0,
+        partitions: dist.week_1_to_month?.partitions || { count: 0, size_gb: 0 },
+        tables: dist.week_1_to_month?.tables || { count: 0, size_gb: 0 }
+      },
+      quarter: {
+        name: '1-6月',
+        total_size_gb: (dist.month_1_to_3?.total_size_gb || 0) + (dist.month_3_to_6?.total_size_gb || 0),
+        partitions: {
+          count: (dist.month_1_to_3?.partitions?.count || 0) + (dist.month_3_to_6?.partitions?.count || 0),
+          size_gb: (dist.month_1_to_3?.partitions?.size_gb || 0) + (dist.month_3_to_6?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.month_1_to_3?.tables?.count || 0) + (dist.month_3_to_6?.tables?.count || 0),
+          size_gb: (dist.month_1_to_3?.tables?.size_gb || 0) + (dist.month_3_to_6?.tables?.size_gb || 0)
         }
       },
-      {
-        key: 'small_files',
-        label: '小文件数',
-        value: formatNumber(summary.total_small_files),
-        icon: Document,
-        type: 'info',
-        trend: {
-          type: 'down',
-          icon: ArrowDown,
-          value: '-15%'
+      year: {
+        name: '6-12月',
+        total_size_gb: dist.month_6_to_12?.total_size_gb || 0,
+        partitions: dist.month_6_to_12?.partitions || { count: 0, size_gb: 0 },
+        tables: dist.month_6_to_12?.tables || { count: 0, size_gb: 0 }
+      },
+      old: {
+        name: '1年以上',
+        total_size_gb: (dist.year_1_to_3?.total_size_gb || 0) + (dist.over_3_years?.total_size_gb || 0),
+        partitions: {
+          count: (dist.year_1_to_3?.partitions?.count || 0) + (dist.over_3_years?.partitions?.count || 0),
+          size_gb: (dist.year_1_to_3?.partitions?.size_gb || 0) + (dist.over_3_years?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.year_1_to_3?.tables?.count || 0) + (dist.over_3_years?.tables?.count || 0),
+          size_gb: (dist.year_1_to_3?.tables?.size_gb || 0) + (dist.over_3_years?.tables?.size_gb || 0)
         }
       }
-    ]
-  })
-
-  // 集群相关信息
-  const currentClusterName = computed(() => {
-    const clusters = dashboardStore.clusterStats
-    const selectedId = monitoringStore.settings.selectedCluster
-    const cluster = clusters.find(c => c.id === selectedId)
-    return cluster?.name || '默认集群'
-  })
-
-  const clusterStatusText = computed(() => {
-    const clusters = dashboardStore.clusterStats
-    const selectedId = monitoringStore.settings.selectedCluster
-    const cluster = clusters.find(c => c.id === selectedId)
-    const statusMap = {
-      active: '运行中',
-      inactive: '已停止',
-      error: '异常'
     }
-    return statusMap[cluster?.status || 'active'] || '运行中'
+
+    return Object.values(merged).map(item => ({
+      name: item.name,
+      value: item.total_size_gb,
+      details: {
+        partitions: item.partitions,
+        tables: item.tables
+      }
+    })).filter(item => item.value > 0) // 过滤掉没有数据的时间段
   })
 
-  const clusterStatusClass = computed(() => {
-    const clusters = dashboardStore.clusterStats
-    const selectedId = monitoringStore.settings.selectedCluster
-    const cluster = clusters.find(c => c.id === selectedId)
-    return `status-${cluster?.status || 'active'}`
+  // 冷数据总大小
+  const coldDataTotal = computed(() => {
+    return coldnessDistributionData.value.reduce((sum, item) => sum + item.value, 0)
   })
 
-  // 操作状态
-  const scanningTables = computed(() => false) // TODO: 实现表扫描状态
-  const mergingFiles = computed(() => false) // TODO: 实现文件合并状态
-  const analyzingFiles = computed(() => false) // TODO: 实现文件分析状态
+  // 颜色配置
+  const compressionColorScheme = [
+    '#5470c6', // 可压缩小文件
+    '#ee6666', // ACID表小文件
+    '#fac858', // 单分区文件
+    '#91cc75', // 数据湖表文件
+    '#73c0de', // 其他
+    '#3ba272',
+    '#fc8452',
+    '#9a60b4'
+  ]
 
-  // 进入大屏模式
-  const enterBigScreenMode = () => {
-    const clusterId = monitoringStore.settings.selectedCluster
-    router.push({
-      path: '/big-screen',
-      query: { cluster: clusterId }
-    })
+  const coldnessColorScheme = [
+    '#67C23A', // 1-7天 - 绿色
+    '#E6A23C', // 1周-1月 - 橙色
+    '#F56C6C', // 1-6月 - 红色
+    '#409EFF', // 6-12月 - 蓝色
+    '#909399'  // 1年以上 - 灰色
+  ]
+
+  // 冷数据饼状图提示框格式化
+  const formatColdnessTooltip = (item: any) => {
+    const details = item.details
+    if (!details) return ''
+
+    return `
+      <div style="font-weight: bold; margin-bottom: 8px;">${item.name}</div>
+      <div>📊 分区：${details.partitions.count}个 (${details.partitions.size_gb.toFixed(2)}GB)</div>
+      <div>📋 表：${details.tables.count}个 (${details.tables.size_gb.toFixed(2)}GB)</div>
+      <div style="margin-top: 4px; font-weight: bold;">💾 总计：${item.value.toFixed(2)}GB</div>
+    `
   }
 
-  // 事件处理
-  function handleClusterChange(clusterId: number) {
-    performRefresh()
+  // 加载双饼状图数据
+  const loadChartData = async () => {
+    isLoadingCharts.value = true
+    try {
+      const clusterId = selectedClusterId.value
+
+      // 并行加载所有API的数据
+      const [fileClassificationResult, coldnessResult, topTablesResult, coldestDataResult, summaryResult, recentTasksResult, fileDistributionResult, trendsResult] = await Promise.all([
+        dashboardApi.getFileClassification(clusterId || undefined),
+        dashboardApi.getEnhancedColdnessDistribution(clusterId || undefined),
+        dashboardApi.getTopTables(clusterId || undefined, 10),
+        dashboardApi.getColdestData(10),
+        dashboardApi.getSummary(),
+        dashboardApi.getRecentTasks(5),
+        dashboardApi.getFileDistribution(clusterId || undefined),
+        dashboardApi.getTrends(clusterId || undefined, 30)
+      ])
+
+      fileClassificationItems.value = fileClassificationResult
+      coldnessDistribution.value = coldnessResult
+      topTables.value = topTablesResult
+      coldestData.value = coldestDataResult
+      dashboardSummary.value = summaryResult
+      recentTasks.value = recentTasksResult
+      fileDistribution.value = fileDistributionResult
+      trendData.value = trendsResult
+
+      console.log('图表数据加载完成:', {
+        fileClassification: fileClassificationResult,
+        coldness: coldnessResult
+      })
+    } catch (error) {
+      console.error('加载图表数据失败:', error)
+      ElMessage.error('加载图表数据失败')
+    } finally {
+      isLoadingCharts.value = false
+    }
   }
 
-  function handleScanTables() {
-    ElMessage.info('开始扫描表...')
-    // TODO: 实现表扫描逻辑
+  // 刷新图表数据
+  const refreshChartData = async () => {
+    await loadChartData()
+    ElMessage.success('图表数据已刷新')
   }
 
-  function handleViewTables() {
-    router.push('/tables')
+  // 文件分类饼状图点击事件
+  const onFileClassificationClick = (item: any) => {
+    console.log('文件分类点击:', item)
+    ElMessage.info(`点击了 ${item.name}：${item.value.toLocaleString()} 个文件`)
   }
 
-  function handleStartMerge() {
-    // 直接跳转到任务管理页面，用户可以在那里创建合并任务
-    router.push('/tasks')
+  // 冷数据分布饼状图点击事件
+  const onColdnessDistributionClick = (item: any) => {
+    console.log('冷数据分布点击:', item)
+    ElMessage.info(`点击了 ${item.name}：${item.value.toFixed(2)}GB`)
   }
 
-  function handleAnalyzeFiles() {
-    ElMessage.info('开始深度分析...')
-    // TODO: 实现深度分析逻辑
-  }
-
-  function handleExportTrend() {
-    ElMessage.info('导出趋势图表...')
-    // TODO: 实现图表导出
-  }
-
-  function handleExportDistribution() {
-    ElMessage.info('导出分布图表...')
-    // TODO: 实现图表导出
-  }
-
-  function handlePeriodChange(days: number) {
-    dashboardStore.loadTrends(monitoringStore.settings.selectedCluster, days)
-  }
-
-  function handleTrendChartClick(params: any) {
-    console.log('Trend chart clicked:', params)
-    // TODO: 处理图表点击事件
-  }
-
-  function handleDistributionChartClick(params: any) {
-    console.log('Distribution chart clicked:', params)
-    // TODO: 处理图表点击事件
-  }
-
-  function handleDistributionRowClick(item: any, index: number) {
-    console.log('Distribution row clicked:', item, index)
-    // TODO: 处理分布表格行点击
-  }
-
-  function handleTableRowClick(row: any) {
-    // 跳转到表详情页
-    const clusterId = row.cluster_id || monitoringStore.settings.selectedCluster || 1
-    router.push(`/tables/${clusterId}/${row.database_name}/${row.table_name}`)
-  }
-
-  function handleTableAnalysis(row: any) {
-    const tableName = row.table_name || `${row.database_name}.${row.table_name}`
-    ElMessage.info(`分析表 ${tableName}...`)
-    // TODO: 实现表分析逻辑
-  }
-
-  function handleViewAllTables() {
-    router.push('/tables')
-  }
-
-  function handleTaskRowClick(row: any) {
-    router.push(`/tasks/${row.id}`)
-  }
-
-  function handleViewTask(row: any) {
-    router.push(`/tasks/${row.id}`)
-  }
-
-  function handleViewAllTasks() {
-    router.push('/tasks')
-  }
-
-  function handleSelectCluster(cluster: any) {
-    monitoringStore.setSelectedCluster(cluster.id)
-    performRefresh()
-  }
-
-  // 格式化函数
-  function formatNumber(num: number): string {
-    return monitoringStore.formatNumber(num)
-  }
-
-  function formatTime(time: string): string {
-    return monitoringStore.formatDate(time)
-  }
-
-  function getStatusType(status: string): string {
+  // 任务状态类型映射
+  const getTaskStatusType = (status: string) => {
     const statusMap: Record<string, string> = {
-      pending: 'info',
-      running: 'warning',
-      success: 'success',
-      failed: 'danger'
+      'running': 'primary',
+      'completed': 'success',
+      'failed': 'danger',
+      'pending': 'warning',
+      'cancelled': 'info'
     }
     return statusMap[status] || 'info'
   }
 
-  function getStatusText(status: string): string {
-    const statusMap: Record<string, string> = {
-      pending: '等待中',
-      running: '运行中',
-      success: '成功',
-      failed: '失败'
-    }
-    return statusMap[status] || status
-  }
+  // 绘制趋势图
+  const drawTrendChart = () => {
+    if (!trendChartRef.value || trendData.value.length === 0) return
 
-  function getProgressColor(ratio: number): string {
-    if (ratio >= 60) return '#F56C6C'
-    if (ratio >= 40) return '#E6A23C'
-    return '#67C23A'
-  }
+    const canvas = trendChartRef.value
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-  function getClusterStatusText(status: string): string {
-    const statusMap: Record<string, string> = {
-      active: '运行中',
-      inactive: '已停止',
-      error: '异常'
-    }
-    return statusMap[status] || status
-  }
+    const width = canvas.width
+    const height = canvas.height
+    const padding = 20
 
-  // 布局相关事件处理
-  function handleLayoutChange(newLayout: GridItemLayout[]) {
-    layoutStore.updateLayout(newLayout)
-  }
+    // 清除画布
+    ctx.clearRect(0, 0, width, height)
 
-  function handleEditModeChange(editMode: boolean) {
-    layoutStore.setEditMode(editMode)
+    // 获取数据范围
+    const maxRatio = Math.max(...trendData.value.map(d => d.ratio))
+    const minRatio = Math.min(...trendData.value.map(d => d.ratio))
+    const range = maxRatio - minRatio || 1
 
-    if (editMode) {
-      ElMessage.info('已进入布局编辑模式，可以拖拽和调整卡片大小')
-    } else {
-      ElMessage.success('布局已锁定')
-    }
-  }
-
-  function handleLayoutReset() {
-    ElMessage.success('布局已重置为默认配置')
-  }
-
-  // 批量扫描功能
-  const isBatchScanning = ref(false)
-
-  async function performBatchScan() {
-    if (isBatchScanning.value) return
-
-    const clusterId = monitoringStore.settings.selectedCluster
-    if (!clusterId) {
-      ElMessage.error('请先选择一个集群')
-      return
+    // 绘制网格线
+    ctx.strokeStyle = '#e5e7eb'
+    ctx.lineWidth = 1
+    for (let i = 1; i < 4; i++) {
+      const y = padding + (height - 2 * padding) * i / 4
+      ctx.beginPath()
+      ctx.moveTo(padding, y)
+      ctx.lineTo(width - padding, y)
+      ctx.stroke()
     }
 
-    try {
-      const confirmed = await ElMessageBox.confirm(
-        '批量扫描将对所有数据库进行小文件分析，可能需要较长时间。是否继续？',
-        '批量扫描确认',
-        {
-          confirmButtonText: '确定扫描',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }
-      )
+    // 绘制趋势线
+    if (trendData.value.length > 1) {
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 2
+      ctx.beginPath()
 
-      if (confirmed) {
-        isBatchScanning.value = true
-        ElMessage.info('开始批量扫描所有数据库，请稍候...')
+      trendData.value.forEach((point, index) => {
+        const x = padding + (width - 2 * padding) * index / (trendData.value.length - 1)
+        const y = height - padding - (height - 2 * padding) * (point.ratio - minRatio) / range
 
-        const result = await tasksApi.scanAllDatabases(clusterId, 10)
-
-        if (result.summary) {
-          const summary = result.summary
-          ElMessage.success(
-            `批量扫描完成！共扫描 ${summary.total_databases} 个数据库，` +
-              `${summary.total_tables_scanned} 个表，发现 ${summary.total_small_files} 个小文件 ` +
-              `(小文件率: ${summary.small_file_ratio}%)`
-          )
-
-          // 重新加载仪表盘数据以显示最新结果
-          await dashboardStore.loadAllData(clusterId)
+        if (index === 0) {
+          ctx.moveTo(x, y)
         } else {
-          ElMessage.success('批量扫描完成！')
+          ctx.lineTo(x, y)
         }
-      }
-    } catch (error: any) {
-      console.error('批量扫描失败:', error)
-      if (error.name !== 'cancel') {
-        // 用户取消不显示错误
-        ElMessage.error(`批量扫描失败: ${error.message || '未知错误'}`)
-      }
-    } finally {
-      isBatchScanning.value = false
+      })
+      ctx.stroke()
+
+      // 绘制数据点
+      ctx.fillStyle = '#3b82f6'
+      trendData.value.forEach((point, index) => {
+        const x = padding + (width - 2 * padding) * index / (trendData.value.length - 1)
+        const y = height - padding - (height - 2 * padding) * (point.ratio - minRatio) / range
+
+        ctx.beginPath()
+        ctx.arc(x, y, 3, 0, 2 * Math.PI)
+        ctx.fill()
+      })
     }
   }
+
+  // 监听集群选择变化
+  watch(selectedClusterId, async (newClusterId) => {
+    console.log('集群选择变化:', newClusterId)
+    await loadChartData()
+  })
+
+  // 监听趋势数据变化并重绘图表
+  watch(trendData, () => {
+    drawTrendChart()
+  }, { deep: true })
 
   // 生命周期
   onMounted(async () => {
-    // 初始化布局 store
-    layoutStore.initialize()
-
-    // 加载仪表盘数据
-    await dashboardStore.loadAllData(monitoringStore.settings.selectedCluster)
+    // 加载双饼状图数据
+    await loadChartData()
+    // 绘制趋势图
+    await nextTick()
+    drawTrendChart()
   })
 </script>
 
 <style scoped>
   .dashboard {
-    padding: var(--space-3) var(--space-4) 400px var(--space-4);
-    min-height: 150vh;
-    overflow-y: visible;
+    padding: var(--space-3);
+    min-height: 100vh;
     background: var(--bg-app);
     max-width: 1600px;
     margin: 0 auto;
   }
 
-  /* 快速操作区域 */
-  .action-section {
-    background: var(--bg-secondary);
-    padding: var(--space-8);
-    border-radius: var(--radius-2xl);
-    margin-bottom: var(--space-10);
-    border: 1px solid var(--gray-100);
+  /* 顶部概览统计卡片样式 */
+  .overview-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
+
+  .stat-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--gray-150);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    box-shadow: var(--elevation-0);
+    transition: all var(--transition-normal);
+    min-height: 60px;
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--elevation-2);
+    transform: translateY(-1px);
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-50);
+    color: var(--primary-500);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .stat-icon.small-files {
+    background: var(--red-50);
+    color: var(--red-500);
+  }
+
+  .stat-icon.storage {
+    background: var(--yellow-50);
+    color: var(--yellow-600);
+  }
+
+  .stat-icon.clusters {
+    background: var(--green-50);
+    color: var(--green-500);
+  }
+
+  .stat-content {
+    flex: 1;
+  }
+
+  .stat-value {
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    line-height: 1.2;
+  }
+
+  .stat-label {
+    font-size: var(--text-xs);
+    color: var(--gray-600);
+    margin-top: 2px;
+  }
+
+  /* 双饼状图区域样式 */
+  .pie-charts-section {
+    background: var(--bg-secondary);
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-100);
+    box-shadow: var(--elevation-1);
+    margin-bottom: var(--space-4);
+  }
+
+
+
+  .dual-pie-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+    min-height: 420px;
+  }
+
+  .chart-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--gray-150);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--elevation-1);
+    transition: all var(--transition-normal);
+  }
+
+  .chart-card:hover {
+    box-shadow: var(--elevation-3);
+    transform: translateY(-1px);
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .chart-header h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--gray-900);
+    margin: 0;
+  }
+
+  .chart-header .el-icon {
+    color: var(--primary-500);
+    font-size: var(--text-lg);
+  }
+
+  .chart-content {
+    padding: var(--space-4) var(--space-3) var(--space-4);
+    background: var(--bg-primary);
+  }
+
 
   .section-title {
     display: flex;
@@ -585,9 +660,7 @@
     font-size: var(--text-2xl);
     font-weight: var(--font-semibold);
     color: var(--gray-900);
-    margin-bottom: var(--space-8);
-    padding-bottom: var(--space-4);
-    border-bottom: 2px solid var(--gray-200);
+    margin: 0;
   }
 
   .section-title .el-icon {
@@ -595,197 +668,82 @@
     font-size: var(--text-xl);
   }
 
-  .action-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--space-6);
-  }
-
-  /* 集群状态卡片特殊样式 */
-  .cluster-status-card .metric-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .cluster-status-text {
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--gray-700);
-  }
-
-  .status-dot.status-active {
-    background-color: var(--success-500);
-  }
-
-  .status-dot.status-inactive {
-    background-color: var(--danger-500);
-  }
-
-  .status-dot.status-error {
-    background-color: var(--danger-500);
-  }
-
-  /* 刷新卡片特殊样式 */
-  .refresh-card .refresh-progress {
-    width: 100%;
-    height: 4px;
-    background: var(--gray-200);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    margin-top: var(--space-3);
-  }
-
-  .refresh-card .progress-bar {
-    height: 100%;
-    background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
-    border-radius: var(--radius-md);
-    transition: width var(--transition-normal);
-  }
-
-  /* 主监控面板 */
-  .main-monitoring-panel {
-    display: flex;
-    gap: var(--space-8);
-    min-height: 640px;
-    margin-top: var(--space-4);
-  }
-
-  .panel-left {
-    flex: 1;
-  }
-
-  .panel-right {
-    width: 400px;
-  }
-
-  .main-chart {
-    height: 100%;
+  /* 排行榜区域样式 */
+  .rankings-section {
+    background: var(--bg-secondary);
+    padding: var(--space-4);
     border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-100);
+    box-shadow: var(--elevation-1);
   }
 
-  /* 任务面板 */
-  .recent-tasks-panel {
-    padding: var(--space-8);
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+
+
+  .dual-rankings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-5);
+    min-height: 500px;
+    width: 100%;
+  }
+
+  .ranking-card {
     background: var(--bg-primary);
     border: 1px solid var(--gray-150);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--elevation-1);
+    transition: all var(--transition-normal);
   }
 
-  .panel-header {
+  .ranking-card:hover {
+    box-shadow: var(--elevation-3);
+    transform: translateY(-1px);
+  }
+
+  .ranking-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--space-8);
-    padding-bottom: var(--space-6);
-    border-bottom: 2px solid var(--gray-200);
+    padding: var(--space-4);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--gray-200);
   }
 
-  .header-title {
+  .ranking-header h3 {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     font-size: var(--text-lg);
     font-weight: var(--font-semibold);
     color: var(--gray-900);
+    margin: 0;
   }
 
-  .header-title .el-icon {
+  .ranking-header .el-icon {
     color: var(--primary-500);
     font-size: var(--text-lg);
   }
 
-  /* 任务列表 */
-  .task-list {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding-right: var(--space-2);
-  }
-
-  .task-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-5);
-    background: var(--bg-secondary);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-xl);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .task-item:hover {
+  .ranking-content {
+    padding: var(--space-4);
     background: var(--bg-primary);
-    border-color: var(--gray-300);
-    transform: translateY(-1px);
-    box-shadow: var(--elevation-2);
+    max-height: 450px;
+    overflow-y: auto;
   }
 
-  .task-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .task-name {
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--gray-900);
-    margin-bottom: var(--space-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .task-table {
-    font-size: var(--text-xs);
-    color: var(--gray-600);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .task-status {
-    flex-shrink: 0;
-    margin-left: var(--space-3);
-  }
-
-  .no-tasks {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-16);
-    color: var(--gray-500);
-    font-size: var(--text-sm);
-    text-align: center;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-xl);
-    margin: var(--space-4);
-  }
-
-  .no-tasks .el-icon {
-    font-size: var(--text-2xl);
-    color: var(--gray-400);
-  }
-
-  /* Cloudera风格：简洁无动画 */
 
   /* 响应式适配 */
   @media (max-width: 1200px) {
-    .main-monitoring-panel {
-      flex-direction: column;
-      gap: var(--space-6);
+    .dual-pie-charts,
+    .dual-rankings {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
     }
 
-    .panel-right {
-      width: 100%;
+
+    .overview-stats {
+      grid-template-columns: repeat(2, 1fr);
     }
   }
 
@@ -794,13 +752,29 @@
       padding: var(--space-4);
     }
 
-    .action-grid {
+    .pie-charts-section,
+    .rankings-section {
+      padding: var(--space-3);
+    }
+
+    .overview-stats {
       grid-template-columns: 1fr;
       gap: var(--space-3);
     }
 
-    .main-monitoring-panel {
+    .charts-header {
+      flex-direction: column;
+      align-items: flex-start;
       gap: var(--space-4);
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .chart-card {
+      min-height: 450px;
     }
   }
 </style>
