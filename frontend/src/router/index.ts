@@ -43,6 +43,12 @@ const router = createRouter({
       meta: { title: '任务管理', requiresCluster: true }
     },
     {
+      path: '/partition-archive',
+      name: 'PartitionArchive',
+      component: () => import('@/views/PartitionArchive.vue'),
+      meta: { title: '分区归档管理', requiresCluster: true }
+    },
+    {
       path: '/settings',
       name: 'Settings',
       component: () => import('@/views/Settings.vue'),

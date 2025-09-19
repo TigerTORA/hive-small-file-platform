@@ -60,6 +60,19 @@
                   <span class="nav-text">任务管理</span>
                 </router-link>
               </div>
+              <!-- 分区归档管理 -->
+              <div class="nav-item">
+                <router-link
+                  to="/partition-archive"
+                  class="nav-link"
+                  :class="{ active: $route.path === '/partition-archive' }"
+                >
+                  <div class="nav-icon">
+                    <el-icon><FolderOpened /></el-icon>
+                  </div>
+                  <span class="nav-text">分区归档</span>
+                </router-link>
+              </div>
             </div>
 
             <div class="nav-section">
@@ -206,7 +219,8 @@
     Sunny,
     Refresh,
     Expand,
-    Fold
+    Fold,
+    FolderOpened
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
@@ -231,6 +245,7 @@
       '/': '监控中心',
       '/clusters': '集群管理',
       '/tasks': '任务管理',
+      '/partition-archive': '分区归档管理',
       '/settings': '系统设置'
     }
 
