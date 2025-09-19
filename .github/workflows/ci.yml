@@ -37,7 +37,7 @@ jobs:
         working-directory: backend
         run: |
           export DATABASE_URL="sqlite:////tmp/hive_small_file_db.db"
-          # Phase-in: expand unit subset and raise coverage gate to 40%
+          # Phase-in: expand unit subset and raise coverage gate to 55%
           python -m pytest \
             test_performance_baseline.py \
             test_scanner.py \
@@ -47,6 +47,8 @@ jobs:
             tests/unit/utils/test_encryption_more.py \
             tests/unit/utils/test_encryption_none_inputs.py \
             tests/unit/utils/test_encryption_is_encrypted.py \
+            tests/unit/utils/test_merge_logger_extra.py \
+            tests/unit/utils/test_table_lock_manager_unit.py \
             tests/unit/services/test_path_resolver.py \
             tests/unit/services/test_path_resolver_extra.py \
             tests/unit/services/test_path_resolver_hs2_error.py \
@@ -61,10 +63,9 @@ jobs:
             tests/unit/services/test_scan_task_manager_unit.py \
             tests/unit/api/test_websocket_api_unit.py \
             tests/unit/api/test_websocket_api_endpoints.py \
-            tests/unit/api/test_clusters_api_direct.py \
-            tests/unit/api/test_clusters_api_more.py \
             tests/unit/api/test_websocket_handle_client_message.py \
             tests/unit/api/test_ws_broadcast_invalid_payload.py \
+            tests/unit/api/test_websocket_endpoint_errors.py \
             tests/unit/api/test_main_health.py \
             tests/unit/api/test_dashboard_extra_endpoints.py \
             tests/unit/api/test_dashboard_summary_more.py \
@@ -72,9 +73,12 @@ jobs:
             tests/unit/api/test_tables_module_direct.py \
             tests/unit/api/test_tables_module_more.py \
             tests/unit/api/test_table_scanning_api_direct.py \
-            tests/unit/api/test_websocket_endpoint_errors.py \
             tests/unit/api/test_table_management_api_direct.py \
             tests/unit/api/test_table_archiving_api_direct.py \
+            tests/unit/api/test_clusters_api_direct.py \
+            tests/unit/api/test_clusters_api_more.py \
+            tests/unit/api/test_scan_tasks_api_extra.py \
+            tests/unit/api/test_tasks_api_extra.py \
             tests/unit/api/test_errors_api_unit.py \
             tests/unit/engines/test_base_engine_helpers.py \
             tests/unit/engines/test_safe_hive_engine_refactored.py \
@@ -82,19 +86,7 @@ jobs:
             tests/unit/engines/test_connection_manager_unit.py \
             tests/unit/monitor/test_mock_hdfs_scanner.py \
             tests/unit/monitor/test_mysql_hive_connector.py \
-            tests/unit/utils/test_table_lock_manager_unit.py \
-            tests/unit/utils/test_merge_logger_extra.py \
             tests/unit/engines/test_validation_service_unit.py \
-            tests/unit/api/test_scan_tasks_api_extra.py \
-            tests/unit/services/test_enhanced_connection_service_connectors.py \
-            tests/unit/services/test_scan_task_manager_unit.py \
-            tests/unit/api/test_table_scanning_api_direct.py \
-            tests/unit/api/test_websocket_endpoint_errors.py \
-            tests/unit/api/test_clusters_api_direct.py \
-            tests/unit/api/test_clusters_api_more.py \
-            tests/unit/api/test_table_management_api_direct.py \
-            tests/unit/api/test_table_archiving_api_direct.py \
-            tests/unit/api/test_tasks_api_extra.py \
             tests/unit/test_ci_verification.py \
             --cov=app --cov-report=xml:coverage.xml --cov-fail-under=55 -v --tb=short
 
