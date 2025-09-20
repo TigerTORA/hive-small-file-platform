@@ -68,10 +68,11 @@
       @update-connection-status="updateConnectionStatus"
     />
 
-    <!-- 扫描进度对话框 -->
-    <ScanProgressDialog
+    <!-- 统一任务执行详情（扫描） -->
+    <TaskRunDialog
       v-model="showProgress"
-      :task-id="currentTaskId || undefined"
+      type="scan"
+      :scan-task-id="currentTaskId || undefined"
     />
   </div>
 </template>
@@ -89,7 +90,7 @@
   import ClusterList from '@/components/cluster/ClusterList.vue'
   import ClusterForm from '@/components/cluster/ClusterForm.vue'
   import ClusterConnectionManager from '@/components/cluster/ClusterConnectionManager.vue'
-  import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
 
   const router = useRouter()
   const monitoringStore = useMonitoringStore()

@@ -60,7 +60,27 @@ export const tablesApi = {
     page_size?: number
     database_name?: string
   }): Promise<{ items: TableMetric[]; total: number }> {
-    return api.get('/tables/metrics', { params })
+    return api.get('/tables/metrics', { params }).then((data: any) => {
+      // Backend usually returns an array of latest TableMetric rows.
+      // Normalize to { items, total } and apply client-side paging.
+      if (Array.isArray(data)) {
+        const total = data.length
+        const page = params.page && params.page > 0 ? params.page : 1
+        const size = params.page_size && params.page_size > 0 ? params.page_size : total
+        const start = (page - 1) * size
+        const end = start + size
+        return { items: data.slice(start, end), total }
+      }
+
+      // If API already returns a shape with items/total, pass through safely
+      if (data && Array.isArray(data.items)) {
+        const total = typeof data.total === 'number' ? data.total : data.items.length
+        return { items: data.items, total }
+      }
+
+      // Fallback: unknown shape
+      return { items: [], total: 0 }
+    })
   },
 
   // 获取分区指标（分区表）
@@ -217,6 +237,17 @@ export const tablesApi = {
     return api.post(`/tables/archive-table/${clusterId}/${databaseName}/${tableName}`, null, {
       params
     })
+  },
+
+  // 归档表（带后台任务与进度）
+  archiveTableWithProgress(
+    clusterId: number,
+    databaseName: string,
+    tableName: string,
+    force = false
+  ): Promise<{ task_id: string }> {
+    const params: any = { force }
+    return api.post(`/table-archiving/archive-with-progress/${clusterId}/${databaseName}/${tableName}`, null, { params })
   },
 
   // 恢复表

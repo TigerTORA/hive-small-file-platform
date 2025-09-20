@@ -20,7 +20,8 @@
     "test:e2e:debug": "playwright test --debug",
     "test:visual": "percy exec -- playwright test tests/visual/",
     "test:visual:local": "playwright test tests/visual/",
-    "test:visual:update": "percy exec -- playwright test tests/visual/ --update-snapshots"
+    "test:visual:update": "percy exec -- playwright test tests/visual/ --update-snapshots",
+    "mcp:browser": "node scripts/mcp/browser-server.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
@@ -37,6 +38,7 @@
     "vue3-grid-layout-next": "^1.0.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^0.1.0",
     "prettier": "^3.3.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
