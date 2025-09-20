@@ -196,11 +196,11 @@
       @retest="handleRetest"
     />
 
-    <!-- Scan Progress Dialog -->
-    <ScanProgressDialog
+    <!-- 统一任务执行详情（扫描） -->
+    <TaskRunDialog
       v-model="showProgressDialog"
-      :task-id="currentScanTaskId"
-      @completed="onScanCompleted"
+      type="scan"
+      :scan-task-id="currentScanTaskId || undefined"
     />
   </div>
 </template>
@@ -213,7 +213,7 @@
   import { clustersApi, type Cluster } from '@/api/clusters'
   import { tablesApi } from '@/api/tables'
   import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
-  import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
   import TablesView from '@/components/TablesView.vue'
   import TasksView from '@/components/TasksView.vue'
   import SmallFilesAnalysis from '@/components/SmallFilesAnalysis.vue'

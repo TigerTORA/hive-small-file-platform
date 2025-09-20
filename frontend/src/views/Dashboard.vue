@@ -1,5 +1,12 @@
 <template>
   <div class="dashboard">
+    <el-alert
+      v-if="renderError"
+      :title="'监控中心加载失败：' + renderError"
+      type="error"
+      show-icon
+      style="margin-bottom: 12px"
+    />
     <!-- 顶部概览统计卡片区域 -->
     <div class="overview-stats">
       <div class="stat-card" v-loading="isLoadingCharts">
@@ -211,11 +218,15 @@
     DataAnalysis
   } from '@element-plus/icons-vue'
   import { ElMessage } from 'element-plus'
+  import { useMonitoringStore } from '@/stores/monitoring'
+  import { clustersApi } from '@/api/clusters'
   import PieChart from '@/components/charts/PieChart.vue'
   import { dashboardApi, type FileClassificationItem, type EnhancedColdnessDistribution, type TopTable, type ColdDataItem, type DashboardSummary, type RecentTask, type FileDistributionItem, type TrendPoint } from '@/api/dashboard'
 
   // 双饼状图相关数据
-  const selectedClusterId = ref<number | null>(null)
+  const monitoringStore = useMonitoringStore()
+  const selectedClusterId = ref<number | null>(monitoringStore.settings.selectedCluster)
+  const renderError = ref<string | null>(null)
   const isLoadingCharts = ref(false)
   const fileClassificationItems = ref<FileClassificationItem[]>([])
   const coldnessDistribution = ref<EnhancedColdnessDistribution | null>(null)
@@ -489,11 +500,18 @@
     }
   }
 
-  // 监听集群选择变化
+  // 监听本页下拉和全局选择的集群变化
   watch(selectedClusterId, async (newClusterId) => {
     console.log('集群选择变化:', newClusterId)
     await loadChartData()
   })
+  watch(
+    () => monitoringStore.settings.selectedCluster,
+    async (cid) => {
+      selectedClusterId.value = cid
+      await loadChartData()
+    }
+  )
 
   // 监听趋势数据变化并重绘图表
   watch(trendData, () => {
@@ -502,11 +520,17 @@
 
   // 生命周期
   onMounted(async () => {
-    // 加载双饼状图数据
-    await loadChartData()
-    // 绘制趋势图
-    await nextTick()
-    drawTrendChart()
+    try {
+      // 同步已选集群
+      selectedClusterId.value = monitoringStore.settings.selectedCluster
+      // 加载图表数据
+      await loadChartData()
+      await nextTick()
+      drawTrendChart()
+    } catch (e: any) {
+      console.error('Dashboard mount error:', e)
+      renderError.value = e?.message || String(e)
+    }
   })
 </script>
 

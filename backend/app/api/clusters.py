@@ -13,11 +13,42 @@ from app.services.enhanced_connection_service import enhanced_connection_service
 
 router = APIRouter()
 
-@router.get("/", response_model=list[ClusterResponse])
+@router.get("/")
 async def list_clusters(db: Session = Depends(get_db)):
-    """List all clusters"""
-    clusters = db.query(Cluster).all()
-    return clusters
+    """List all clusters (robust encoding).
+
+    Use explicit serialization to avoid validation issues that may produce 500s
+    in heterogeneous records created by older versions.
+    """
+    try:
+        rows = db.query(Cluster).all()
+        result = []
+        for c in rows:
+            result.append({
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "hive_host": c.hive_host,
+                "hive_port": c.hive_port,
+                "hive_database": c.hive_database,
+                "hive_metastore_url": c.hive_metastore_url,
+                "hdfs_namenode_url": c.hdfs_namenode_url,
+                "hdfs_user": c.hdfs_user,
+                "auth_type": (c.auth_type or "NONE"),
+                "hive_username": c.hive_username,
+                "hive_password": None,  # never expose
+                "yarn_resource_manager_url": c.yarn_resource_manager_url,
+                "small_file_threshold": c.small_file_threshold,
+                "scan_enabled": bool(c.scan_enabled),
+                "status": c.status or "active",
+                "health_status": c.health_status or None,
+                "last_health_check": c.last_health_check.isoformat() if c.last_health_check else None,
+                "created_time": c.created_time.isoformat() if c.created_time else None,
+                "updated_time": c.updated_time.isoformat() if c.updated_time else None,
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list clusters: {str(e)}")
 
 @router.post("/", response_model=ClusterResponse)
 async def create_cluster(cluster: ClusterCreate, validate_connection: bool = False, db: Session = Depends(get_db)):
@@ -792,4 +823,3 @@ async def test_cluster_connection_enhanced(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Enhanced connection test failed: {str(e)}")
-

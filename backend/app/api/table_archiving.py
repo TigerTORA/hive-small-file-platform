@@ -15,6 +15,8 @@ from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.monitor.cold_data_scanner import SimpleColdDataScanner
 from app.monitor.simple_archive_engine import SimpleArchiveEngine
+from app.services.scan_service import scan_task_manager
+from app.config.database import SessionLocal
 
 router = APIRouter()
 
@@ -237,7 +239,7 @@ async def archive_table(
         archive_engine = SimpleArchiveEngine(cluster)
 
         archive_result = archive_engine.archive_table(
-            database_name=database_name, table_name=table_name, force=force
+            db_session=db, database_name=database_name, table_name=table_name, force=force
         )
 
         # 更新数据库记录
@@ -258,6 +260,84 @@ async def archive_table(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Archive failed: {str(e)}")
+
+
+@router.post("/archive-with-progress/{cluster_id}/{database_name}/{table_name}")
+async def archive_table_with_progress(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    force: bool = Query(False, description="强制归档，跳过检查"),
+    db: Session = Depends(get_db),
+):
+    """以后台任务形式执行归档，提供阶段与日志。返回 task_id 以供追踪。"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # 创建任务
+    task = scan_task_manager.create_scan_task(
+        db,
+        cluster_id=cluster_id,
+        task_type="archive-table",
+        task_name=f"归档表: {database_name}.{table_name}",
+        target_database=database_name,
+        target_table=table_name,
+    )
+
+    task_id = task.task_id
+
+    # 后台线程执行归档
+    def run_archive():
+        db_thread = SessionLocal()
+        try:
+            # 附带初始日志
+            scan_task_manager.add_log(task_id, "INFO", "初始化归档上下文", database_name, table_name, db=db_thread)
+            scan_task_manager.update_task_progress(db_thread, task_id, status="running", total_items=5, completed_items=0, current_item="准备")
+
+            # 前置校验
+            scan_task_manager.add_log(task_id, "INFO", "检查表状态与冷数据标记", database_name, table_name, db=db_thread)
+            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=1, current_item="校验")
+
+            archive_engine = SimpleArchiveEngine(cluster)
+
+            # 获取位置
+            scan_task_manager.add_log(task_id, "INFO", "获取存储位置并计算归档路径", database_name, table_name, db=db_thread)
+            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=2, current_item="定位")
+
+            # 执行归档
+            scan_task_manager.add_log(task_id, "INFO", "开始移动数据文件到归档位置", database_name, table_name, db=db_thread)
+            result = archive_engine.archive_table(
+                db_session=db_thread, database_name=database_name, table_name=table_name, force=force
+            )
+            scan_task_manager.add_log(task_id, "INFO", f"移动完成: {result.get('files_moved', 0)} 个文件", database_name, table_name, db=db_thread)
+            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=4, current_item="更新元数据")
+
+            # 元数据更新已在引擎内完成
+            scan_task_manager.add_log(task_id, "INFO", "更新元数据并提交", database_name, table_name, db=db_thread)
+            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=5, current_item="完成")
+            scan_task_manager.complete_task(db_thread, task_id, success=True)
+        except Exception as e:
+            try:
+                scan_task_manager.add_log(task_id, "ERROR", f"归档失败: {e}", database_name, table_name, db=db_thread)
+            finally:
+                scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
+        finally:
+            try:
+                db_thread.close()
+            except Exception:
+                pass
+
+    import threading
+    threading.Thread(target=run_archive, daemon=True).start()
+
+    return {
+        "message": "Archive started",
+        "task_id": task_id,
+        "cluster_id": cluster_id,
+        "progress_url": f"/api/v1/tables/scan-progress/{task_id}",
+        "status": "started",
+    }
 
 
 @router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")

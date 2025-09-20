@@ -4,7 +4,7 @@
     <div class="header-section">
       <div class="title-section">
         <h1>任务管理</h1>
-        <p>管理和监控您的小文件合并任务</p>
+        <p>统一管理与监控扫描任务、合并任务、归档任务</p>
       </div>
       <div class="actions-section">
         <el-button
@@ -25,412 +25,87 @@
       </div>
     </div>
 
-    <!-- Cloudera风格统计概览 -->
-    <div class="cloudera-metrics-grid stagger-animation">
-      <div
-        class="cloudera-metric-card stagger-item"
-        style="--stagger-delay: 0.1s"
-      >
-        <div class="metric-header">
-          <div class="metric-icon primary">
-            <el-icon><List /></el-icon>
-          </div>
-        </div>
-        <div class="metric-value">{{ totalTasks }}</div>
-        <div class="metric-label">总任务数</div>
-      </div>
-
-      <div
-        class="cloudera-metric-card stagger-item"
-        style="--stagger-delay: 0.2s"
-      >
-        <div class="metric-header">
-          <div class="metric-icon warning">
-            <el-icon><Clock /></el-icon>
-          </div>
-          <div class="metric-status">
-            <div class="status-dot warning"></div>
-          </div>
-        </div>
-        <div class="metric-value">{{ runningTasks }}</div>
-        <div class="metric-label">运行中</div>
-      </div>
-
-      <div
-        class="cloudera-metric-card stagger-item"
-        style="--stagger-delay: 0.3s"
-      >
-        <div class="metric-header">
-          <div class="metric-icon success">
-            <el-icon><CircleCheckFilled /></el-icon>
-          </div>
-        </div>
-        <div class="metric-value">{{ successTasks }}</div>
-        <div class="metric-label">已完成</div>
-      </div>
-
-      <div
-        class="cloudera-metric-card stagger-item"
-        style="--stagger-delay: 0.4s"
-      >
-        <div class="metric-header">
-          <div class="metric-icon danger">
-            <el-icon><CircleCloseFilled /></el-icon>
-          </div>
-        </div>
-        <div class="metric-value">{{ failedTasks }}</div>
-        <div class="metric-label">失败任务</div>
-      </div>
-    </div>
-
-    <!-- Cloudera风格标签页 -->
-    <div class="cloudera-tabs">
-      <div class="tab-nav">
-        <div
-          v-for="tab in tabs"
-          :key="tab.key"
-          :class="['tab-item', { active: activeTab === tab.key }]"
-          @click="activeTab = tab.key"
-        >
-          <el-icon><component :is="tab.icon" /></el-icon>
-          <span>{{ tab.label }}</span>
-        </div>
-      </div>
-
-      <div class="tab-content">
-        <!-- 合并任务标签页 -->
-        <div
-          v-show="activeTab === 'merge'"
-          class="tab-pane"
-        >
-          <div class="cloudera-table">
-            <div class="table-header">
-              <h3>合并任务列表</h3>
-              <div class="table-actions">
-                <el-input
-                  v-model="taskSearchText"
-                  placeholder="搜索任务名称或表名..."
-                  clearable
-                  class="search-input"
-                  style="width: 250px"
-                >
-                  <template #prefix>
-                    <el-icon><Search /></el-icon>
-                  </template>
-                </el-input>
-              </div>
+    <!-- 主体：筛选器 + 内容 -->
+    <div class="main-layout">
+      <!-- 筛选器（左侧） -->
+      <el-card class="filters-pane" shadow="never">
+        <div class="filters-title">筛选器</div>
+        <el-input v-model="globalSearch" placeholder="搜索任务名/表名/数据库" clearable size="small" class="filters-search" />
+        <div class="filter-section">
+          <div class="filter-header">状态</div>
+          <div class="filter-list">
+            <div v-for="s in statusOptions" :key="s.value" :class="['filter-item', { active: selectedStatuses.has(s.value) }]" @click="toggleStatus(s.value)">
+              <span class="name">{{ s.label }}</span>
+              <span class="count">{{ statusCounts[s.value] || 0 }}</span>
             </div>
-
-            <el-table
-              :data="filteredTasks"
-              stripe
-              v-loading="loading"
-              class="cloudera-data-table"
-            >
-              <el-table-column
-                prop="task_name"
-                label="任务名称"
-                width="200"
-              />
-              <el-table-column
-                prop="database_name"
-                label="数据库"
-                width="120"
-              />
-              <el-table-column
-                prop="table_name"
-                label="表名"
-                width="200"
-              />
-              <el-table-column
-                prop="merge_strategy"
-                label="合并策略"
-                width="120"
-              >
-                <template #default="{ row }">
-                  <el-tag
-                    :type="row.merge_strategy === 'concatenate' ? 'success' : 'warning'"
-                    size="small"
-                  >
-                    {{ row.merge_strategy === 'concatenate' ? '文件合并' : '重写插入' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="status"
-                label="状态"
-                width="120"
-              >
-                <template #default="{ row }">
-                  <div class="status-column">
-                    <el-tag
-                      :type="getStatusType(row.status)"
-                      size="small"
-                    >
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
-                    <div
-                      v-if="row.status === 'running'"
-                      class="execution-phase"
-                    >
-                      <span class="phase-text">{{ getExecutionPhase(row) }}</span>
-                    </div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="执行进度"
-                width="180"
-                v-if="hasRunningTasks"
-              >
-                <template #default="{ row }">
-                  <div
-                    v-if="row.status === 'running'"
-                    class="progress-column"
-                  >
-                    <el-progress
-                      :percentage="getTaskProgress(row)"
-                      :status="row.status === 'failed' ? 'exception' : undefined"
-                      :stroke-width="6"
-                    />
-                    <div class="progress-details">
-                      <span class="progress-text">{{ getProgressText(row) }}</span>
-                    </div>
-                  </div>
-                  <div
-                    v-else-if="row.status === 'success'"
-                    class="completed-info"
-                  >
-                    <el-icon color="#67c23a"><CircleCheckFilled /></el-icon>
-                    <span>已完成</span>
-                  </div>
-                  <div
-                    v-else-if="row.status === 'failed'"
-                    class="failed-info"
-                  >
-                    <el-icon color="#f56c6c"><CircleCloseFilled /></el-icon>
-                    <span>执行失败</span>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="处理前文件数"
-                width="140"
-              >
-                <template #default="{ row }">
-                  {{ displayFiles(row.files_before) }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="处理后文件数"
-                width="140"
-              >
-                <template #default="{ row }">
-                  {{ displayFiles(row.files_after) }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="created_time"
-                label="创建时间"
-                width="160"
-              >
-                <template #default="{ row }">
-                  {{ formatTime(row.created_time) }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="操作"
-                width="250"
-              >
-                <template #default="{ row }">
-                  <el-button
-                    v-if="row.status === 'pending'"
-                    @click="showPreview(row)"
-                    class="cloudera-btn info"
-                    size="small"
-                    >预览</el-button
-                  >
-                  <el-button
-                    v-if="row.status === 'pending'"
-                    @click="executeTask(row)"
-                    class="cloudera-btn primary"
-                    size="small"
-                    >执行</el-button
-                  >
-                  <el-button
-                    v-if="row.status === 'running'"
-                    @click="cancelTask(row)"
-                    class="cloudera-btn warning"
-                    size="small"
-                    >取消</el-button
-                  >
-                  <el-button
-                    @click="viewLogs(row)"
-                    class="cloudera-btn secondary"
-                    size="small"
-                    >日志</el-button
-                  >
-                </template>
-              </el-table-column>
-            </el-table>
           </div>
         </div>
+        <div class="filter-section">
+          <div class="filter-header">类型</div>
+          <div class="filter-list">
+            <div v-for="t in typeOptions" :key="t.value" :class="['filter-item', { active: selectedTypes.has(t.value) }]" @click="toggleType(t.value)">
+              <span class="name">{{ t.label }}</span>
+              <span class="count">{{ typeCounts[t.value] || 0 }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="filter-actions">
+          <el-button text size="small" @click="resetFilters">清除筛选</el-button>
+        </div>
+      </el-card>
 
-        <!-- 扫描任务标签页 -->
-        <div
-          v-show="activeTab === 'scan'"
-          class="tab-pane"
-        >
-          <div class="cloudera-table">
-            <div class="table-header">
-              <h3>扫描任务列表</h3>
-              <div class="table-actions">
-                <el-select
-                  v-model="scanClusterFilter"
-                  placeholder="全部集群"
-                  clearable
-                  style="width: 160px; margin-right: 8px"
-                >
-                  <el-option
-                    v-for="c in clusters"
-                    :key="c.id"
-                    :label="c.name"
-                    :value="c.id"
-                  />
-                </el-select>
-                <el-select
-                  v-model="scanStatusFilter"
-                  placeholder="全部状态"
-                  clearable
-                  style="width: 140px; margin-right: 8px"
-                >
-                  <el-option
-                    label="等待中"
-                    value="pending"
-                  />
-                  <el-option
-                    label="运行中"
-                    value="running"
-                  />
-                  <el-option
-                    label="已完成"
-                    value="completed"
-                  />
-                  <el-option
-                    label="失败"
-                    value="failed"
-                  />
-                </el-select>
-                <el-select
-                  v-model="scanAutoRefresh"
-                  placeholder="刷新频率"
-                  style="width: 140px; margin-right: 8px"
-                >
-                  <el-option
-                    :value="0"
-                    label="手动刷新"
-                  />
-                  <el-option
-                    :value="30"
-                    label="30秒"
-                  />
-                  <el-option
-                    :value="60"
-                    label="60秒"
-                  />
-                </el-select>
+      <!-- 内容（右侧） -->
+      <div class="content-pane">
+        <!-- 统一任务列表（单表） -->
+        <div class="cloudera-table">
+          <div class="table-header">
+            <h3>任务列表</h3>
+            <div class="table-actions">
+              <el-text type="info">共 {{ filteredAllTasks.length }} 条</el-text>
+            </div>
+          </div>
+          <el-table :data="filteredAllTasks" stripe class="cloudera-data-table">
+            <el-table-column prop="task_name" label="任务名称" min-width="240" />
+            <el-table-column label="类型" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" type="info">{{ row.type === 'merge' ? '合并' : row.type === 'scan' ? '扫描' : '归档' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="对象" min-width="220">
+              <template #default="{ row }">
+                {{ row.database_name && row.table_name ? `${row.database_name}.${row.table_name}` : '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="进度" width="200">
+              <template #default="{ row }">
+                <el-progress :percentage="row.progress || 0" :status="row.status === 'failed' ? 'exception' : undefined" />
+              </template>
+            </el-table-column>
+            <el-table-column label="开始时间" width="160">
+              <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
+            </el-table-column>
+            <el-table-column label="最近更新" width="160">
+              <template #default="{ row }">{{ formatTime(row.last_update || row.start_time) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="260" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" class="cloudera-btn secondary" @click="openRunRow(row)">查看日志</el-button>
                 <el-button
-                  @click="loadScanTasks"
-                  class="cloudera-btn secondary"
-                  >刷新</el-button
-                >
-              </div>
-            </div>
-
-            <el-table
-              :data="scanTasks"
-              stripe
-              v-loading="loadingScan"
-              class="cloudera-data-table"
-            >
-              <el-table-column
-                label="任务ID"
-                min-width="260"
-              >
-                <template #default="{ row }">
-                  <span class="mono">{{ shortId(row.task_id) }}</span>
-                  <el-button
-                    size="small"
-                    link
-                    @click="copyId(row.task_id)"
-                    >复制</el-button
-                  >
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="task_name"
-                label="任务名称"
-                min-width="200"
-              />
-              <el-table-column
-                prop="status"
-                label="状态"
-                width="100"
-              >
-                <template #default="{ row }">
-                  <el-tag
-                    :type="getStatusType(row.status)"
-                    size="small"
-                    >{{ getStatusText(row.status) }}</el-tag
-                  >
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="进度"
-                width="200"
-              >
-                <template #default="{ row }">
-                  <el-progress
-                    :percentage="row.progress_percentage || 0"
-                    :status="row.status === 'failed' ? 'exception' : undefined"
-                    style="width: 140px; margin-right: 6px"
-                  />
-                  <span style="font-size: 12px; color: #909399"
-                    >{{ (row.progress_percentage || 0).toFixed(0) }}%</span
-                  >
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="start_time"
-                label="开始时间"
-                width="160"
-              >
-                <template #default="{ row }">{{ formatTime(row.start_time) }}</template>
-              </el-table-column>
-              <el-table-column
-                prop="last_update"
-                label="最近更新"
-                width="160"
-              >
-                <template #default="{ row }">{{
-                  formatTime(row.last_update || row.end_time || row.start_time)
-                }}</template>
-              </el-table-column>
-              <el-table-column
-                label="操作"
-                width="180"
-              >
-                <template #default="{ row }">
-                  <el-button
-                    size="small"
-                    @click="openScanLogs(row.task_id)"
-                    class="cloudera-btn secondary"
-                    >查看日志</el-button
-                  >
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
+                  v-if="row.type === 'archive'"
+                  size="small"
+                  class="cloudera-btn primary"
+                  style="margin-left:6px"
+                  @click="restoreArchiveRow(row)"
+                >恢复</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </div>
     </div>
@@ -736,9 +411,11 @@
         </div>
       </template>
     </el-dialog>
-    <ScanProgressDialog
-      v-model="showScanDialog"
-      :task-id="selectedScanTaskId"
+    <TaskRunDialog
+      v-model="showRunDialog"
+      :type="runDialogType"
+      :scan-task-id="runScanTaskId || undefined"
+      :merge-task-id="runMergeTaskId || undefined"
     />
   </div>
 </template>
@@ -746,46 +423,42 @@
 <script setup lang="ts">
   import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
-  import {
-    Plus,
-    List,
-    Clock,
-    CircleCheckFilled,
-    CircleCloseFilled,
-    Refresh,
-    Search,
-    Loading
-  } from '@element-plus/icons-vue'
+  import { Plus, Refresh, Loading } from '@element-plus/icons-vue'
   import { tasksApi, type MergeTask, type MergeTaskCreate } from '@/api/tasks'
   import { clustersApi, type Cluster } from '@/api/clusters'
   import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
-  import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+  import { tablesApi } from '@/api/tables'
+  import { useMonitoringStore } from '@/stores/monitoring'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
   import dayjs from 'dayjs'
 
   // 数据
-  const activeTab = ref('merge')
   const taskSearchText = ref('')
-
-  // 标签页配置
-  const tabs = [
-    { key: 'merge', label: '合并任务', icon: 'List' },
-    { key: 'scan', label: '扫描任务', icon: 'Search' }
-  ]
+  const globalSearch = ref('')
+  // 归档任务（统一纳入单列表）所需状态
+  const monitoringStore = useMonitoringStore()
+  const selectedClusterId = computed(() => monitoringStore.settings.selectedCluster)
+  const archiveTasks = ref<any[]>([])
 
   const tasks = ref<MergeTask[]>([])
   const scanTasks = ref<ScanTask[]>([])
   const clusters = ref<Cluster[]>([])
   const loading = ref(false)
   const loadingScan = ref(false)
+  const loadingArchiveTables = ref(false)
+  const loadingArchivePartitions = ref(false)
   const showCreateDialog = ref(false)
   const showLogsDialog = ref(false)
   const showPreviewDialog = ref(false)
-  const showScanDialog = ref(false)
+  const showRunDialog = ref(false)
   const taskLogs = ref<any[]>([])
   const previewData = ref<any>(null)
   const previewLoading = ref(false)
   const previewingTask = ref<MergeTask | null>(null)
-  const selectedScanTaskId = ref<string | null>(null)
+  const runDialogType = ref<'scan' | 'merge' | 'archive'>('scan')
+  const runScanTaskId = ref<string | null>(null)
+  const runMergeTaskId = ref<number | null>(null)
+  // 归档任务数据（已移除界面，保留为将来扩展占位）
   // 扫描任务筛选与刷新
   const scanClusterFilter = ref<number | null>(null)
   const scanStatusFilter = ref<string>('')
@@ -818,21 +491,129 @@
   const taskFormRef = ref()
 
   // 计算属性
-  const totalTasks = computed(() => tasks.value.length)
-  const runningTasks = computed(() => tasks.value.filter(t => t.status === 'running').length)
-  const successTasks = computed(() => tasks.value.filter(t => t.status === 'success').length)
-  const failedTasks = computed(() => tasks.value.filter(t => t.status === 'failed').length)
+  // 统计卡片已移除，这些总计已不再使用
+
+  // 统一筛选器
+  const statusOptions = [
+    { label: '失败', value: 'failed' },
+    { label: '已成功', value: 'success' },
+    { label: '正在执行', value: 'running' },
+    { label: '已取消', value: 'cancelled' },
+    { label: '排队中', value: 'pending' }
+  ]
+  const typeOptions = [
+    { label: '合并任务', value: 'merge' },
+    { label: '扫描任务', value: 'scan' },
+    { label: '归档任务', value: 'archive' }
+  ]
+  const selectedStatuses = ref<Set<string>>(new Set())
+  const selectedTypes = ref<Set<string>>(new Set())
+  const toggleStatus = (s: string) => { const set = selectedStatuses.value; set.has(s) ? set.delete(s) : set.add(s) }
+  const toggleType = (t: string) => { const set = selectedTypes.value; set.has(t) ? set.delete(t) : set.add(t) }
+  const resetFilters = () => { selectedStatuses.value.clear(); selectedTypes.value.clear(); globalSearch.value = ''; taskSearchText.value = '' }
+
+  const normalizeStatus = (s: string) => (s === 'completed' ? 'success' : s)
+  const statusCounts = computed<Record<string, number>>(() => {
+    const map: Record<string, number> = {}
+    for (const r of tasks.value) { const s = normalizeStatus(r.status); map[s] = (map[s] || 0) + 1 }
+    for (const r of scanTasks.value) { const s = normalizeStatus(r.status); map[s] = (map[s] || 0) + 1 }
+    for (const r of archiveTasks.value) { const s = 'success'; map[s] = (map[s] || 0) + 1 }
+    return map
+  })
+  const typeCounts = computed<Record<string, number>>(() => ({
+    merge: tasks.value.length,
+    scan: scanTasks.value.length,
+    archive: archiveTasks.value.length
+  }))
+
+  const matchSearch = (text: string) => {
+    const q = (globalSearch.value || taskSearchText.value || '').trim().toLowerCase()
+    if (!q) return true
+    return (text || '').toLowerCase().includes(q)
+  }
 
   const filteredTasks = computed(() => {
-    if (!taskSearchText.value) return tasks.value
-    const search = taskSearchText.value.toLowerCase()
-    return tasks.value.filter(
-      task =>
-        task.task_name.toLowerCase().includes(search) ||
-        task.table_name.toLowerCase().includes(search) ||
-        task.database_name.toLowerCase().includes(search)
-    )
+    if (selectedTypes.value.size && !selectedTypes.value.has('merge')) return []
+    return tasks.value.filter(task => {
+      const s = normalizeStatus(task.status)
+      if (selectedStatuses.value.size && !selectedStatuses.value.has(s)) return false
+      const text = `${task.task_name} ${task.database_name}.${task.table_name}`
+      return matchSearch(text)
+    })
   })
+
+  // 统计卡片：根据筛选器后结果统计
+  // 统计卡片已移除：相关按筛选的统计也不再需要
+
+  const filteredScanTasks = computed(() => {
+    if (selectedTypes.value.size && !selectedTypes.value.has('scan')) return []
+    return scanTasks.value.filter(task => {
+      const s = normalizeStatus(task.status)
+      if (selectedStatuses.value.size && !selectedStatuses.value.has(s)) return false
+      const text = `${task.task_name || ''}`
+      return matchSearch(text)
+    })
+  })
+
+  // 单列表数据：统一合并/扫描任务
+  const filteredAllTasks = computed(() => {
+    const mergeRows = filteredTasks.value.map(row => ({
+      type: 'merge',
+      raw: row,
+      task_name: row.task_name,
+      database_name: row.database_name,
+      table_name: row.table_name,
+      status: row.status,
+      progress: getTaskProgress(row),
+      start_time: row.created_time,
+      last_update: (row as any).updated_time || row.created_time
+    }))
+    const scanRows = filteredScanTasks.value.map(r => ({
+      type: (r as any).task_type && String((r as any).task_type).startsWith('archive') ? 'archive' : 'scan',
+      raw: r,
+      task_name: r.task_name || '扫描任务',
+      database_name: null as any,
+      table_name: null as any,
+      status: normalizeStatus(r.status),
+      progress: r.progress_percentage || 0,
+      start_time: r.start_time,
+      last_update: (r as any).last_update || r.end_time || r.start_time,
+      task_id: r.task_id
+    }))
+    const archiveRows = (selectedTypes.value.size && !selectedTypes.value.has('archive'))
+      ? []
+      : archiveTasks.value.map(r => ({
+          type: 'archive',
+          raw: r,
+          task_name: r.task_name || `归档 ${r.database_name}.${r.table_name}`,
+          database_name: r.database_name,
+          table_name: r.table_name,
+          status: 'success',
+          progress: 100,
+          start_time: r.archived_at,
+          last_update: r.archived_at
+        }))
+    return [...mergeRows, ...scanRows, ...archiveRows].sort((a,b) => new Date(b.last_update || b.start_time).getTime() - new Date(a.last_update || a.start_time).getTime())
+  })
+
+  const openRunRow = (row: any) => {
+    if (row.type === 'scan') {
+      runDialogType.value = 'scan'
+      runScanTaskId.value = row.task_id || row.raw?.task_id
+      runMergeTaskId.value = null
+      showRunDialog.value = true
+    } else if (row.type === 'merge') {
+      runDialogType.value = 'merge'
+      runMergeTaskId.value = row.raw?.id
+      runScanTaskId.value = null
+      showRunDialog.value = true
+    } else if (row.type === 'archive') {
+      runDialogType.value = 'archive'
+      runScanTaskId.value = row.task_id || row.raw?.task_id || null
+      runMergeTaskId.value = null
+      showRunDialog.value = true
+    }
+  }
 
   // 方法
   const loadTasks = async () => {
@@ -859,6 +640,27 @@
     }
   }
 
+  // 加载归档任务（基于已归档表列表示例映射）
+  const loadArchiveTasks = async () => {
+    try {
+      archiveTasks.value = []
+      const cid = selectedClusterId.value
+      if (!cid) return
+      const res: any = await tablesApi.getArchivedTables(cid, 200)
+      const list = res?.archived_tables || res?.items || []
+      archiveTasks.value = list.map((t: any) => ({
+        cluster_id: cid,
+        database_name: t.database_name,
+        table_name: t.table_name,
+        archived_at: t.archived_at,
+        archive_location: t.archive_location,
+        task_name: `归档 ${t.database_name}.${t.table_name}`
+      }))
+    } catch (e) {
+      console.error('Failed to load archive tasks:', e)
+    }
+  }
+
   const loadClusters = async () => {
     try {
       clusters.value = await clustersApi.list()
@@ -866,6 +668,8 @@
       console.error('Failed to load clusters:', error)
     }
   }
+
+  // 归档相关功能已从该界面移除
 
   const createTask = async () => {
     try {
@@ -922,17 +726,40 @@
   }
 
   const viewLogs = async (task: MergeTask) => {
-    try {
-      taskLogs.value = await tasksApi.getLogs(task.id)
-      showLogsDialog.value = true
-    } catch (error) {
-      console.error('Failed to load task logs:', error)
-    }
+    runDialogType.value = 'merge'
+    runMergeTaskId.value = task.id
+    runScanTaskId.value = null
+    showRunDialog.value = true
   }
 
   const openScanLogs = (taskId: string) => {
-    selectedScanTaskId.value = taskId
-    showScanDialog.value = true
+    runDialogType.value = 'scan'
+    runScanTaskId.value = taskId
+    runMergeTaskId.value = null
+    showRunDialog.value = true
+  }
+
+  const restoreArchiveRow = async (row: any) => {
+    try {
+      const cid = selectedClusterId.value
+      if (!cid) {
+        ElMessage.warning('请先选择集群')
+        return
+      }
+      await ElMessageBox.confirm(`确定要恢复 ${row.database_name}.${row.table_name} 吗？`, '确认恢复', {
+        confirmButtonText: '恢复',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      await tablesApi.restoreTable(cid as number, row.database_name, row.table_name)
+      ElMessage.success('恢复成功')
+      await loadArchiveTasks()
+    } catch (e: any) {
+      if (e !== 'cancel') {
+        console.error('Restore archive failed:', e)
+        ElMessage.error(e?.message || '恢复失败')
+      }
+    }
   }
 
   const resetTaskForm = () => {
@@ -962,10 +789,11 @@
 
   const getStatusText = (status: string): string => {
     const statusMap: Record<string, string> = {
-      pending: '等待中',
-      running: '运行中',
-      success: '成功',
-      failed: '失败'
+      pending: '排队中',
+      running: '正在执行',
+      success: '已成功',
+      failed: '失败',
+      cancelled: '已取消'
     }
     return statusMap[status] || status
   }
@@ -973,6 +801,9 @@
   const formatTime = (time: string): string => {
     return dayjs(time).format('MM-DD HH:mm:ss')
   }
+
+  // 归档操作
+  // 归档恢复操作已移除
 
   // 显示文件数：统计失败或为空时显示 NaN
   const displayFiles = (value: number | null | undefined) => {
@@ -1208,12 +1039,17 @@
     loadTasks()
     loadClusters()
     loadScanTasks()
+    loadArchiveTasks()
 
     // 如果有运行中的任务，启动轮询
     if (hasRunningTasks.value) {
       startPolling()
     }
     setupScanAutoRefresh()
+  })
+
+  watch(selectedClusterId, () => {
+    loadArchiveTasks()
   })
 
   // 组件卸载时清理轮询
@@ -1238,6 +1074,8 @@
   }
 
   watch(scanAutoRefresh, setupScanAutoRefresh)
+
+  // 归档相关已移除
   watch([scanClusterFilter, scanStatusFilter], () => loadScanTasks())
 </script>
 
@@ -1279,6 +1117,21 @@
     gap: var(--space-4);
     align-items: center;
   }
+
+  /* 主布局与筛选器 */
+  .main-layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
+  .filters-pane { position: sticky; top: 12px; height: fit-content; }
+  .filters-title { font-weight: 600; color: var(--gray-900); margin-bottom: 8px; }
+  .filters-search { margin-bottom: 8px; }
+  .filter-section { margin-top: 12px; }
+  .filter-header { font-size: 13px; color: #606266; margin-bottom: 6px; }
+  .filter-list { display: flex; flex-direction: column; border: 1px solid #ebeef5; border-radius: 6px; }
+  .filter-item { display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; }
+  .filter-item:hover { background: #f5f7fa; }
+  .filter-item.active { background: #ecf5ff; }
+  .filter-item .name { color: #303133; }
+  .filter-item .count { color: #909399; }
+  .filter-actions { margin-top: 12px; text-align: right; }
 
   /* Cloudera风格标签页 */
   .cloudera-tabs {
@@ -1370,36 +1223,7 @@
   }
 
   /* 依次出现动画 */
-  .stagger-animation {
-    perspective: 1000px;
-  }
-
-  .stagger-item {
-    animation: staggerIn 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-    animation-delay: var(--stagger-delay, 0s);
-  }
-
-  .stagger-item:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: var(--elevation-4);
-  }
-
-  @keyframes staggerIn {
-    0% {
-      opacity: 0;
-      transform: translateY(30px) scale(0.95);
-    }
-    60% {
-      opacity: 0.8;
-      transform: translateY(-5px) scale(1.02);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
+  /* 统计卡片相关动画已移除 */
 
   .mono {
     font-family: Menlo, Monaco, monospace;
@@ -1534,10 +1358,7 @@
       max-width: 120px;
     }
 
-    .cloudera-metrics-grid {
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: var(--space-4);
-    }
+    /* 统计卡片已移除 */
   }
 
   @media (max-width: 768px) {
@@ -1551,9 +1372,7 @@
       text-align: center;
     }
 
-    .cloudera-metrics-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
+    /* 统计卡片已移除 */
 
     .tab-nav {
       flex-direction: column;

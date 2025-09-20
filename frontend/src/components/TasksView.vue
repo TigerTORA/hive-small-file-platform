@@ -176,10 +176,10 @@
       </el-tab-pane>
     </el-tabs>
 
-    <ScanProgressDialog
-      v-model="showScanDialog"
-      :task-id="selectedScanTaskId"
-      @completed="onScanCompleted"
+    <TaskRunDialog
+      v-model="showRunDialog"
+      type="scan"
+      :scan-task-id="selectedScanTaskId || undefined"
     />
   </div>
 </template>
@@ -190,7 +190,7 @@
   import { Refresh } from '@element-plus/icons-vue'
   import { tasksApi } from '@/api/tasks'
   import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
-  import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
   import dayjs from 'dayjs'
 
   interface Props {
@@ -206,7 +206,7 @@
   const loading = ref(false)
   const loadingScan = ref(false)
   const statusFilter = ref('')
-  const showScanDialog = ref(false)
+  const showRunDialog = ref(false)
   const selectedScanTaskId = ref<string | null>(null)
 
   // Computed
@@ -278,10 +278,11 @@
 
   const getStatusText = (status: string) => {
     const statusMap = {
-      pending: '等待中',
-      running: '运行中',
-      success: '已完成',
-      failed: '失败'
+      pending: '排队中',
+      running: '正在执行',
+      success: '已成功',
+      failed: '失败',
+      cancelled: '已取消'
     }
     return statusMap[status as keyof typeof statusMap] || status
   }
@@ -297,13 +298,14 @@
 
   const openScanLogs = (taskId: string) => {
     selectedScanTaskId.value = taskId
-    showScanDialog.value = true
+    showRunDialog.value = true
   }
 
   const onScanCompleted = async () => {
     ElMessage.success('扫描任务已完成')
     await loadScanTasks()
   }
+  
 </script>
 
 <style scoped>

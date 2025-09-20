@@ -47,7 +47,13 @@
                   <span class="nav-text">表管理</span>
                 </router-link>
               </div>
-              <!-- 任务管理 -->
+              <!-- 任务管理 moved to global section below -->
+              
+            </div>
+
+            <div class="nav-section">
+              <div class="nav-section-title">系统管理</div>
+              <!-- 任务管理（统一：扫描/合并/归档） → 全局可见 -->
               <div class="nav-item">
                 <router-link
                   to="/tasks"
@@ -60,23 +66,6 @@
                   <span class="nav-text">任务管理</span>
                 </router-link>
               </div>
-              <!-- 分区归档管理 -->
-              <div class="nav-item">
-                <router-link
-                  to="/partition-archive"
-                  class="nav-link"
-                  :class="{ active: $route.path === '/partition-archive' }"
-                >
-                  <div class="nav-icon">
-                    <el-icon><FolderOpened /></el-icon>
-                  </div>
-                  <span class="nav-text">分区归档</span>
-                </router-link>
-              </div>
-            </div>
-
-            <div class="nav-section">
-              <div class="nav-section-title">系统管理</div>
               <!-- 集群管理 - 总是显示 -->
               <div class="nav-item">
                 <router-link
@@ -187,12 +176,18 @@
           <!-- 主内容区域 -->
           <main class="page-content">
             <router-view v-slot="{ Component }">
-              <transition
-                name="page"
-                mode="out-in"
-              >
-                <component :is="Component" />
-              </transition>
+              <Suspense>
+                <template #default>
+                  <transition name="page">
+                    <component :is="Component" :key="$route.fullPath" />
+                  </transition>
+                </template>
+                <template #fallback>
+                  <div class="page-fallback">
+                    <el-skeleton animated :rows="8" />
+                  </div>
+                </template>
+              </Suspense>
             </router-view>
           </main>
         </div>
@@ -244,8 +239,8 @@
     const titleMap: Record<string, string> = {
       '/': '监控中心',
       '/clusters': '集群管理',
+      '/tables': '表管理',
       '/tasks': '任务管理',
-      '/partition-archive': '分区归档管理',
       '/settings': '系统设置'
     }
 
@@ -308,6 +303,7 @@
     overflow-y: visible;
     background: var(--bg-app);
   }
+  .page-fallback { padding: var(--space-6); }
 
   /* 用户信息样式 */
   .user-info {

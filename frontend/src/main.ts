@@ -7,6 +7,7 @@ import * as Sentry from '@sentry/vue'
 
 import App from './App.vue'
 import router from './router'
+import { useMonitoringStore } from '@/stores/monitoring'
 
 const app = createApp(App)
 
@@ -29,7 +30,16 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
-app.use(createPinia())
+// Setup Pinia and initialize global monitoring store early to avoid race conditions
+const pinia = createPinia()
+app.use(pinia)
+try {
+  const monitoringStore = useMonitoringStore(pinia)
+  monitoringStore.initialize()
+} catch (e) {
+  // best-effort init; don't block app startup
+  console.warn('Monitoring store init failed:', e)
+}
 app.use(router)
 app.use(ElementPlus)
 

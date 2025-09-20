@@ -7,7 +7,7 @@ import asyncio
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config.database import get_db
@@ -71,30 +71,24 @@ async def scan_tables(
 async def scan_all_cluster_databases_with_progress(
     cluster_id: int,
     strict_real: bool = Query(True, description="严格实连模式"),
-    max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数"),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数(为空表示不限制)"),
     db: Session = Depends(get_db),
 ):
-    """集群级批量扫描（带进度追踪）"""
+    """集群级批量扫描（带进度追踪）
+
+    简化为直接调用 ScanTaskManager.scan_cluster_with_progress，
+    由其内部创建任务并在后台线程执行，避免双重后台调度。
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     try:
-        # 创建后台扫描任务
-        task_id = scan_task_manager.create_cluster_scan_task(
-            cluster_id=cluster_id,
+        task_id = scan_task_manager.scan_cluster_with_progress(
+            db,
+            cluster_id,
+            max_tables_per_db=max_tables_per_db,
             strict_real=strict_real,
-            max_tables_per_db=max_tables_per_db or 0,
-        )
-
-        # 启动后台任务
-        background_tasks.add_task(
-            scan_task_manager.execute_cluster_scan,
-            task_id,
-            cluster,
-            strict_real,
-            max_tables_per_db,
         )
 
         return {
@@ -102,6 +96,7 @@ async def scan_all_cluster_databases_with_progress(
             "task_id": task_id,
             "cluster_id": cluster_id,
             "progress_url": f"/api/v1/tables/scan-progress/{task_id}",
+            "status": "started",
         }
 
     except Exception as e:

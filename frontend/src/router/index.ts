@@ -40,7 +40,7 @@ const router = createRouter({
       path: '/tasks',
       name: 'Tasks',
       component: () => import('@/views/Tasks.vue'),
-      meta: { title: '任务管理', requiresCluster: true }
+      meta: { title: '任务管理' }
     },
     {
       path: '/partition-archive',
@@ -65,6 +65,16 @@ const router = createRouter({
 
 // 路由守卫：检查集群选择和设置页面标题
 router.beforeEach((to, from, next) => {
+  // 若访问根路径且尚未选择集群，统一跳转到集群管理
+  try {
+    const monitoringStore = useMonitoringStore()
+    const hasCluster = !!monitoringStore.settings.selectedCluster
+    if (to.path === '/' && !hasCluster) {
+      next('/clusters')
+      return
+    }
+  } catch {}
+
   // 设置页面标题
   if (to.meta?.title) {
     document.title = `${to.meta.title} - DataNova`
@@ -73,9 +83,9 @@ router.beforeEach((to, from, next) => {
   // 检查是否需要集群权限
   if (to.meta?.requiresCluster) {
     const monitoringStore = useMonitoringStore()
-
+    const hasCluster = !!monitoringStore.settings.selectedCluster
     // 如果没有选择集群，重定向到集群管理页面
-    if (!monitoringStore.hasSelectedCluster) {
+    if (!hasCluster) {
       const targetPath = encodeURIComponent(to.fullPath)
       next(`/clusters?redirect=${targetPath}`)
       return

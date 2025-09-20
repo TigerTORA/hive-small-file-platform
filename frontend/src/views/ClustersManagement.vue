@@ -1,5 +1,16 @@
 <template>
   <div class="clusters-management">
+    <el-alert
+      v-if="loadError"
+      :title="'加载集群失败：' + loadError"
+      type="error"
+      show-icon
+      style="margin-bottom: 12px"
+    >
+      <template #default>
+        <el-button size="small" class="cloudera-btn secondary" @click="reloadClusters">重试</el-button>
+      </template>
+    </el-alert>
     <!-- 页面标题和操作栏 -->
     <div class="header-section">
       <div class="title-section">
@@ -382,10 +393,11 @@
       :error="testError"
       @retest="handleRetest"
     />
-    <!-- 扫描进度对话框 -->
-    <ScanProgressDialog
+    <!-- 统一任务执行详情（扫描） -->
+    <TaskRunDialog
       v-model="showProgress"
-      :task-id="currentTaskId || undefined"
+      type="scan"
+      :scan-task-id="currentTaskId || undefined"
     />
   </div>
 </template>
@@ -412,7 +424,7 @@
   import { clustersApi, type Cluster, type ClusterCreate } from '@/api/clusters'
   import { useMonitoringStore } from '@/stores/monitoring'
   import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
-  import ScanProgressDialog from '@/components/ScanProgressDialog.vue'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
   import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator.vue'
   import { tablesApi } from '@/api/tables'
   import dayjs from 'dayjs'
@@ -423,6 +435,7 @@
   // 数据
   const clusters = ref<Cluster[]>([])
   const loading = ref(false)
+  const loadError = ref<string | null>(null)
   const showCreateDialog = ref(false)
   const showProgress = ref(false)
   const currentTaskId = ref<string | null>(null)
@@ -561,15 +574,20 @@
   // 方法
   const loadClusters = async () => {
     loading.value = true
+    loadError.value = null
     try {
       clusters.value = await clustersApi.list()
-      // 加载集群统计数据
       await loadClusterStats()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load clusters:', error)
+      loadError.value = error?.response?.data?.detail || error?.message || '请求失败'
     } finally {
       loading.value = false
     }
+  }
+
+  const reloadClusters = () => {
+    loadClusters()
   }
 
   // 触发集群扫描（带进度）
