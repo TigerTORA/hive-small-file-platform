@@ -38,7 +38,7 @@
     "vue3-grid-layout-next": "^1.0.7"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.18.1",
     "prettier": "^3.3.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
