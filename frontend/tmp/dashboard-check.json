@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "steps": [
+    "goto http://127.0.0.1:3000/#/",
+    "wait page title visible",
+    "wait overview grid visible"
+  ],
+  "errors": [],
+  "screenshot": "/Users/luohu/new_project/hive-small-file-platform/frontend/tmp/dashboard-page.png",
+  "logs": [
+    "[debug] [vite] connecting...",
+    "[debug] [vite] connected.",
+    "[log] [FeatureFlags] Development mode: feature flags available in window object"
+  ]
+}

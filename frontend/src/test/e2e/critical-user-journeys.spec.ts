@@ -78,8 +78,8 @@ test.describe('关键用户场景测试', () => {
       await page.goto(`${APP_URL}/#/tasks?demo=true`)
       await page.waitForLoadState('networkidle')
 
-      // 验证任务列表加载
-      await expect(page.locator('.task-list, .tasks-table')).toBeVisible()
+      // 验证任务列表加载（适配新版统一表格）
+      await expect(page.locator('.task-list, .tasks-table, .cloudera-data-table')).toBeVisible()
 
       // 步骤2：创建新的扫描任务
       const createTaskBtn = page.locator('text=创建任务, button:has-text("创建")')
@@ -144,7 +144,7 @@ test.describe('关键用户场景测试', () => {
       await page.waitForLoadState('networkidle')
 
       // 验证表列表加载
-      await expect(page.locator('.table-list, .tables-table')).toBeVisible()
+      await expect(page.locator('.table-list, .tables-table, .cloudera-data-table')).toBeVisible()
 
       // 步骤2：使用搜索功能
       const searchInput = page.locator('input[placeholder*="搜索"], .search-input')
@@ -271,7 +271,7 @@ test.describe('关键用户场景测试', () => {
 
       // 验证表格在平板端的显示
       await page.goto(`${APP_URL}/#/tables?demo=true`)
-      await expect(page.locator('.table-list, .tables-table')).toBeVisible()
+      await expect(page.locator('.table-list, .tables-table, .cloudera-data-table')).toBeVisible()
     })
 
     test('应该在大屏设备上正确显示', async ({ page }) => {

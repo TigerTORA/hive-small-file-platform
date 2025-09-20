@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "steps": [
+    "goto dashboard",
+    "goto tables",
+    "back to dashboard"
+  ],
+  "errors": [],
+  "shots": {
+    "dashboard1": "/Users/luohu/new_project/hive-small-file-platform/frontend/tmp/nav-1-dashboard.png",
+    "tables": "/Users/luohu/new_project/hive-small-file-platform/frontend/tmp/nav-2-tables.png",
+    "dashboard2": "/Users/luohu/new_project/hive-small-file-platform/frontend/tmp/nav-3-dashboard.png"
+  },
+  "logs": [
+    "[debug] [vite] connecting...",
+    "[debug] [vite] connected.",
+    "[log] [FeatureFlags] Development mode: feature flags available in window object",
+    "[info] <Suspense> is an experimental feature and its API will likely change.",
+    "[warning] [Vue warn]: Component inside <Transition> renders non-element root node that cannot be animated. \n  at <Tables onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< null > key=\"/tables\" > \n  at <BaseTransition appear=false persisted=false mode=undefined  ... > \n  at <Transition name=\"page\" > \n  at <RouterView> \n  at <FeatureFlagProvider> \n  at <App>"
+  ]
+}

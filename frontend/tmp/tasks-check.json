@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "steps": [
+    "goto http://127.0.0.1:3000/#/tasks",
+    "wait title",
+    "wait filters pane",
+    "wait unified table header",
+    "wait table element"
+  ],
+  "errors": [],
+  "screenshot": "/Users/luohu/new_project/hive-small-file-platform/frontend/tmp/tasks-page.png",
+  "logs": [
+    "[debug] [vite] connecting...",
+    "[debug] [vite] connected.",
+    "[log] [FeatureFlags] Development mode: feature flags available in window object",
+    "[info] <Suspense> is an experimental feature and its API will likely change."
+  ]
+}
