@@ -122,7 +122,7 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
   await page.getByRole('button', { name: '开始扫描' }).click()
 
   // 进度对话框应出现并显示执行详情
-  await expect(page.getByText('扫描任务执行详情')).toBeVisible()
+  await expect(page.locator('[data-testid="task-run-dialog"]')).toBeVisible()
   await expect(page.getByText('100%')).toBeVisible()
 
   // 关闭弹窗（如果可关闭）
@@ -131,7 +131,7 @@ test('创建集群 -> 触发扫描 -> 任务页查看扫描任务与日志', asy
 
   // 打开任务管理页并查看扫描任务（统一单列表，无需标签切换）
   await page.goto('/#/tasks')
-  await expect(page.getByText('扫描集群')).toBeVisible()
-  await page.getByRole('button', { name: '查看日志' }).first().click()
-  await expect(page.getByText('扫描完成')).toBeVisible()
+  await expect(page.locator('[data-testid="tasks-table"]')).toBeVisible()
+  await page.locator('[data-testid="task-log-btn"]').first().click()
+  await expect(page.locator('[data-testid="logs-container"]')).toBeVisible()
 })

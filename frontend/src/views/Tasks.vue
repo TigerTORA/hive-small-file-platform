@@ -1,5 +1,5 @@
 <template>
-  <div class="tasks-management">
+  <div class="tasks-management" data-testid="tasks-page">
     <!-- Cloudera风格页面头部 -->
     <div class="header-section">
       <div class="title-section">
@@ -28,7 +28,7 @@
     <!-- 主体：筛选器 + 内容 -->
     <div class="main-layout">
       <!-- 筛选器（左侧） -->
-      <el-card class="filters-pane" shadow="never">
+      <el-card class="filters-pane" shadow="never" data-testid="tasks-filters">
         <div class="filters-title">筛选器</div>
         <el-input v-model="globalSearch" placeholder="搜索任务名/表名/数据库" clearable size="small" class="filters-search" />
         <div class="filter-section">
@@ -65,7 +65,7 @@
               <el-text type="info">共 {{ filteredAllTasks.length }} 条</el-text>
             </div>
           </div>
-          <el-table :data="filteredAllTasks" stripe class="cloudera-data-table">
+          <el-table :data="filteredAllTasks" stripe class="cloudera-data-table" data-testid="tasks-table">
             <el-table-column prop="task_name" label="任务名称" min-width="240" />
             <el-table-column label="类型" width="100">
               <template #default="{ row }">
@@ -95,7 +95,7 @@
             </el-table-column>
             <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" class="cloudera-btn secondary" @click="openRunRow(row)">查看日志</el-button>
+                <el-button size="small" class="cloudera-btn secondary" data-testid="task-log-btn" @click="openRunRow(row)">查看日志</el-button>
                 <el-button
                   v-if="row.type === 'archive'"
                   size="small"

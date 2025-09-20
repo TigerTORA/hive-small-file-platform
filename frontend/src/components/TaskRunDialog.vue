@@ -5,6 +5,7 @@
     width="960px"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
+    data-testid="task-run-dialog"
   >
     <div class="task-run">
       <!-- Header summary -->
@@ -58,7 +59,7 @@
           </div>
 
           <!-- Logs -->
-          <div class="logs" ref="logsRef">
+          <div class="logs" ref="logsRef" data-testid="logs-container">
             <div
               v-for="(l, i) in filteredLogs"
               :key="i"

@@ -1,5 +1,5 @@
 <template>
-  <div class="tables">
+  <div class="tables" data-testid="tables-page">
     <el-card>
       <template #header>
         <div class="card-header">
@@ -13,12 +13,12 @@
             >
               <el-option v-for="db in databases" :key="db" :label="db" :value="db" />
             </el-select>
-            <el-input v-model="searchText" placeholder="搜索表名..." clearable style="width: 260px">
+            <el-input v-model="searchText" placeholder="搜索表名..." clearable style="width: 260px" data-testid="tables-search">
               <template #prefix>
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-dropdown split-button type="primary" @click="onScanDefault" @command="handleScanCommand" style="margin-left: 8px">
+            <el-dropdown split-button type="primary" @click="onScanDefault" @command="handleScanCommand" style="margin-left: 8px" data-testid="scan-btn">
               扫描
               <template #dropdown>
                 <el-dropdown-menu>
@@ -86,7 +86,7 @@
 
       <!-- 主体内容：页签 + 表格 + 分页（保留原有） -->
       <div class="main-content">
-          <el-tabs v-model="activeTab">
+          <el-tabs v-model="activeTab" data-testid="tables-tabs">
             <el-tab-pane label="小文件/合并" name="merge">
               <el-table :data="displayRowsMerge" stripe v-loading="loading" @selection-change="onSelectionChange">
                 <el-table-column type="selection" width="44" />
