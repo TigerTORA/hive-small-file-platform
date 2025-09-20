@@ -204,14 +204,15 @@ async def test_scan_all_cluster_databases_with_progress(db_session, monkeypatch)
 
     c = _mk_cluster(db_session)
 
-    monkeypatch.setattr(ts.scan_task_manager, "create_cluster_scan_task", lambda cluster_id, strict_real, max_tables_per_db: "tid-x", raising=False)
+    # 直接使用新的统一方法，返回 task_id
+    monkeypatch.setattr(
+        ts.scan_task_manager,
+        "scan_cluster_with_progress",
+        lambda db, cluster_id, max_tables_per_db=None, strict_real=True: "tid-x",
+        raising=False,
+    )
 
-    called = {"exec": False}
-
-    async def fake_exec(task_id, cluster, strict_real, max_tables_per_db):
-        called["exec"] = True
-
-    monkeypatch.setattr(ts.scan_task_manager, "execute_cluster_scan", fake_exec, raising=False)
-
-    resp = await ts.scan_all_cluster_databases_with_progress(c.id, strict_real=True, max_tables_per_db=3, db=db_session)
-    assert resp["task_id"] == "tid-x" and resp["cluster_id"] == c.id
+    resp = await ts.scan_all_cluster_databases_with_progress(
+        c.id, strict_real=True, max_tables_per_db=3, db=db_session
+    )
+    assert resp["task_id"] == "tid-x" and resp["cluster_id"] == c.id and resp["status"] == "started"
