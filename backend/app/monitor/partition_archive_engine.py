@@ -390,8 +390,11 @@ class PartitionArchiveEngine:
         try:
             logger.info(f"开始移动分区数据从 {source_path} 到 {target_path}")
 
-            # 创建WebHDFS客户端
-            hdfs_client = WebHDFSClient(self.cluster.hdfs_url, user="hdfs")
+            # 创建WebHDFS客户端（使用配置中的 NameNode URL 与用户）
+            hdfs_client = WebHDFSClient(
+                getattr(self.cluster, 'hdfs_namenode_url', None) or getattr(self.cluster, 'hdfs_url', ''),
+                user=getattr(self.cluster, 'hdfs_user', 'hdfs') or 'hdfs'
+            )
 
             try:
                 # 1. 检查源路径是否存在
@@ -459,8 +462,11 @@ class PartitionArchiveEngine:
         try:
             logger.info(f"开始恢复分区数据从 {archive_path} 到 {restore_path}")
 
-            # 创建WebHDFS客户端
-            hdfs_client = WebHDFSClient(self.cluster.hdfs_url, user="hdfs")
+            # 创建WebHDFS客户端（使用配置中的 NameNode URL 与用户）
+            hdfs_client = WebHDFSClient(
+                getattr(self.cluster, 'hdfs_namenode_url', None) or getattr(self.cluster, 'hdfs_url', ''),
+                user=getattr(self.cluster, 'hdfs_user', 'hdfs') or 'hdfs'
+            )
 
             try:
                 # 1. 检查归档路径是否存在

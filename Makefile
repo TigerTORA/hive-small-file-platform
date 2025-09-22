@@ -44,6 +44,12 @@ dev:
 	@echo "Starting backend (8000) and frontend (Vite)..."
 	(\
 	  cd backend && uvicorn app.main:app --reload --port 8000 \
+	    --reload-dir app \
+	    --reload-exclude "venv/*" \
+	    --reload-exclude ".pytest_cache/*" \
+	    --reload-exclude "alembic/*" \
+	    --reload-exclude "var/*" \
+	    --reload-exclude "*.db" \
 	) & \
 	(\
 	  cd frontend && npm run dev \

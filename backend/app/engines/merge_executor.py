@@ -14,6 +14,7 @@ from app.engines.connection_manager import HiveConnectionManager
 from app.engines.validation_service import MergeTaskValidationService
 from app.models.merge_task import MergeTask
 from app.utils.merge_logger import MergeLogLevel, MergePhase, MergeTaskLogger
+from app.utils.webhdfs_client import WebHDFSClient
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,17 @@ class MergeTaskExecutor:
                 task.database_name
             ) as conn:
                 cursor = conn.cursor()
+                # 压缩与reducer控制（尽量通用，具体格式由Hive决定）
+                try:
+                    cursor.execute("SET hive.exec.compress.output=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
+                    # 单文件提示：将 reducer 限制为 1（若表过大，Hive/Tez可能调整；作为尽力控制）
+                    if task.target_file_size is not None and task.target_file_size < 0:
+                        cursor.execute("SET hive.exec.reducers.max=1")
+                        cursor.execute("SET mapreduce.job.reduces=1")
+                except Exception:
+                    pass
                 cursor.execute(sql)
 
             merge_logger.log(
@@ -282,6 +294,52 @@ class MergeTaskExecutor:
 
             table_identifier = f"{task.database_name}.{task.table_name}"
 
+            # 非分区：优先尝试影子目录写出 + 原子目录切换（零停机），失败则回退为直接 INSERT OVERWRITE TABLE
+            if not task.partition_filter:
+                try:
+                    table_path = self._get_table_path(task)
+                    if table_path:
+                        storage_format = self._get_table_format(task)
+                        parent = "/".join(p for p in table_path.rstrip('/').split('/')[:-1]) or "/"
+                        ts = int(time.time())
+                        shadow = f"{parent}/.merge_shadow_{ts}"
+                        backup = f"{parent}/.merge_backup_{ts}"
+
+                        merge_logger.log(MergePhase.EXECUTION, MergeLogLevel.INFO, f"Shadow write to {shadow} (format={storage_format})")
+                        sql_shadow = f"INSERT OVERWRITE DIRECTORY '{shadow}'"
+                        if storage_format in ("PARQUET", "ORC"):
+                            sql_shadow += f" STORED AS {storage_format}"
+                        sql_shadow += f" SELECT * FROM {table_identifier}"
+
+                        with self.connection_manager.get_hive_connection(task.database_name) as conn:
+                            cursor = conn.cursor()
+                            try:
+                                cursor.execute("SET hive.exec.compress.output=true")
+                                cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
+                                cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
+                                if task.target_file_size is not None and task.target_file_size < 0:
+                                    cursor.execute("SET hive.exec.reducers.max=1")
+                                    cursor.execute("SET mapreduce.job.reduces=1")
+                            except Exception:
+                                pass
+                            cursor.execute(sql_shadow)
+
+                        # 目录切换
+                        hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
+                        ok1, msg1 = hdfs.move_file(table_path, backup)
+                        if not ok1:
+                            raise RuntimeError(f"备份原目录失败: {msg1}")
+                        ok2, msg2 = hdfs.move_file(shadow, table_path)
+                        if not ok2:
+                            # 回滚
+                            hdfs.move_file(backup, table_path)
+                            raise RuntimeError(f"切换影子目录失败: {msg2}")
+
+                        merge_logger.log(MergePhase.EXECUTION, MergeLogLevel.INFO, "Shadow swap completed")
+                        return {"success": True, "message": "Shadow swap completed", "backup_path": backup, "shadow_path": shadow}
+                except Exception as shadow_error:
+                    logger.warning(f"Shadow swap failed, fallback to in-place overwrite: {shadow_error}")
+
             if task.partition_filter:
                 # 对分区表执行分区级别的INSERT OVERWRITE
                 partition_spec = self._partition_filter_to_spec(task.partition_filter)
@@ -305,6 +363,16 @@ class MergeTaskExecutor:
                 task.database_name
             ) as conn:
                 cursor = conn.cursor()
+                # 基础压缩/单文件控制
+                try:
+                    cursor.execute("SET hive.exec.compress.output=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
+                    if task.target_file_size is not None and task.target_file_size < 0:
+                        cursor.execute("SET hive.exec.reducers.max=1")
+                        cursor.execute("SET mapreduce.job.reduces=1")
+                except Exception:
+                    pass
                 cursor.execute(sql)
 
             merge_logger.log(
@@ -327,6 +395,56 @@ class MergeTaskExecutor:
                 f"INSERT OVERWRITE failed: {e}",
             )
             return {"success": False, "message": f"INSERT OVERWRITE failed: {str(e)}"}
+
+    def _get_table_path(self, task: MergeTask) -> Optional[str]:
+        """尝试从 MetaStore/Hive 获取表 LOCATION"""
+        try:
+            connector = getattr(self.connection_manager, 'metastore_connector', None)
+            if connector and hasattr(connector, 'get_table_location'):
+                if not getattr(connector, '_connection', None):
+                    connector.connect()
+                return connector.get_table_location(task.database_name, task.table_name)
+        except Exception:
+            pass
+        # 兜底：DESCRIBE FORMATTED 解析 Location
+        try:
+            with self.connection_manager.get_hive_connection(task.database_name) as conn:
+                cur = conn.cursor()
+                cur.execute(f"DESCRIBE FORMATTED {task.database_name}.{task.table_name}")
+                for row in cur.fetchall():
+                    try:
+                        col = str(row[0] if len(row) > 0 else '')
+                        val = str(row[1] if len(row) > 1 else '')
+                        if col.strip().lower().startswith('location'):
+                            return val.strip()
+                    except Exception:
+                        continue
+        except Exception:
+            return None
+        return None
+
+    def _get_table_format(self, task: MergeTask) -> str:
+        """解析表存储格式：PARQUET/ORC/TEXTFILE（默认）"""
+        try:
+            with self.connection_manager.get_hive_connection(task.database_name) as conn:
+                cur = conn.cursor()
+                cur.execute(f"DESCRIBE FORMATTED {task.database_name}.{task.table_name}")
+                for row in cur.fetchall():
+                    try:
+                        col = str(row[0] if len(row) > 0 else '')
+                        val = str(row[1] if len(row) > 1 else '')
+                        if 'InputFormat' in col:
+                            low = val.lower()
+                            if 'parquet' in low:
+                                return 'PARQUET'
+                            if 'orc' in low:
+                                return 'ORC'
+                            return 'TEXTFILE'
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return 'TEXTFILE'
 
     def _report_progress(self, phase: str, message: str):
         """报告执行进度"""
