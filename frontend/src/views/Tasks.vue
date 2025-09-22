@@ -49,6 +49,15 @@
             </div>
           </div>
         </div>
+        <div class="filter-section">
+          <div class="filter-header">归档子类型</div>
+          <div class="filter-list">
+            <div v-for="t in archiveSubtypeOptions" :key="t.value" :class="['filter-item', { active: selectedArchiveSubtypes.has(t.value) }]" @click="toggleArchiveSubtype(t.value)">
+              <span class="name">{{ t.label }}</span>
+              <span class="count">{{ archiveSubtypeCounts[t.value] || 0 }}</span>
+            </div>
+          </div>
+        </div>
         
         <div class="filter-actions">
           <el-button text size="small" @click="resetFilters">清除筛选</el-button>
@@ -57,7 +66,8 @@
 
       <!-- 内容（右侧） -->
       <div class="content-pane">
-        <!-- 统一任务列表（单表） -->
+        <!-- 统一任务列表（单表）占满可用高度，在容器内部滚动 -->
+        <div class="list-scroll">
         <div class="cloudera-table">
           <div class="table-header">
             <h3>任务列表</h3>
@@ -67,14 +77,46 @@
           </div>
           <el-table :data="filteredAllTasks" stripe class="cloudera-data-table">
             <el-table-column prop="task_name" label="任务名称" min-width="240" />
-            <el-table-column label="类型" width="100">
+            <el-table-column label="类型" width="120">
               <template #default="{ row }">
-                <el-tag size="small" type="info">{{ row.type === 'merge' ? '合并' : row.type === 'scan' ? '扫描' : '归档' }}</el-tag>
+                <template v-if="row.type === 'archive'">
+                  <el-tag size="small" :type="archiveTypeTag(row.subtype)">
+                    {{ archiveTypeLabel(row.subtype) }}
+                  </el-tag>
+                </template>
+                <template v-else>
+                  <el-tag size="small" type="info">{{ row.type === 'merge' ? '合并' : '扫描' }}</el-tag>
+                </template>
               </template>
             </el-table-column>
             <el-table-column label="对象" min-width="220">
               <template #default="{ row }">
                 {{ row.database_name && row.table_name ? `${row.database_name}.${row.table_name}` : '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column v-if="showArchiveSummaryColumn" label="归档详情" min-width="360">
+              <template #default="{ row }">
+                <template v-if="row.type === 'archive' && row.subtype === 'archive-table'">
+                  <span class="mono">moved={{ archiveSummaries[row.task_id]?.files_moved ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">loc={{ shortPath(archiveSummaries[row.task_id]?.archive_location) }}</span>
+                </template>
+                <template v-else-if="row.type === 'archive' && row.subtype === 'archive-table-policy'">
+                  <span class="mono">ok={{ archiveSummaries[row.task_id]?.paths_success ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">fail={{ archiveSummaries[row.task_id]?.paths_failed ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">policy={{ archiveSummaries[row.task_id]?.effective ?? 'COLD' }}</span>
+                </template>
+                <template v-else-if="row.type === 'archive' && row.subtype === 'restore-table'">
+                  <span class="mono">restored={{ archiveSummaries[row.task_id]?.files_restored ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">loc={{ shortPath(archiveSummaries[row.task_id]?.restored_location) }}</span>
+                </template>
+                <template v-else-if="row.type === 'archive' && row.subtype === 'restore-table-policy'">
+                  <span class="mono">ok={{ archiveSummaries[row.task_id]?.paths_success ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">fail={{ archiveSummaries[row.task_id]?.paths_failed ?? '-' }}</span>
+                  <span class="mono" style="margin-left:8px">policy={{ archiveSummaries[row.task_id]?.effective ?? 'HOT' }}</span>
+                </template>
+                <template v-else>
+                  <span>-</span>
+                </template>
               </template>
             </el-table-column>
             <el-table-column label="状态" width="120">
@@ -106,6 +148,7 @@
               </template>
             </el-table-column>
           </el-table>
+        </div>
         </div>
       </div>
     </div>
@@ -512,6 +555,16 @@
   const toggleType = (t: string) => { const set = selectedTypes.value; set.has(t) ? set.delete(t) : set.add(t) }
   const resetFilters = () => { selectedStatuses.value.clear(); selectedTypes.value.clear(); globalSearch.value = ''; taskSearchText.value = '' }
 
+  // 归档子类型筛选（仅对归档类scan任务生效）
+  const archiveSubtypeOptions = [
+    { label: '表归档', value: 'archive-table' },
+    { label: '表恢复', value: 'restore-table' },
+    { label: '策略归档', value: 'archive-table-policy' },
+    { label: '策略恢复', value: 'restore-table-policy' },
+  ]
+  const selectedArchiveSubtypes = ref<Set<string>>(new Set())
+  const toggleArchiveSubtype = (v: string) => { const set = selectedArchiveSubtypes.value; set.has(v) ? set.delete(v) : set.add(v) }
+
   const normalizeStatus = (s: string) => (s === 'completed' ? 'success' : s)
   const statusCounts = computed<Record<string, number>>(() => {
     const map: Record<string, number> = {}
@@ -525,6 +578,15 @@
     scan: scanTasks.value.length,
     archive: archiveTasks.value.length
   }))
+
+  const archiveSubtypeCounts = computed<Record<string, number>>(() => {
+    const m: Record<string, number> = {}
+    for (const r of scanTasks.value) {
+      const sub = String((r as any).task_type)
+      if (sub.startsWith('archive') || sub.startsWith('restore')) m[sub] = (m[sub] || 0) + 1
+    }
+    return m
+  })
 
   const matchSearch = (text: string) => {
     const q = (globalSearch.value || taskSearchText.value || '').trim().toLowerCase()
@@ -550,6 +612,14 @@
     return scanTasks.value.filter(task => {
       const s = normalizeStatus(task.status)
       if (selectedStatuses.value.size && !selectedStatuses.value.has(s)) return false
+      // 归档子类型筛选
+      const tt = String((task as any).task_type || '')
+      if (tt.startsWith('archive')) {
+        if (selectedArchiveSubtypes.value.size && !selectedArchiveSubtypes.value.has(tt)) return false
+      } else {
+        // 如果选择了归档子类型，非归档scan任务应被排除
+        if (selectedArchiveSubtypes.value.size) return false
+      }
       const text = `${task.task_name || ''}`
       return matchSearch(text)
     })
@@ -569,7 +639,7 @@
       last_update: (row as any).updated_time || row.created_time
     }))
     const scanRows = filteredScanTasks.value.map(r => ({
-      type: (r as any).task_type && String((r as any).task_type).startsWith('archive') ? 'archive' : 'scan',
+      type: (r as any).task_type && (String((r as any).task_type).startsWith('archive') || String((r as any).task_type).startsWith('restore')) ? 'archive' : 'scan',
       raw: r,
       task_name: r.task_name || '扫描任务',
       database_name: null as any,
@@ -578,7 +648,8 @@
       progress: r.progress_percentage || 0,
       start_time: r.start_time,
       last_update: (r as any).last_update || r.end_time || r.start_time,
-      task_id: r.task_id
+      task_id: r.task_id,
+      subtype: (r as any).task_type
     }))
     const archiveRows = (selectedTypes.value.size && !selectedTypes.value.has('archive'))
       ? []
@@ -633,6 +704,8 @@
       const cid = scanClusterFilter.value || undefined
       const status = scanStatusFilter.value || undefined
       scanTasks.value = await scanTasksApi.list(cid as any, status)
+      // 仅为归档与恢复任务异步加载概要
+      await refreshArchiveSummaries()
     } catch (error) {
       console.error('Failed to load scan tasks:', error)
     } finally {
@@ -747,12 +820,22 @@
         return
       }
       await ElMessageBox.confirm(`确定要恢复 ${row.database_name}.${row.table_name} 吗？`, '确认恢复', {
-        confirmButtonText: '恢复',
+        confirmButtonText: '恢复（后台任务）',
         cancelButtonText: '取消',
         type: 'warning'
       })
-      await tablesApi.restoreTable(cid as number, row.database_name, row.table_name)
-      ElMessage.success('恢复成功')
+      const resp = await tablesApi.restoreTableWithProgress(cid as number, row.database_name, row.table_name)
+      const taskId = (resp as any)?.task_id
+      if (taskId) {
+        // 打开归档任务运行对话框
+        runDialogType.value = 'archive'
+        runScanTaskId.value = taskId
+        runMergeTaskId.value = null
+        showRunDialog.value = true
+        ElMessage.success('已提交恢复任务')
+      } else {
+        ElMessage.success('恢复任务已提交')
+      }
       await loadArchiveTasks()
     } catch (e: any) {
       if (e !== 'cancel') {
@@ -796,6 +879,80 @@
       cancelled: '已取消'
     }
     return statusMap[status] || status
+  }
+
+  // 归档/恢复任务：行高亮与概要
+  const archiveTypeLabel = (sub: string) => {
+    if (sub === 'archive-table') return '表归档'
+    if (sub === 'restore-table') return '表恢复'
+    if (sub === 'archive-table-policy') return '策略归档'
+    if (sub === 'restore-table-policy') return '策略恢复'
+    if (sub && sub.startsWith('archive')) return '归档'
+    return '扫描'
+  }
+  const archiveTypeTag = (sub: string) => {
+    if (sub === 'archive-table') return 'warning'
+    if (sub === 'restore-table') return 'success'
+    if (sub === 'archive-table-policy') return 'primary'
+    if (sub === 'restore-table-policy') return 'success'
+    return 'info'
+  }
+  const showArchiveSummaryColumn = true
+  const archiveSummaries = ref<Record<string, any>>({})
+  const shortPath = (p?: string) => {
+    if (!p) return '-'
+    if (p.length <= 36) return p
+    const parts = p.split('/')
+    if (parts.length > 4) return `${parts.slice(0,3).join('/')}/…/${parts.slice(-2).join('/')}`
+    return p.slice(0, 16) + '…' + p.slice(-12)
+  }
+  const parseStructured = (msg: string): { code?: string; ctx?: Record<string,string> } => {
+    // 形如: "[ARCHIVE] A150 数据移动完成 files_moved=10 archive_location=/..."
+    const m = msg.match(/\]\s*(\w+)\s+/)
+    const code = m ? m[1] : undefined
+    const ctx: Record<string, string> = {}
+    const kvRe = /(\w+)=([^\s]+)/g
+    let mm
+    while ((mm = kvRe.exec(msg)) !== null) {
+      ctx[mm[1]] = mm[2]
+    }
+    return { code, ctx }
+  }
+  const refreshArchiveSummaries = async () => {
+    // 挑选 archive/restore 表任务
+    const candidates = (scanTasks.value || []).filter((t: any) => ['archive-table', 'restore-table', 'archive-table-policy', 'restore-table-policy'].includes(String(t.task_type)))
+    for (const t of candidates) {
+      const tid = t.task_id
+      if (!tid) continue
+      // 若已缓存且任务已完成，不再重复加载
+      if (archiveSummaries.value[tid] && (t.status === 'completed' || t.status === 'failed')) continue
+      try {
+        const logs = await scanTasksApi.getLogs(tid)
+        const acc: any = {}
+        for (const l of logs || []) {
+          const { code, ctx } = parseStructured(String(l.message || ''))
+          if (!code || !ctx) continue
+          if (code === 'A150') {
+            if (ctx.files_moved) acc.files_moved = Number(ctx.files_moved)
+            if (ctx.archive_location) acc.archive_location = ctx.archive_location
+          }
+          if (code === 'PL120') {
+            if (ctx.paths_success) acc.paths_success = Number(ctx.paths_success)
+            if (ctx.paths_failed) acc.paths_failed = Number(ctx.paths_failed)
+            if (ctx.effective) acc.effective = ctx.effective
+          }
+          if (code === 'AR190') {
+            if (ctx.files_restored) acc.files_restored = Number(ctx.files_restored)
+            if (ctx.restored_location) acc.restored_location = ctx.restored_location
+          }
+        }
+        if (Object.keys(acc).length) {
+          archiveSummaries.value[tid] = { ...(archiveSummaries.value[tid] || {}), ...acc }
+        }
+      } catch (e) {
+        // 忽略日志加载失败
+      }
+    }
   }
 
   const formatTime = (time: string): string => {
@@ -1081,8 +1238,11 @@
 
 <style scoped>
   .tasks-management {
-    padding: var(--space-3) var(--space-4) 400px var(--space-4);
-    min-height: 150vh;
+    padding: var(--space-3) var(--space-4) var(--space-8) var(--space-4);
+    min-height: 100vh;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     overflow-y: visible;
     background: var(--bg-app);
   }
@@ -1119,8 +1279,14 @@
   }
 
   /* 主布局与筛选器 */
-  .main-layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
-  .filters-pane { position: sticky; top: 12px; height: fit-content; }
+  .main-layout {
+    display: grid; grid-template-columns: 260px 1fr; gap: 16px;
+    flex: 1 1 auto; min-height: 0; overflow: hidden;
+  }
+  .content-pane { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .list-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  /* 筛选保持 sticky，跟随 page-content 内滚动 */
+  .filters-pane { position: sticky; top: var(--space-2); align-self: start; max-height: calc(100vh - 96px); overflow: auto; }
   .filters-title { font-weight: 600; color: var(--gray-900); margin-bottom: 8px; }
   .filters-search { margin-bottom: 8px; }
   .filter-section { margin-top: 12px; }
@@ -1140,6 +1306,38 @@
     border: 1px solid var(--gray-200);
     box-shadow: var(--elevation-1);
     overflow: hidden;
+  }
+
+  /* 防止表格在小屏横向撑爆，允许内部区域滚动 */
+  .cloudera-data-table { width: 100%; }
+  .cloudera-data-table :deep(.el-table__header-wrapper),
+  .cloudera-data-table :deep(.el-table__body-wrapper) { overflow-x: auto; }
+  /* 表头吸顶（相对于 .list-scroll） */
+  .cloudera-data-table :deep(.el-table__header-wrapper) {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg-primary);
+    box-shadow: 0 1px 0 var(--gray-200);
+  }
+
+  @media (max-width: 1280px) {
+    .main-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .filters-pane {
+      position: static;
+      order: -1;
+    }
+  }
+
+  /* 更小屏幕时隐藏次要列，提升自适应性 */
+  @media (max-width: 992px) {
+    .cloudera-data-table :deep(.el-table__header th:nth-child(4)),
+    .cloudera-data-table :deep(.el-table__body td:nth-child(4)) { /* 归档详情/对象等较宽列按需裁剪 */
+      display: none;
+    }
   }
 
   .tab-nav {

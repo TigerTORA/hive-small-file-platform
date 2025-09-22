@@ -244,10 +244,23 @@ export const tablesApi = {
     clusterId: number,
     databaseName: string,
     tableName: string,
-    force = false
+    force = false,
+    opts?: { mode?: 'move' | 'storage-policy'; policy?: string; recursive?: boolean }
   ): Promise<{ task_id: string }> {
     const params: any = { force }
+    if (opts?.mode) params.mode = opts.mode
+    if (opts?.policy) params.policy = opts.policy
+    if (typeof opts?.recursive === 'boolean') params.recursive = opts.recursive
     return api.post(`/table-archiving/archive-with-progress/${clusterId}/${databaseName}/${tableName}`, null, { params })
+  },
+
+  // 恢复表（带后台任务与进度）
+  restoreTableWithProgress(
+    clusterId: number,
+    databaseName: string,
+    tableName: string
+  ): Promise<{ task_id: string }> {
+    return api.post(`/table-archiving/restore-with-progress/${clusterId}/${databaseName}/${tableName}`)
   },
 
   // 恢复表

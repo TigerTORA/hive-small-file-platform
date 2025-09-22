@@ -221,6 +221,53 @@
           </el-select>
         </el-form-item>
 
+        <!-- HAR SSH 配置（仅前端保存：用于 HAR 任务默认参数） -->
+        <el-divider content-position="left">
+          <span style="color: #606266; font-weight: 500">HAR SSH 配置（可选）</span>
+        </el-divider>
+        <div class="tip-muted">用于 Hadoop Archives 任务的默认 SSH 与 Kerberos 参数，保存在浏览器本地（按集群）。</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="SSH 主机">
+              <el-input v-model="harSsh.host" placeholder="edgenode.example.com" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="端口">
+              <el-input-number v-model="harSsh.port" :min="1" :max="65535" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="用户">
+              <el-input v-model="harSsh.user" placeholder="hdfs" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="私钥路径">
+              <el-input v-model="harSsh.keyPath" placeholder="/home/hdfs/.ssh/id_rsa（服务端可访问路径）" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="kinit 主体">
+              <el-input v-model="harSsh.principal" placeholder="hdfs@REALM（可选）" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="keytab 路径">
+              <el-input v-model="harSsh.keytab" placeholder="/etc/security/keytabs/hdfs.keytab（可选）" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="命令预览">
+              <el-input type="textarea" :rows="2" :model-value="harPreview" readonly />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <el-form-item
           label="集群名称"
           prop="name"
@@ -504,6 +551,28 @@
     scan_enabled: true
   })
 
+  // HAR SSH 配置（本地存储，按集群）
+  type HarSshConfig = { host: string; port: number; user: string; keyPath?: string; principal?: string; keytab?: string }
+  const defaultHar = (): HarSshConfig => ({ host: '', port: 22, user: 'hdfs', keyPath: '', principal: '', keytab: '' })
+  const harSsh = ref<HarSshConfig>(defaultHar())
+  const harKey = (id: number) => `har-ssh.${id}`
+  const loadHarSsh = (id?: number) => {
+    if (!id) { harSsh.value = defaultHar(); return }
+    try { const raw = localStorage.getItem(harKey(id)); harSsh.value = raw ? JSON.parse(raw) : defaultHar() } catch { harSsh.value = defaultHar() }
+  }
+  const saveHarSsh = (id: number) => {
+    try { localStorage.setItem(harKey(id), JSON.stringify(harSsh.value)) } catch {}
+  }
+  const harPreview = computed(() => {
+    const host = harSsh.value.host || '<ssh-host>'
+    const user = harSsh.value.user || 'hdfs'
+    const port = harSsh.value.port || 22
+    const key = harSsh.value.keyPath ? `-i ${harSsh.value.keyPath} ` : ''
+    const kinit = harSsh.value.principal && harSsh.value.keytab ? `kinit -kt ${harSsh.value.keytab} ${harSsh.value.principal} && ` : ''
+    const cmd = `${kinit}hadoop archive -archiveName foo.har -p /parent dir1 dir2 /dest`
+    return `ssh ${key}-p ${port} ${user}@${host} -- ${cmd}`
+  })
+
   const clusterRules = {
     name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
     hive_host: [{ required: true, message: '请输入 Hive 主机地址', trigger: 'blur' }],
@@ -670,14 +739,19 @@
 
       if (editingCluster.value) {
         await clustersApi.update(editingCluster.value.id, clusterForm.value)
+        // 保存 HAR SSH 本地配置
+        saveHarSsh(editingCluster.value.id)
         ElMessage.success('集群更新成功')
       } else {
         // 创建集群时选择是否验证连接
         if (validateConnection.value) {
-          await clustersApi.createWithValidation(clusterForm.value)
+          const created = await clustersApi.createWithValidation(clusterForm.value)
+          // 保存 HAR SSH 本地配置
+          if (created?.id) saveHarSsh(created.id)
           ElMessage.success('集群创建成功（已验证连接）')
         } else {
-          await clustersApi.create(clusterForm.value)
+          const created = await clustersApi.create(clusterForm.value)
+          if ((created as any)?.id) saveHarSsh((created as any).id)
           ElMessage.success('集群创建成功')
         }
       }
@@ -695,6 +769,7 @@
   const editCluster = (cluster: Cluster) => {
     editingCluster.value = cluster
     clusterForm.value = { ...cluster }
+    loadHarSsh(cluster.id)
     showCreateDialog.value = true
   }
 
@@ -924,6 +999,7 @@
       small_file_threshold: 128 * 1024 * 1024,
       scan_enabled: true
     }
+    harSsh.value = defaultHar()
   }
 
   // 连接状态管理函数
@@ -1172,8 +1248,8 @@
 
 <style scoped>
   .clusters-management {
-    padding: var(--space-3) var(--space-4) 400px var(--space-4);
-    min-height: 150vh;
+    padding: var(--space-3) var(--space-4) var(--space-8) var(--space-4);
+    min-height: 100vh;
     background: var(--bg-app);
     overflow-y: visible;
   }
