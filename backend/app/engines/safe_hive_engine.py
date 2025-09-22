@@ -1,5 +1,7 @@
 import logging
 import re
+import socket
+import threading
 from typing import Dict, Any, Optional, List, Callable
 from datetime import datetime
 import time
@@ -118,7 +120,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         }
         
         try:
-            # 连接检查
+            # 连接检查（严格：WebHDFS/Hive 任一失败则不可执行）
             if not self._test_connections():
                 result['valid'] = False
                 result['message'] = 'Failed to connect to Hive or HDFS'
@@ -337,7 +339,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             merge_logger.start_phase(MergePhase.CONNECTION_TEST, "建立Hive、HDFS、YARN连接")
             self._report_progress('connecting', 'Establishing connections to Hive and HDFS')
             
-            if not self._test_connections():
+            if not self._test_connections(merge_logger=merge_logger, task=task, db_session=db_session):
                 merge_logger.end_phase(MergePhase.CONNECTION_TEST, "连接测试失败", success=False, details={
                     "hive_host": self.cluster.hive_host,
                     "hdfs_namenode": self.cluster.hdfs_namenode_url,
@@ -399,7 +401,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 current_operation=f"创建临时表: {temp_table_name}"
             )
             
-            create_temp_sql = self._create_temp_table_with_logging(task, temp_table_name, merge_logger)
+            create_temp_sql = self._create_temp_table_with_logging(task, temp_table_name, merge_logger, db_session)
             result['sql_executed'].extend(create_temp_sql)
             result['temp_table_created'] = temp_table_name
             
@@ -448,32 +450,86 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 files_after=files_after
             )
             
-            # 第三步：原子切换表（关键步骤）
-            merge_logger.start_phase(MergePhase.ATOMIC_SWAP, "执行原子表切换")
-            self._report_progress('atomic_swap', 'Performing atomic table swap')
-            
-            # 更新进度：原子切换阶段
-            self._update_task_progress(
-                task, db_session,
-                execution_phase="atomic_swap",
-                progress_percentage=75.0,
-                processed_files_count=files_after,
-                current_operation="执行原子表切换"
-            )
-            
-            swap_sql = self._atomic_table_swap_with_logging(task, temp_table_name, backup_table_name, merge_logger)
-            result['sql_executed'].extend(swap_sql)
-            result['backup_table_created'] = backup_table_name
-            
-            merge_logger.end_phase(MergePhase.ATOMIC_SWAP, "原子表切换完成")
-            
-            # 更新进度：原子切换完成
-            self._update_task_progress(
-                task, db_session,
-                execution_phase="atomic_swap",
-                progress_percentage=85.0,
-                current_operation="原子表切换完成"
-            )
+            # 第三步：切换为新数据
+            # 读取原表 External/Location 信息，用于决定切换策略
+            fmt_info_after = self._get_table_format_info(task.database_name, task.table_name)
+            table_type_after = str(fmt_info_after.get('table_type', '')).upper()
+            is_external = 'EXTERNAL' in table_type_after
+            original_location = self._get_table_location(task.database_name, task.table_name) or ''
+            parent_dir = '/'.join([p for p in original_location.rstrip('/').split('/')[:-1]]) if original_location else ''
+            # 直接读取临时表LOCATION，作为影子目录来源
+            temp_location = self._get_table_location(task.database_name, temp_table_name) or ''
+            if is_external and original_location and temp_location:
+                merge_logger.start_phase(MergePhase.ATOMIC_SWAP, "外部表目录切换")
+                self._report_progress('atomic_swap', 'Swapping external table directory')
+                self._update_task_progress(
+                    task, db_session,
+                    execution_phase="atomic_swap",
+                    progress_percentage=75.0,
+                    processed_files_count=files_after,
+                    current_operation="执行外部表目录切换"
+                )
+                hdfs: WebHDFSClient = self.webhdfs_client
+                ts_id = int(time.time())
+                # 首选：备份到 .merge_shadow 根
+                shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ''
+                backup_dir = f"{shadow_root}/backup_{ts_id}"
+                ok1, msg1 = hdfs.move_file(original_location, backup_dir)
+                if not ok1:
+                    # 对部分 HttpFS 环境，rename 至 .merge_shadow 可能抛 500 IllegalStateException；回退到父目录下的 .merge_backup_<ts>
+                    alt_backup_dir = f"{parent_dir}/.merge_backup_{ts_id}" if parent_dir else ''
+                    merge_logger.log_hdfs_operation("rename", original_location, MergePhase.ATOMIC_SWAP, success=False, error_message=msg1)
+                    if alt_backup_dir:
+                        ok1b, msg1b = hdfs.move_file(original_location, alt_backup_dir)
+                        if ok1b:
+                            backup_dir = alt_backup_dir
+                        else:
+                            raise RuntimeError(f"备份原目录失败: {msg1}; fallback: {msg1b}")
+                    else:
+                        raise RuntimeError(f"备份原目录失败: {msg1}")
+                merge_logger.log_hdfs_operation("rename", original_location, MergePhase.ATOMIC_SWAP, success=True, stats={"to": backup_dir})
+                ok2, msg2 = hdfs.move_file(temp_location, original_location)
+                if not ok2:
+                    # 回滚还原
+                    hdfs.move_file(backup_dir, original_location)
+                    merge_logger.log_hdfs_operation("rename", temp_location, MergePhase.ATOMIC_SWAP, success=False, error_message=msg2)
+                    raise RuntimeError(f"切换影子目录失败: {msg2}")
+                merge_logger.log_hdfs_operation("rename", temp_location, MergePhase.ATOMIC_SWAP, success=True, stats={"to": original_location})
+                # 删除临时表元数据
+                try:
+                    conn = self._create_hive_connection(task.database_name)
+                    cur = conn.cursor(); cur.execute(f"DROP TABLE IF EXISTS {temp_table_name}"); cur.close(); conn.close()
+                except Exception:
+                    pass
+                result['backup_table_created'] = backup_dir
+                merge_logger.end_phase(MergePhase.ATOMIC_SWAP, "外部表目录切换完成")
+                self._update_task_progress(
+                    task, db_session,
+                    execution_phase="atomic_swap",
+                    progress_percentage=85.0,
+                    current_operation="外部表目录切换完成"
+                )
+            else:
+                # 非外部表：重命名表对象
+                merge_logger.start_phase(MergePhase.ATOMIC_SWAP, "执行原子表切换")
+                self._report_progress('atomic_swap', 'Performing atomic table swap')
+                self._update_task_progress(
+                    task, db_session,
+                    execution_phase="atomic_swap",
+                    progress_percentage=75.0,
+                    processed_files_count=files_after,
+                    current_operation="执行原子表切换"
+                )
+                swap_sql = self._atomic_table_swap_with_logging(task, temp_table_name, backup_table_name, merge_logger)
+                result['sql_executed'].extend(swap_sql)
+                result['backup_table_created'] = backup_table_name
+                merge_logger.end_phase(MergePhase.ATOMIC_SWAP, "原子表切换完成")
+                self._update_task_progress(
+                    task, db_session,
+                    execution_phase="atomic_swap",
+                    progress_percentage=85.0,
+                    current_operation="原子表切换完成"
+                )
             
             # 切换完成后，重新统计一次目标表文件数，确保展示准确
             try:
@@ -652,15 +708,41 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             logger.error(f"Failed to estimate duration: {e}")
             return 600  # 默认10分钟
     
-    def _test_connections(self) -> bool:
-        """测试连接：Hive 成功即可放行，HDFS 失败仅告警"""
+    def _test_connections(self, *, merge_logger: Optional[MergeTaskLogger] = None,
+                          task: Optional[MergeTask] = None,
+                          db_session: Optional[Session] = None,
+                          timeout_sec: int = 10) -> bool:
+        """测试连接：输出更详细的日志并增加心跳，Hive 必须成功。
+
+        过程：
+        1) WebHDFS 自检（失败仅告警）
+        2) Hive TCP 探测（3s 超时）
+        3) HiveServer2 连接 + SELECT 1（超时 + 心跳日志）
+        """
         # 1) HDFS/HttpFS（不作为阻塞条件）
         try:
+            if merge_logger:
+                merge_logger.log(MergePhase.CONNECTION_TEST, MergeLogLevel.INFO,
+                                 "开始测试 WebHDFS 连接", details={"namenode": self.cluster.hdfs_namenode_url})
             ok, msg = self.webhdfs_client.test_connection()
             if not ok:
-                logger.warning(f"WebHDFS test failed: {msg} (non-blocking)")
+                logger.error(f"WebHDFS test failed: {msg}")
+                if merge_logger:
+                    merge_logger.log_hdfs_operation("connect", self.cluster.hdfs_namenode_url,
+                                                    MergePhase.CONNECTION_TEST, success=False,
+                                                    error_message=str(msg))
+                return False
+            else:
+                if merge_logger:
+                    merge_logger.log_hdfs_operation("connect", self.cluster.hdfs_namenode_url,
+                                                    MergePhase.CONNECTION_TEST, stats={"ok": True}, success=True)
         except Exception as e:
-            logger.warning(f"WebHDFS test exception: {e} (non-blocking)")
+            logger.error(f"WebHDFS test exception: {e}")
+            if merge_logger:
+                merge_logger.log(MergePhase.CONNECTION_TEST, MergeLogLevel.ERROR,
+                                 f"WebHDFS 测试异常: {e}",
+                                 details={"namenode": self.cluster.hdfs_namenode_url})
+            return False
 
         # 2) Hive（必须成功）
         try:
@@ -676,11 +758,71 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 hive_conn_params['auth'] = 'LDAP'
                 logger.info(f"Using LDAP authentication for user: {self.cluster.hive_username}")
 
-            conn = hive.Connection(**hive_conn_params)
-            cursor = conn.cursor(); cursor.execute('SELECT 1'); cursor.fetchall()
-            cursor.close(); conn.close()
-            logger.info("Hive connection test passed")
-            return True
+            # 2.1 TCP 快速探测（3s）
+            if merge_logger:
+                merge_logger.log(MergePhase.CONNECTION_TEST, MergeLogLevel.INFO,
+                                 f"测试 Hive TCP 连接: {hive_conn_params['host']}:{hive_conn_params['port']}",
+                                 details={"host": hive_conn_params['host'], "port": hive_conn_params['port']})
+            try:
+                with socket.create_connection((hive_conn_params['host'], hive_conn_params['port']), timeout=3):
+                    pass
+            except Exception as se:
+                if merge_logger:
+                    merge_logger.log(MergePhase.CONNECTION_TEST, MergeLogLevel.ERROR,
+                                     f"Hive TCP 连接失败: {se}",
+                                     details={"host": hive_conn_params['host'], "port": hive_conn_params['port']})
+                logger.error(f"Hive TCP connectivity failed: {se}")
+                return False
+
+            # 2.2 HS2 连接 + SELECT 1（超时 + 心跳）
+            if merge_logger:
+                merge_logger.start_phase(MergePhase.CONNECTION_TEST, "连接 HiveServer2 并校验查询")
+
+            done_flag = {"ok": False, "err": None}
+
+            def _connect_and_query():
+                try:
+                    conn = hive.Connection(**hive_conn_params)
+                    cursor = conn.cursor(); cursor.execute('SELECT 1'); cursor.fetchall()
+                    cursor.close(); conn.close()
+                    done_flag["ok"] = True
+                except Exception as ie:
+                    done_flag["err"] = ie
+
+            th = threading.Thread(target=_connect_and_query, daemon=True)
+            th.start()
+
+            waited = 0
+            while th.is_alive() and waited < timeout_sec:
+                if merge_logger and task and db_session:
+                    merge_logger.log(MergePhase.CONNECTION_TEST, MergeLogLevel.INFO,
+                                     "正在连接 HiveServer2 ...", details={"elapsed_s": waited})
+                    try:
+                        self._update_task_progress(task, db_session,
+                                                   execution_phase="connection_test",
+                                                   current_operation=f"连接 HiveServer2 中 (已等待{waited}s)")
+                    except Exception:
+                        pass
+                waited += 2
+                th.join(timeout=2)
+
+            if th.is_alive():
+                if merge_logger:
+                    merge_logger.end_phase(MergePhase.CONNECTION_TEST, f"HiveServer2 连接超时({timeout_sec}s)", success=False)
+                logger.error("Hive connection test timeout")
+                return False
+
+            if done_flag["ok"] and not done_flag["err"]:
+                if merge_logger:
+                    merge_logger.end_phase(MergePhase.CONNECTION_TEST, "Hive 连接与校验通过", success=True)
+                logger.info("Hive connection test passed")
+                return True
+            else:
+                err = done_flag["err"]
+                if merge_logger:
+                    merge_logger.end_phase(MergePhase.CONNECTION_TEST, f"Hive 校验失败: {err}", success=False)
+                logger.error(f"Hive connection test failed: {err}")
+                return False
         except Exception as e:
             logger.error(f"Hive connection test failed: {e}")
             return False
@@ -779,7 +921,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             'input_format': '',
             'serde_lib': '',
             'storage_handler': '',
-            'tblproperties': {}
+            'tblproperties': {},
+            'table_type': ''
         }
         try:
             conn = self._create_hive_connection(database_name)
@@ -798,6 +941,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     info['serde_lib'] = v
                 elif 'Storage Handler' in k:
                     info['storage_handler'] = v
+                elif 'Table Type' in k or k.lower().startswith('type'):
+                    # values like EXTERNAL_TABLE / MANAGED_TABLE
+                    info['table_type'] = v
             # 读取表属性
             try:
                 cursor.execute(f"SHOW TBLPROPERTIES {table_name}")
@@ -1157,7 +1303,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             table_location = self._get_table_location(database_name, temp_table_name)
             if not table_location:
                 logger.error(f"Could not get temp table location for {database_name}.{temp_table_name}")
-                return None
+                raise RuntimeError("无法获取临时表HDFS位置")
             
             logger.info(f"Getting file count for temp table {database_name}.{temp_table_name} at location: {table_location}")
             
@@ -1173,11 +1319,11 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 return total_files
             else:
                 logger.error(f"WebHDFS stats failed for temp table: {stats.get('error', 'Unknown error')}")
-                return None
+                raise RuntimeError(f"临时表文件统计失败: {stats.get('error','Unknown error')}")
             
         except Exception as e:
             logger.error(f"Failed to get temp table file count: {e}")
-            return None
+            raise
     
     def _get_file_count_fallback(self, database_name: str, table_name: str, partition_filter: Optional[str] = None) -> Optional[int]:
         """获取文件数量的备用方法"""
@@ -1222,29 +1368,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     "get_table_stats", table_location, MergePhase.FILE_ANALYSIS,
                     success=False, error_message=stats.get('error', 'Unknown error')
                 )
-                # 兜底：使用最近一次扫描指标
-                try:
-                    db = SessionLocal()
-                    metric = (
-                        db.query(TableMetric)
-                        .filter(
-                            TableMetric.cluster_id == self.cluster.id,
-                            TableMetric.database_name == database_name,
-                            TableMetric.table_name == table_name,
-                        )
-                        .order_by(TableMetric.scan_time.desc())
-                        .first()
-                    )
-                    if metric and metric.total_files is not None:
-                        merge_logger.log(
-                            MergePhase.FILE_ANALYSIS, MergeLogLevel.INFO,
-                            "使用最近一次扫描指标兜底文件数",
-                            details={"total_files": metric.total_files}
-                        )
-                        return int(metric.total_files)
-                except Exception:
-                    pass
-                return 0
+                # 严格模式：统计失败视为致命错误
+                raise RuntimeError(f"WebHDFS 统计失败: {stats.get('error', 'Unknown error')}")
                 
         except Exception as e:
             merge_logger.log(
@@ -1252,9 +1377,10 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 f"获取文件数量失败: {str(e)}",
                 details={"error": str(e), "table": f"{database_name}.{table_name}"}
             )
-            return self._get_file_count_fallback(database_name, table_name, partition_filter)
+            # 严格模式：异常直接上抛
+            raise
     
-    def _create_temp_table_with_logging(self, task: MergeTask, temp_table_name: str, merge_logger) -> List[str]:
+    def _create_temp_table_with_logging(self, task: MergeTask, temp_table_name: str, merge_logger, db_session: Session) -> List[str]:
         """带详细日志记录的临时表创建"""
         sql_statements = []
         
@@ -1275,34 +1401,159 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             ]
             
             for setting in merge_settings:
-                merge_logger.log_sql_execution(setting, MergePhase.TEMP_TABLE_CREATION, success=True)
+                # 设置项较快，直接记录执行成功
+                merge_logger.log(MergePhase.TEMP_TABLE_CREATION, MergeLogLevel.INFO,
+                                 f"SQL开始执行: {setting}", details={"full_sql": setting})
                 cursor.execute(setting)
+                merge_logger.log_sql_execution(setting, MergePhase.TEMP_TABLE_CREATION, success=True)
                 sql_statements.append(setting)
             
             # 删除可能存在的临时表
             drop_temp_sql = f"DROP TABLE IF EXISTS {temp_table_name}"
-            merge_logger.log_sql_execution(drop_temp_sql, MergePhase.TEMP_TABLE_CREATION)
+            merge_logger.log(MergePhase.TEMP_TABLE_CREATION, MergeLogLevel.INFO,
+                             f"SQL开始执行: {drop_temp_sql}", details={"full_sql": drop_temp_sql})
             cursor.execute(drop_temp_sql)
+            merge_logger.log_sql_execution(drop_temp_sql, MergePhase.TEMP_TABLE_CREATION, success=True)
             sql_statements.append(drop_temp_sql)
             
             # 创建临时表并执行合并
-            if task.partition_filter:
-                create_sql = f"""
-                CREATE TABLE {temp_table_name} 
-                AS SELECT * FROM {task.table_name} 
-                WHERE {task.partition_filter}
-                DISTRIBUTE BY 1
-                """
+            # 读取原表是否为 EXTERNAL（用于保持表类型与路径）
+            fmt_info = self._get_table_format_info(task.database_name, task.table_name)
+            table_type = str(fmt_info.get('table_type', '')).upper()
+            is_external = 'EXTERNAL' in table_type
+            original_location = self._get_table_location(task.database_name, task.table_name) or ''
+            # 影子目录：在原父目录下使用固定根 ".merge_shadow"，并在其下创建按时间戳命名的子目录
+            # 例如：hdfs://.../parent/.merge_shadow/<ts>
+            ts_id = int(time.time())
+            # 将影子目录切回原父目录，避免 /warehouse 路径的 HttpFS 限制
+            parent_dir = '/'.join([p for p in original_location.rstrip('/').split('/')[:-1]]) if original_location else ''
+            shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ''
+            shadow_dir = f"{shadow_root}/{ts_id}" if shadow_root else ''
+
+            # 外部表：预创建影子目标目录，优先通过 HS2 执行 dfs，失败再回退 WebHDFS
+            if is_external and shadow_dir:
+                hs2_ok = False
+                try:
+                    try:
+                        # 先确保根目录存在并开放权限，再创建本次会话的子目录
+                        cursor.execute(f"dfs -mkdir -p {shadow_root}")
+                        cursor.execute(f"dfs -chmod 777 {shadow_root}")
+                        cursor.execute(f"dfs -mkdir -p {shadow_dir}")
+                        cursor.execute(f"dfs -chmod 777 {shadow_dir}")
+                        hs2_ok = True
+                        merge_logger.log(
+                            MergePhase.TEMP_TABLE_CREATION, MergeLogLevel.INFO,
+                            f"HS2 已创建影子目录并授权: {shadow_dir}"
+                        )
+                    except Exception as e:
+                        merge_logger.log(
+                            MergePhase.TEMP_TABLE_CREATION, MergeLogLevel.WARNING,
+                            f"HS2 创建影子目录失败，回退 WebHDFS: {e}"
+                        )
+                    if not hs2_ok:
+                        # 先确保根目录存在
+                        ok_root, msg_root = self.webhdfs_client.create_directory(shadow_root, permission="777")
+                        if not ok_root and 'File exists' not in str(msg_root):
+                            raise RuntimeError(f"创建影子根目录失败: {msg_root}")
+                        merge_logger.log_hdfs_operation("mkdir", shadow_root, MergePhase.TEMP_TABLE_CREATION, success=ok_root, error_message=None if ok_root else str(msg_root))
+                        # 再创建本次使用的子目录
+                        ok_mkdir, msg_mkdir = self.webhdfs_client.create_directory(shadow_dir, permission="777")
+                        if not ok_mkdir and 'File exists' not in str(msg_mkdir):
+                            raise RuntimeError(f"创建影子目录失败: {msg_mkdir}")
+                        merge_logger.log_hdfs_operation("mkdir", shadow_dir, MergePhase.TEMP_TABLE_CREATION, success=ok_mkdir, error_message=None if ok_mkdir else str(msg_mkdir))
+                except Exception as e:
+                    merge_logger.log_hdfs_operation("mkdir", shadow_dir, MergePhase.TEMP_TABLE_CREATION, success=False, error_message=str(e))
+                    raise
+
+            if is_external:
+                # 外部表：改用 "INSERT OVERWRITE DIRECTORY shadow" 写入影子目录，然后
+                # 创建一个与原表结构一致的外部临时表指向 shadow，用于后续校验与元数据清理
+                # 解析格式：PARQUET/ORC/TEXTFILE
+                table_format = 'TEXTFILE'
+                try:
+                    conn_fmt = self._create_hive_connection(task.database_name)
+                    cur_fmt = conn_fmt.cursor()
+                    cur_fmt.execute(f"DESCRIBE FORMATTED {task.table_name}")
+                    for r in cur_fmt.fetchall():
+                        try:
+                            c = str(r[0] if len(r) > 0 else '')
+                            v = str(r[1] if len(r) > 1 else '')
+                            if 'InputFormat' in c:
+                                low = v.lower()
+                                if 'parquet' in low: table_format = 'PARQUET'
+                                elif 'orc' in low: table_format = 'ORC'
+                                else: table_format = 'TEXTFILE'
+                                break
+                        except Exception:
+                            continue
+                    cur_fmt.close(); conn_fmt.close()
+                except Exception:
+                    table_format = 'TEXTFILE'
+                fmt_clause = ''
+                if table_format in ('PARQUET', 'ORC'):
+                    fmt_clause = f" STORED AS {table_format}"
+                # 1) 预创建影子目录（上方已 mkdir），2) 写入影子目录
+                insert_dir_sql = (
+                    f"INSERT OVERWRITE DIRECTORY '{shadow_dir}'{fmt_clause} SELECT * FROM {task.table_name}"
+                )
+                # 3) 创建外部临时表映射影子目录
+                create_like_sql = (
+                    f"CREATE EXTERNAL TABLE {temp_table_name} LIKE {task.table_name} LOCATION '{shadow_dir}'"
+                )
+                # 在写目录前，设置更激进的合并参数，尽量降低输出文件数
+                try:
+                    cursor.execute("SET hive.exec.compress.output=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
+                    cursor.execute("SET hive.tez.auto.reducer.parallelism=false")
+                    cursor.execute("SET hive.exec.reducers.max=1")
+                    cursor.execute("SET mapreduce.job.reduces=1")
+                except Exception:
+                    pass
+
+                # 执行：先写目录（长时 SQL 心跳），再建映射表
+                self._execute_sql_with_heartbeat(
+                    cursor=cursor,
+                    sql=insert_dir_sql,
+                    phase=MergePhase.TEMP_TABLE_CREATION,
+                    merge_logger=merge_logger,
+                    task=task,
+                    db_session=db_session,
+                    op_desc=f"写入影子目录: {shadow_dir}",
+                    execution_phase_name="temp_table_creation"
+                )
+                sql_statements.append(insert_dir_sql)
+                merge_logger.log_sql_execution(create_like_sql, MergePhase.TEMP_TABLE_CREATION)
+                cursor.execute(create_like_sql)
+                sql_statements.append(create_like_sql)
             else:
-                create_sql = f"""
-                CREATE TABLE {temp_table_name} 
-                AS SELECT * FROM {task.table_name}
-                DISTRIBUTE BY 1
-                """
+                # 非外部表：保留 CTAS 临时表
+                if task.partition_filter:
+                    create_sql = (
+                        f"CREATE TABLE {temp_table_name} "
+                        f"TBLPROPERTIES('transactional'='false') "
+                        f"AS SELECT * FROM {task.table_name} WHERE {task.partition_filter} DISTRIBUTE BY 1"
+                    )
+                else:
+                    create_sql = (
+                        f"CREATE TABLE {temp_table_name} "
+                        f"TBLPROPERTIES('transactional'='false') "
+                        f"AS SELECT * FROM {task.table_name} DISTRIBUTE BY 1"
+                    )
+                # 长时 SQL：增加心跳日志
+                self._execute_sql_with_heartbeat(
+                    cursor=cursor,
+                    sql=create_sql,
+                    phase=MergePhase.TEMP_TABLE_CREATION,
+                    merge_logger=merge_logger,
+                    task=task,
+                    db_session=db_session,
+                    op_desc=f"创建临时表并写入数据: {temp_table_name}",
+                    execution_phase_name="temp_table_creation"
+                )
+                sql_statements.append(create_sql)
             
-            merge_logger.log_sql_execution(create_sql, MergePhase.TEMP_TABLE_CREATION)
-            cursor.execute(create_sql)
-            sql_statements.append(create_sql)
+            
             
             cursor.close()
             conn.close()
@@ -1315,13 +1566,100 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             
         except Exception as e:
             merge_logger.log_sql_execution(
-                create_sql if 'create_sql' in locals() else "CREATE TABLE ...", 
+                create_sql if 'create_sql' in locals() else "CREATE TABLE ...",
                 MergePhase.TEMP_TABLE_CREATION,
                 success=False, error_message=str(e)
             )
             raise
         
         return sql_statements
+
+    def _execute_sql_with_heartbeat(self, *, cursor, sql: str, phase: MergePhase, merge_logger: MergeTaskLogger,
+                                     task: MergeTask, db_session: Session, op_desc: str,
+                                     execution_phase_name: str, interval: int = 10) -> None:
+        """执行可能耗时较长的 SQL，期间定时输出心跳日志并刷新当前操作。
+
+        - 在执行前记录“开始执行”日志
+        - 执行结束后记录“执行成功/失败”日志
+        - 执行期间每 `interval` 秒输出一次 INFO 心跳，包含已等待时长
+        - 同步更新任务 `current_operation`，避免前端长时间静默
+        """
+        import threading
+
+        stop = threading.Event()
+        start_ts = time.time()
+
+        def _heartbeat():
+            i = 0
+            while not stop.wait(interval):
+                i += 1
+                waited = int(time.time() - start_ts)
+                merge_logger.log(
+                    phase=phase,
+                    level=MergeLogLevel.INFO,
+                    message=f"正在执行: {op_desc}",
+                    details={"elapsed_s": waited, "full_sql": sql[:200]}
+                )
+                # 仅刷新当前操作，避免误导性的进度上涨
+                try:
+                    cur_op = f"{op_desc} (已等待{waited}s)"
+                    yarn_id = None
+                    # 附带 YARN 应用心跳（如果配置了 RM）
+                    if self.yarn_monitor is not None:
+                        try:
+                            # 拉取更宽的范围，包含 RUNNING/ACCEPTED/SUBMITTED，避免 RM 还未进入 RUNNING 时拿不到应用
+                            apps = self.yarn_monitor.get_applications(limit=20)
+                            apps = [a for a in apps if str(getattr(a,'application_type','')).upper() in ('TEZ','MAPREDUCE')]
+                            # 选择最新启动的应用，优先匹配已记录的ID
+                            app = None
+                            if task.yarn_application_id:
+                                for a in apps:
+                                    if a.id == task.yarn_application_id:
+                                        app = a; break
+                            if app is None and apps:
+                                app = sorted(apps, key=lambda a: a.start_time, reverse=True)[0]
+                            if app is not None:
+                                yarn_id = app.id
+                                # 记录 YARN 监控日志
+                                merge_logger.log_yarn_monitoring(app.id, phase,
+                                                                 progress=float(getattr(app, 'progress', 0) or 0),
+                                                                 state=str(app.state or ''),
+                                                                 details={
+                                                                     'queue': getattr(app, 'queue', ''),
+                                                                     'name': getattr(app, 'name', ''),
+                                                                     'tracking_url': getattr(app, 'tracking_url', '') or getattr(app, 'original_tracking_url', '')
+                                                                 })
+                                # 把进度拼进 current_operation，便于用户识别
+                                try:
+                                    pct = int(getattr(app, 'progress', 0) or 0)
+                                    cur_op = f"{op_desc} - YARN {pct}% {getattr(app,'state','')} (队列:{getattr(app,'queue','')}) (已等待{waited}s)"
+                                except Exception:
+                                    pass
+                        except Exception:
+                            # 监控失败不影响主流程
+                            pass
+
+                    self._update_task_progress(
+                        task, db_session,
+                        execution_phase=execution_phase_name,
+                        yarn_application_id=yarn_id or task.yarn_application_id,
+                        current_operation=cur_op
+                    )
+                except Exception:
+                    pass
+
+        # 记录开始
+        merge_logger.log(phase, MergeLogLevel.INFO, f"SQL开始执行: {op_desc}", details={"full_sql": sql})
+        hb = threading.Thread(target=_heartbeat, daemon=True)
+        hb.start()
+        try:
+            cursor.execute(sql)
+            stop.set(); hb.join(timeout=0.2)
+            merge_logger.log_sql_execution(sql, phase, success=True)
+        except Exception as e:
+            stop.set(); hb.join(timeout=0.2)
+            merge_logger.log_sql_execution(sql, phase, success=False, error_message=str(e))
+            raise
     
     def _atomic_table_swap_with_logging(self, task: MergeTask, temp_table_name: str, 
                                       backup_table_name: str, merge_logger) -> List[str]:
