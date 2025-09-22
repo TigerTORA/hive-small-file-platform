@@ -5,7 +5,9 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.api import clusters, dashboard, errors, table_archiving, partition_archiving
-from app.api import har_archiving, storage_admin
+# Avoid package-level re-export assumptions; import submodules directly
+import app.api.har_archiving as har_archiving
+import app.api.storage_admin as storage_admin
 from app.api import scan_tasks as scan_tasks_api
 from app.api import tables_refactored, tasks, websocket
 from app.config.database import Base, engine
