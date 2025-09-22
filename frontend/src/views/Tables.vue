@@ -36,8 +36,7 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="activeTab==='merge'" command="bulk-merge" :disabled="!selectedRows.length">批量创建合并任务</el-dropdown-item>
-                  <el-dropdown-item v-else disabled>批量归档（稍后提供）</el-dropdown-item>
+                  <el-dropdown-item command="bulk-merge" :disabled="!selectedRows.length">批量创建合并任务</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -58,23 +57,22 @@
               <template #reference>
                 <el-button plain style="margin-left:8px">列</el-button>
               </template>
-              <div v-if="activeTab==='merge'" class="cols-pop">
-                <el-checkbox v-model="columnsMerge.small">小文件数</el-checkbox>
-                <el-checkbox v-model="columnsMerge.ratio">小文件占比</el-checkbox>
-                <el-checkbox v-model="columnsMerge.total_files">总文件数</el-checkbox>
-                <el-checkbox v-model="columnsMerge.total_size">总大小</el-checkbox>
-                <el-checkbox v-model="columnsMerge.partitioned">分区表</el-checkbox>
-                <el-checkbox v-model="columnsMerge.partition_count">分区数</el-checkbox>
-                <el-checkbox v-model="columnsMerge.scan_time">扫描时间</el-checkbox>
-                <el-checkbox v-model="columnsMerge.actions">操作列</el-checkbox>
-              </div>
-              <div v-else class="cols-pop">
-                <el-checkbox v-model="columnsArchive.cold">冷数据</el-checkbox>
-                <el-checkbox v-model="columnsArchive.cold_days">未访问天数</el-checkbox>
-                <el-checkbox v-model="columnsArchive.archived">归档状态</el-checkbox>
-                <el-checkbox v-model="columnsArchive.archive_location">归档位置</el-checkbox>
-                <el-checkbox v-model="columnsArchive.archived_at">归档时间</el-checkbox>
-                <el-checkbox v-model="columnsArchive.actions">操作列</el-checkbox>
+              <div class="cols-pop">
+                <div class="group-title">合并相关</div>
+                <el-checkbox v-model="columnsAll.small">小文件数</el-checkbox>
+                <el-checkbox v-model="columnsAll.ratio">小文件占比</el-checkbox>
+                <el-checkbox v-model="columnsAll.total_files">总文件数</el-checkbox>
+                <el-checkbox v-model="columnsAll.total_size">总大小</el-checkbox>
+                <el-checkbox v-model="columnsAll.partitioned">分区表</el-checkbox>
+                <el-checkbox v-model="columnsAll.partition_count">分区数</el-checkbox>
+                <el-checkbox v-model="columnsAll.scan_time">扫描时间</el-checkbox>
+                <div class="group-title" style="margin-top:8px">归档相关</div>
+                <el-checkbox v-model="columnsAll.cold">冷数据</el-checkbox>
+                <el-checkbox v-model="columnsAll.cold_days">未访问天数</el-checkbox>
+                <el-checkbox v-model="columnsAll.archived">归档状态</el-checkbox>
+                <el-checkbox v-model="columnsAll.archive_location">归档位置</el-checkbox>
+                <el-checkbox v-model="columnsAll.archived_at">归档时间</el-checkbox>
+                <el-checkbox v-model="columnsAll.actions">操作列</el-checkbox>
               </div>
             </el-popover>
             <span class="last-updated">更新于 {{ lastUpdated || '-' }}</span>
@@ -84,85 +82,70 @@
         </div>
       </template>
 
-      <!-- 主体内容：页签 + 表格 + 分页（保留原有） -->
+      <!-- 主体内容：统一表格 + 分页 -->
       <div class="main-content">
-          <el-tabs v-model="activeTab">
-            <el-tab-pane label="小文件/合并" name="merge">
-              <el-table :data="displayRowsMerge" stripe v-loading="loading" @selection-change="onSelectionChange">
-                <el-table-column type="selection" width="44" />
-                <el-table-column prop="database_name" label="数据库" width="120" v-if="columnsMerge.db" />
-                <el-table-column prop="table_name" label="表名" width="200" v-if="columnsMerge.table">
-                  <template #default="{ row }">
-                    <router-link :to="`/tables/${clusterId}/${row.database_name}/${row.table_name}`" class="table-name-link">
-                      {{ row.table_name }}
-                    </router-link>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="small_files" label="小文件数" width="100" v-if="columnsMerge.small">
-                  <template #default="{ row }">
-                    <span :class="{ 'text-danger': row.small_files > 0 }">{{ row.small_files }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="small_file_ratio" label="小文件占比" width="120" v-if="columnsMerge.ratio">
-                  <template #default="{ row }">
-                    <el-progress :percentage="calcSmallFilePercent(row)" :color="getProgressColor(calcSmallFilePercent(row))" :show-text="true" style="width: 80px" />
-                  </template>
-                </el-table-column>
-                <el-table-column prop="total_files" label="总文件数" width="100" v-if="columnsMerge.total_files" />
-                <el-table-column prop="total_size" label="总大小" width="110" v-if="columnsMerge.total_size">
-                  <template #default="{ row }">{{ formatSize(row.total_size) }}</template>
-                </el-table-column>
-                <el-table-column prop="is_partitioned" label="分区表" width="80" v-if="columnsMerge.partitioned">
-                  <template #default="{ row }">
-                    <el-tag :type="row.is_partitioned ? 'success' : 'info'" size="small">{{ row.is_partitioned ? '是' : '否' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="分区数" width="90" sortable :sort-by="partitionCountSortKey" v-if="columnsMerge.partition_count">
-                  <template #default="{ row }">{{ row.is_partitioned ? (row.partition_count ?? 0) : -1 }}</template>
-                </el-table-column>
-                <el-table-column prop="scan_time" label="扫描时间" width="160" v-if="columnsMerge.scan_time">
-                  <template #default="{ row }">{{ formatTime(row.scan_time) }}</template>
-                </el-table-column>
-                <el-table-column label="操作" width="160" v-if="columnsMerge.actions">
-                  <template #default="{ row }">
-                    <el-button type="primary" size="small" @click="createMergeTask(row)">创建合并任务</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-            <el-tab-pane label="归档" name="archive">
-              <el-table :data="displayRowsArchive" stripe v-loading="loading" @selection-change="onSelectionChange">
-                <el-table-column type="selection" width="44" />
-                <el-table-column prop="database_name" label="数据库" width="120" v-if="columnsArchive.db" />
-                <el-table-column prop="table_name" label="表名" width="200" v-if="columnsArchive.table" />
-                <el-table-column label="冷数据" width="120" v-if="columnsArchive.cold">
-                  <template #default="{ row }">
-                    <el-tag v-if="row.is_cold_data" type="warning" size="small">冷数据</el-tag>
-                    <span v-else>-</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="未访问天数" width="120" v-if="columnsArchive.cold_days">
-                  <template #default="{ row }">{{ row.days_since_last_access ?? '-' }}</template>
-                </el-table-column>
-                <el-table-column label="归档状态" width="100" v-if="columnsArchive.archived">
-                  <template #default="{ row }">
-                    <el-tag v-if="row.archive_status === 'archived'" type="danger" size="small">已归档</el-tag>
-                    <el-tag v-else type="primary" size="small">活跃中</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="archive_location" label="归档位置" min-width="240" show-overflow-tooltip v-if="columnsArchive.archive_location" />
-                <el-table-column label="归档时间" width="160" v-if="columnsArchive.archived_at">
-                  <template #default="{ row }">{{ formatTime(row.archived_at) }}</template>
-                </el-table-column>
-                <el-table-column label="操作" width="200" v-if="columnsArchive.actions">
-                  <template #default="{ row }">
-                    <el-button v-if="row.archive_status !== 'archived'" type="warning" size="small" @click="archiveTable(row)" :loading="row.archiving">归档</el-button>
-                    <el-button v-else type="success" size="small" @click="restoreTable(row)" :loading="row.restoring">恢复</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-          </el-tabs>
+          <el-table :data="displayRows" stripe v-loading="loading" @selection-change="onSelectionChange">
+            <el-table-column type="selection" width="44" />
+            <el-table-column prop="database_name" label="数据库" width="120" v-if="columnsAll.db" sortable />
+            <el-table-column prop="table_name" label="表名" width="200" v-if="columnsAll.table" sortable>
+              <template #default="{ row }">
+                <router-link :to="`/tables/${clusterId}/${row.database_name}/${row.table_name}`" class="table-name-link">
+                  {{ row.table_name }}
+                </router-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="small_files" label="小文件数" width="100" v-if="columnsAll.small" sortable>
+              <template #default="{ row }">
+                <span :class="{ 'text-danger': row.small_files > 0 }">{{ row.small_files }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="small_file_ratio" label="小文件占比" width="120" v-if="columnsAll.ratio" sortable :sort-by="row => calcSmallFilePercent(row)">
+              <template #default="{ row }">
+                <el-progress :percentage="calcSmallFilePercent(row)" :color="getProgressColor(calcSmallFilePercent(row))" :show-text="true" style="width: 80px" />
+              </template>
+            </el-table-column>
+            <el-table-column prop="total_files" label="总文件数" width="100" v-if="columnsAll.total_files" sortable />
+            <el-table-column prop="total_size" label="总大小" width="110" v-if="columnsAll.total_size" sortable>
+              <template #default="{ row }">{{ formatSize(row.total_size) }}</template>
+            </el-table-column>
+            <el-table-column prop="is_partitioned" label="分区表" width="80" v-if="columnsAll.partitioned" sortable :sort-by="row => (row.is_partitioned ? 1 : 0)">
+              <template #default="{ row }">
+                <el-tag :type="row.is_partitioned ? 'success' : 'info'" size="small">{{ row.is_partitioned ? '是' : '否' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="分区数" width="90" sortable :sort-by="partitionCountSortKey" v-if="columnsAll.partition_count">
+              <template #default="{ row }">{{ row.is_partitioned ? (row.partition_count ?? 0) : -1 }}</template>
+            </el-table-column>
+            <el-table-column prop="scan_time" label="扫描时间" width="160" v-if="columnsAll.scan_time" sortable :sort-by="row => timeValue(row.scan_time)">
+              <template #default="{ row }">{{ formatTime(row.scan_time) }}</template>
+            </el-table-column>
+            <el-table-column label="冷数据" width="120" v-if="columnsAll.cold" sortable :sort-by="row => (row.is_cold_data ? 1 : 0)">
+              <template #default="{ row }">
+                <el-tag v-if="row.is_cold_data" type="warning" size="small">冷数据</el-tag>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="未访问天数" width="120" v-if="columnsAll.cold_days" sortable :sort-by="row => (row.days_since_last_access || 0)">
+              <template #default="{ row }">{{ row.days_since_last_access ?? '-' }}</template>
+            </el-table-column>
+            <el-table-column label="归档状态" width="100" v-if="columnsAll.archived" sortable :sort-by="row => (row.archive_status === 'archived' ? 1 : 0)">
+              <template #default="{ row }">
+                <el-tag v-if="row.archive_status === 'archived'" type="danger" size="small">已归档</el-tag>
+                <el-tag v-else type="primary" size="small">活跃中</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="archive_location" label="归档位置" min-width="240" show-overflow-tooltip v-if="columnsAll.archive_location" sortable />
+            <el-table-column label="归档时间" width="160" v-if="columnsAll.archived_at" sortable :sort-by="row => timeValue(row.archived_at)">
+              <template #default="{ row }">{{ formatTime(row.archived_at) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="240" v-if="columnsAll.actions" sortable :sort-by="() => 0">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" @click="createMergeTask(row)" style="margin-right:6px">创建合并任务</el-button>
+                <el-button v-if="row.archive_status !== 'archived'" type="warning" size="small" @click="archiveTable(row)" :loading="row.archiving" style="margin-right:6px">归档</el-button>
+                <el-button v-else type="success" size="small" @click="restoreTable(row)" :loading="row.restoring">恢复</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
           <!-- 分页（两个页签共用，同步 URL） -->
           <div class="pagination-wrapper" v-if="total > 0">
             <el-pagination
@@ -197,6 +180,7 @@
     v-model="showProgress"
     :type="runDialogType"
     :scan-task-id="currentTaskId || undefined"
+    :merge-task-id="currentMergeTaskId || undefined"
   />
 </template>
 
@@ -228,7 +212,6 @@
   const filterSmall = ref(false)
   const filterArchivedOnly = ref(false)
   const filterColdOnly = ref(false)
-  const activeTab = ref<'merge' | 'archive'>('merge')
   const databases = ref<string[]>([])
   const selectedDatabase = ref<string | ''>('')
   const loading = ref(false)
@@ -239,7 +222,8 @@
   const showScanSettings = ref(false)
   const showProgress = ref(false)
   const currentTaskId = ref<string | null>(null)
-  const runDialogType = ref<'scan'|'archive'>('scan')
+  const runDialogType = ref<'scan'|'merge'|'archive'>('scan')
+  const currentMergeTaskId = ref<number | null>(null)
   const maxPerDb = ref<number>(20)
   const currentPage = ref(1)
   const pageSize = ref(50)
@@ -258,6 +242,7 @@
   // 列可见性（持久化）
   const columnKeyMerge = 'tables-columns-merge'
   const columnKeyArchive = 'tables-columns-archive'
+  const columnKeyAll = 'tables-columns-all'
   const columnsMerge = ref<Record<string, boolean>>({
     db: true,
     table: true,
@@ -280,20 +265,67 @@
     archived_at: true,
     actions: true,
   })
+  // 统一列表列偏好（合并 + 归档组合）
+  const columnsAll = ref<Record<string, boolean>>({
+    db: true,
+    table: true,
+    small: true,
+    ratio: true,
+    total_files: true,
+    total_size: true,
+    partitioned: true,
+    partition_count: true,
+    scan_time: true,
+    cold: false,
+    cold_days: false,
+    archived: true,
+    archive_location: false,
+    archived_at: false,
+    actions: true,
+  })
   const loadColumnPrefs = () => {
     try {
       const m = localStorage.getItem(columnKeyMerge)
       if (m) Object.assign(columnsMerge.value, JSON.parse(m))
       const a = localStorage.getItem(columnKeyArchive)
       if (a) Object.assign(columnsArchive.value, JSON.parse(a))
+      const all = localStorage.getItem(columnKeyAll)
+      if (all) Object.assign(columnsAll.value, JSON.parse(all))
     } catch {}
   }
   const saveColumnPrefs = () => {
     try {
       localStorage.setItem(columnKeyMerge, JSON.stringify(columnsMerge.value))
       localStorage.setItem(columnKeyArchive, JSON.stringify(columnsArchive.value))
+      localStorage.setItem(columnKeyAll, JSON.stringify(columnsAll.value))
     } catch {}
   }
+
+  // 同步：统一列偏好变更时，映射到原有 merge/archive 两组，保持兼容
+  watch(columnsAll, (v) => {
+    Object.assign(columnsMerge.value, {
+      db: v.db,
+      table: v.table,
+      small: v.small,
+      ratio: v.ratio,
+      total_files: v.total_files,
+      total_size: v.total_size,
+      partitioned: v.partitioned,
+      partition_count: v.partition_count,
+      scan_time: v.scan_time,
+      actions: v.actions,
+    })
+    Object.assign(columnsArchive.value, {
+      db: v.db,
+      table: v.table,
+      cold: v.cold,
+      cold_days: v.cold_days,
+      archived: v.archived,
+      archive_location: v.archive_location,
+      archived_at: v.archived_at,
+      actions: v.actions,
+    })
+  }, { deep: true, immediate: true })
 
   const filteredDatabases = computed(() => {
     const kw = (dbSearch.value || '').toLowerCase()
@@ -324,6 +356,12 @@
       // 冷/归档页签不对分区/小文件做硬过滤，仅保留搜索
       return okSearch
     })
+  })
+
+  // 统一列表数据：若开启归档/冷数据筛选则显示归档来源，否则显示合并来源
+  const displayRows = computed(() => {
+    if (filterArchivedOnly.value || filterColdOnly.value) return displayRowsArchive.value
+    return displayRowsMerge.value
   })
 
   // 方法
@@ -454,7 +492,7 @@
   }
 
   const reloadPage = () => {
-    if (activeTab.value === 'archive') {
+    if (filterArchivedOnly.value || filterColdOnly.value) {
       loadArchiveData()
     } else {
       loadTableMetrics()
@@ -470,7 +508,6 @@
         ...route.query,
         db: selectedDatabase.value || '',
         q: searchText.value || '',
-        tab: activeTab.value,
         page: String(currentPage.value),
         page_size: String(pageSize.value),
         mode: scanMode.value,
@@ -606,9 +643,31 @@
     startScan()
   }
 
-  const createMergeTask = (table: TableMetric) => {
-    // TODO: 实现创建合并任务的逻辑
-    ElMessage.info(`准备为表 ${table.database_name}.${table.table_name} 创建合并任务`)
+  const createMergeTask = async (table: TableMetric) => {
+    try {
+      if (!clusterId.value) {
+        ElMessage.warning('请先选择集群')
+        return
+      }
+      const name = `merge_${table.database_name}.${table.table_name}_${Date.now()}`
+      const payload = {
+        cluster_id: clusterId.value as number,
+        task_name: name,
+        database_name: table.database_name,
+        table_name: table.table_name,
+        merge_strategy: 'safe_merge' as const
+      }
+      const created = await tasksApi.create(payload as any)
+      await tasksApi.execute(created.id)
+      ElMessage.success('已创建并启动合并任务')
+      // 打开执行详情
+      runDialogType.value = 'merge'
+      currentMergeTaskId.value = created.id
+      showProgress.value = true
+    } catch (e: any) {
+      console.error('Failed to create/execute merge task', e)
+      ElMessage.error(e?.message || '创建或启动失败')
+    }
   }
 
   // 归档表
@@ -703,6 +762,12 @@
     return dayjs(time).format('MM-DD HH:mm')
   }
 
+  const timeValue = (time?: string): number => {
+    if (!time) return 0
+    const v = dayjs(time).valueOf()
+    return isNaN(v) ? 0 : v
+  }
+
   // 排序：分区数（非分区为 -1）
   const partitionCountSortKey = (row: TableMetric): number => {
     return row.is_partitioned ? (row.partition_count ?? 0) : -1
@@ -731,7 +796,6 @@
     loadColumnPrefs()
     // 初始tab/db/q/page
     const q = route.query
-    if (typeof q.tab === 'string' && (q.tab === 'merge' || q.tab === 'archive')) activeTab.value = q.tab
     if (typeof q.db === 'string') selectedDatabase.value = q.db
     if (typeof q.q === 'string') searchText.value = q.q
     if (typeof q.page === 'string') currentPage.value = parseInt(q.page) || 1
@@ -749,8 +813,11 @@
 
     await loadCurrentClusterName()
     await loadDatabases()
-    await loadTableMetrics()
-    await loadArchiveData()
+    if (filterArchivedOnly.value || filterColdOnly.value) {
+      await loadArchiveData()
+    } else {
+      await loadTableMetrics()
+    }
   })
 
   // 响应数据库变更
@@ -763,23 +830,23 @@
   // 集群变化时刷新只读集群名称
   watch(clusterId, () => {
     loadCurrentClusterName()
-    if (activeTab.value === 'archive') {
+    if (filterArchivedOnly.value || filterColdOnly.value) {
       loadArchiveData()
     } else {
       loadTableMetrics()
     }
   })
 
-  // 其他筛选/搜索/标签切换变更后同步路由
-  watch([searchText, filterPartitioned, filterSmall, filterArchivedOnly, filterColdOnly, activeTab], () => {
+  // 其他筛选/搜索变更后同步路由
+  watch([searchText, filterPartitioned, filterSmall, filterArchivedOnly, filterColdOnly], () => {
     currentPage.value = 1
     reloadPage()
   })
-  watch([columnsMerge, columnsArchive], saveColumnPrefs, { deep: true })
+  watch([columnsMerge, columnsArchive, columnsAll], saveColumnPrefs, { deep: true })
 
-  // 分页变化时，按当前页签加载数据
+  // 分页变化时，按筛选决定数据来源
   watch([currentPage, pageSize], () => {
-    if (activeTab.value === 'archive') {
+    if (filterArchivedOnly.value || filterColdOnly.value) {
       loadArchiveData()
     } else {
       loadTableMetrics()
