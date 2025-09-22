@@ -422,17 +422,7 @@
 
 .cloudera-table .el-table__body tr:hover {
   background: var(--primary-50) !important;
-  position: relative;
-}
-
-.cloudera-table .el-table__body tr:hover::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--primary-500);
+  box-shadow: inset 3px 0 0 var(--primary-500);
 }
 
 .cloudera-table .el-table__body td {

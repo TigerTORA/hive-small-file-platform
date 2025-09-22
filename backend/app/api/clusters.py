@@ -284,25 +284,79 @@ async def update_cluster(cluster_id: int, cluster_update: ClusterUpdate, db: Ses
 @router.delete("/{cluster_id}")
 async def delete_cluster(cluster_id: int, db: Session = Depends(get_db)):
     """Delete cluster and all related data"""
-    # 首先检查集群是否存在，但不加载关系
-    cluster_result = db.execute("SELECT name FROM clusters WHERE id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
+    from sqlalchemy import text
+    # 首先检查集群是否存在，但不加载关系（SQLAlchemy 2.0 需要 text()）
+    cluster_result = db.execute(
+        text("SELECT name FROM clusters WHERE id = :cluster_id"),
+        {"cluster_id": cluster_id},
+    ).fetchone()
     if not cluster_result:
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     cluster_name = cluster_result[0]
 
     try:
-        # 检查关联数据数量
-        table_count_result = db.execute("SELECT COUNT(*) FROM table_metrics WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
-        scan_task_count_result = db.execute("SELECT COUNT(*) FROM scan_tasks WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id}).fetchone()
+        # 统计主要关联数量（用于反馈）
+        table_count_result = db.execute(
+            text("SELECT COUNT(*) FROM table_metrics WHERE cluster_id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        ).fetchone()
+        scan_task_count_result = db.execute(
+            text("SELECT COUNT(*) FROM scan_tasks WHERE cluster_id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        ).fetchone()
 
-        table_count = table_count_result[0] if table_count_result else 0
-        scan_task_count = scan_task_count_result[0] if scan_task_count_result else 0
+        table_count = int(table_count_result[0]) if table_count_result else 0
+        scan_task_count = int(scan_task_count_result[0]) if scan_task_count_result else 0
 
-        # 使用原生SQL进行级联删除，避免SQLAlchemy的关系管理干扰
-        db.execute("DELETE FROM scan_tasks WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id})
-        db.execute("DELETE FROM table_metrics WHERE cluster_id = :cluster_id", {"cluster_id": cluster_id})
-        db.execute("DELETE FROM clusters WHERE id = :cluster_id", {"cluster_id": cluster_id})
+        # 级联删除（显式顺序，避免外键冲突）
+        # 1) 扫描任务日志 -> 扫描任务
+        db.execute(
+            text(
+                "DELETE FROM scan_task_logs WHERE scan_task_id IN ("
+                "  SELECT id FROM scan_tasks WHERE cluster_id = :cluster_id"
+                ")"
+            ),
+            {"cluster_id": cluster_id},
+        )
+        db.execute(
+            text("DELETE FROM scan_tasks WHERE cluster_id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        )
+
+        # 2) 合并任务日志 -> 合并任务
+        db.execute(
+            text(
+                "DELETE FROM task_logs WHERE task_id IN ("
+                "  SELECT id FROM merge_tasks WHERE cluster_id = :cluster_id"
+                ")"
+            ),
+            {"cluster_id": cluster_id},
+        )
+        db.execute(
+            text("DELETE FROM merge_tasks WHERE cluster_id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        )
+
+        # 3) 分区指标 -> 表指标
+        db.execute(
+            text(
+                "DELETE FROM partition_metrics WHERE table_metric_id IN ("
+                "  SELECT id FROM table_metrics WHERE cluster_id = :cluster_id"
+                ")"
+            ),
+            {"cluster_id": cluster_id},
+        )
+        db.execute(
+            text("DELETE FROM table_metrics WHERE cluster_id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        )
+
+        # 4) 最后删除集群
+        db.execute(
+            text("DELETE FROM clusters WHERE id = :cluster_id"),
+            {"cluster_id": cluster_id},
+        )
 
         db.commit()
 

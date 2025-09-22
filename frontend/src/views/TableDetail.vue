@@ -47,6 +47,15 @@
                 </span>
               </el-tooltip>
             </template>
+            <el-divider direction="vertical" />
+            <el-button type="warning" :disabled="!tableMetric" @click="archiveTableBg('storage-policy')">存储策略归档（COLD）</el-button>
+            <el-button
+              type="success"
+              @click="restoreTableBg"
+              :disabled="!tableMetric || !isArchived"
+            >
+              恢复（后台）
+            </el-button>
           </div>
         </div>
       </template>
@@ -505,6 +514,90 @@
       </template>
     </el-dialog>
   </div>
+  <TaskRunDialog
+    v-model="showRunDialog"
+    :type="'archive'"
+    :scan-task-id="runScanTaskId || undefined"
+  />
+  <el-dialog v-model="showPolicyDialog" title="归档策略" width="640px">
+    <el-form label-width="140px">
+      <el-form-item label="合并压缩">
+        <el-switch v-model="policyForm.merge" />
+        <template v-if="policyForm.merge">
+          <div style="margin-top:8px"></div>
+          <el-checkbox v-model="policyForm.mergeSingleFile">单文件</el-checkbox>
+          <el-input-number v-model="policyForm.mergeTargetSizeMB" :min="16" :step="64" style="margin-left:12px" />
+          <span style="margin-left:6px">MB/文件</span>
+          <div style="font-size:12px;color:#909399;margin-top:6px">当前使用 INSERT OVERWRITE；“单文件/格式/Codec”将在引擎扩展后完全生效</div>
+        </template>
+      </el-form-item>
+      <el-form-item label="存储策略">
+        <el-switch v-model="policyForm.storagePolicy" />
+        <template v-if="policyForm.storagePolicy">
+          <div style="margin-top:8px"></div>
+          <el-select v-model="policyForm.policy" style="width:160px">
+            <el-option label="COLD" value="COLD" />
+            <el-option label="HOT" value="HOT" />
+            <el-option label="WARM" value="WARM" />
+          </el-select>
+          <el-checkbox v-model="policyForm.recursive" style="margin-left:12px">递归</el-checkbox>
+          <el-checkbox v-model="policyForm.runMover" style="margin-left:12px">执行 mover</el-checkbox>
+        </template>
+      </el-form-item>
+      <el-form-item label="纠删码(EC)">
+        <el-switch v-model="policyForm.ec" />
+        <template v-if="policyForm.ec">
+          <div style="margin-top:8px"></div>
+          <el-input v-model="policyForm.ecPolicy" placeholder="RS-6-3-1024k" style="width: 220px" />
+          <el-checkbox v-model="policyForm.ecRecursive" style="margin-left:12px">递归</el-checkbox>
+          <div style="font-size:12px;color:#909399;margin-top:6px">通过 SSH 执行 hdfs ec -setPolicy</div>
+        </template>
+      </el-form-item>
+      <el-form-item label="HAR 归档">
+        <el-switch v-model="policyForm.har" />
+        <template v-if="policyForm.har">
+          <div style="margin-top:8px"></div>
+          <el-input v-model="policyForm.harArchiveName" placeholder="category.har" style="width: 220px" />
+          <el-input v-model="policyForm.harDestDir" placeholder="/archive/har/default" style="width: 300px; margin-left:12px" />
+          <div style="font-size:12px;color:#909399;margin-top:6px">SSH 参数从“集群管理→HAR SSH 配置”读取</div>
+        </template>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showPolicyDialog=false">取消</el-button>
+      <el-button type="primary" @click="runArchiveStrategy">开始</el-button>
+    </template>
+  </el-dialog>
+  <el-dialog v-model="showPolicyDialog" title="归档策略" width="640px">
+    <el-form label-width="140px">
+      <el-form-item label="存储策略">
+        <el-switch v-model="policyForm.storagePolicy" />
+        <template v-if="policyForm.storagePolicy">
+          <div style="margin-top:8px"></div>
+          <el-select v-model="policyForm.policy" style="width:160px">
+            <el-option label="COLD" value="COLD" />
+            <el-option label="HOT" value="HOT" />
+            <el-option label="WARM" value="WARM" />
+          </el-select>
+          <el-checkbox v-model="policyForm.recursive" style="margin-left:12px">递归</el-checkbox>
+          <el-checkbox v-model="policyForm.runMover" style="margin-left:12px">执行 mover</el-checkbox>
+        </template>
+      </el-form-item>
+      <el-form-item label="HAR 归档">
+        <el-switch v-model="policyForm.har" />
+        <template v-if="policyForm.har">
+          <div style="margin-top:8px"></div>
+          <el-input v-model="policyForm.harArchiveName" placeholder="category.har" style="width: 220px" />
+          <el-input v-model="policyForm.harDestDir" placeholder="/archive/har/default" style="width: 300px; margin-left:12px" />
+          <div style="font-size:12px;color:#909399;margin-top:6px">SSH 参数从“集群管理→HAR SSH 配置”读取</div>
+        </template>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showPolicyDialog=false">取消</el-button>
+      <el-button type="primary" @click="runArchiveStrategy">开始</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -515,6 +608,7 @@
   import { tasksApi, type MergeTaskCreate } from '@/api/tasks'
   import { formatFileSize } from '@/utils/formatFileSize'
   import dayjs from 'dayjs'
+  import TaskRunDialog from '@/components/TaskRunDialog.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -559,10 +653,119 @@
 
   const mergeFormRef = ref()
 
+  // 归档任务运行对话框
+  const showRunDialog = ref(false)
+  const runScanTaskId = ref<string | null>(null)
+  const isArchived = computed(() => (tableMetric.value?.archive_status || '').toLowerCase() === 'archived')
+
+  // 归档策略对话框与表单
+  const showPolicyDialog = ref(false)
+  const policyForm = ref({
+    merge: false,
+    mergeSingleFile: false,
+    mergeTargetSizeMB: 512,
+    storagePolicy: true,
+    policy: 'COLD',
+    recursive: true,
+    ec: false,
+    ecPolicy: 'RS-6-3-1024k',
+    ecRecursive: true,
+    runMover: false,
+    har: false,
+    harArchiveName: '',
+    harDestDir: ''
+  })
+  const openArchivePolicy = () => {
+    policyForm.value.merge = false
+    policyForm.value.mergeSingleFile = false
+    policyForm.value.mergeTargetSizeMB = 512
+    policyForm.value.storagePolicy = true
+    policyForm.value.policy = 'COLD'
+    policyForm.value.recursive = true
+    policyForm.value.runMover = false
+    policyForm.value.ec = false
+    policyForm.value.ecPolicy = 'RS-6-3-1024k'
+    policyForm.value.ecRecursive = true
+    policyForm.value.har = false
+    const path = tableMetric.value?.table_path || ''
+    const last = path.split('/').filter(Boolean).pop() || tableName.value
+    policyForm.value.harArchiveName = `${last}.har`
+    policyForm.value.harDestDir = `/archive/har/${database.value}`
+    showPolicyDialog.value = true
+  }
+
+  const getHarSshDefaults = () => {
+    try { const raw = localStorage.getItem(`har-ssh.${clusterId.value}`); return raw ? JSON.parse(raw) : null } catch { return null }
+  }
+
+  const runArchiveStrategy = async () => {
+    if (!tableMetric.value) return
+    try {
+      const cid = clusterId.value
+      const dbn = database.value
+      const tbn = tableName.value
+      const path = tableMetric.value.table_path
+      const tasks: string[] = []
+      // 0) 合并压缩（先进行，完成后再设置策略/EC/HAR）
+      if ((policyForm.value as any).merge) {
+        const targetBytes = (policyForm.value as any).mergeSingleFile ? -1 : Math.max(1, Number((policyForm.value as any).mergeTargetSizeMB || 512)) * 1024 * 1024
+        const task = await tasksApi.create({
+          cluster_id: cid,
+          task_name: `merge_${dbn}_${tbn}_${Date.now()}`,
+          table_name: tbn,
+          database_name: dbn,
+          partition_filter: '',
+          merge_strategy: 'insert_overwrite',
+          target_file_size: targetBytes
+        } as any)
+        await tasksApi.execute((task as any).id)
+      }
+      if (policyForm.value.storagePolicy) {
+        const resp = await tablesApi.archiveTableWithProgress(cid, dbn, tbn, false, { mode: 'storage-policy', policy: policyForm.value.policy, recursive: policyForm.value.recursive })
+        if ((resp as any)?.task_id) tasks.push((resp as any).task_id)
+      }
+      if (policyForm.value.ec) {
+        const ssh = getHarSshDefaults()
+        if (!ssh || !ssh.host) { ElMessage.warning('请先在集群管理维护 HAR SSH 配置'); }
+        else {
+          const { storageApi } = await import('@/api/storage')
+          const ecResp = await storageApi.setEcPolicy(cid, { path, policy: policyForm.value.ecPolicy || 'RS-6-3-1024k', recursive: policyForm.value.ecRecursive, ssh_host: ssh.host, ssh_user: ssh.user || 'hdfs', ssh_port: ssh.port || 22, ssh_key_path: ssh.keyPath, kinit_principal: ssh.principal, kinit_keytab: ssh.keytab })
+          if ((ecResp as any)?.task_id) tasks.push((ecResp as any).task_id)
+        }
+      }
+      if (policyForm.value.runMover) {
+        const ssh = getHarSshDefaults()
+        if (!ssh || !ssh.host) { ElMessage.warning('请先在集群管理维护 HAR SSH 配置'); }
+        else {
+          const { storageApi } = await import('@/api/storage')
+          const mover = await storageApi.runMover(cid, { path, ssh_host: ssh.host, ssh_user: ssh.user || 'hdfs', ssh_port: ssh.port || 22, ssh_key_path: ssh.keyPath, kinit_principal: ssh.principal, kinit_keytab: ssh.keytab })
+          if ((mover as any)?.task_id) tasks.push((mover as any).task_id)
+        }
+      }
+      if (policyForm.value.har) {
+        const ssh = getHarSshDefaults()
+        if (!ssh || !ssh.host) { ElMessage.warning('请先在集群管理维护 HAR SSH 配置'); }
+        else {
+          const { default: api } = await import('@/api/index')
+          const seg = (path || '').split('/').filter(Boolean); const src = seg.pop() || tbn; const parent = '/' + seg.join('/')
+          const payload = { archive_name: policyForm.value.harArchiveName || `${tbn}.har`, parent_path: parent, sources: [src], dest_dir: policyForm.value.harDestDir || `/archive/har/${dbn}`, replication: 3, ssh_host: ssh.host, ssh_user: ssh.user || 'hdfs', ssh_port: ssh.port || 22, ssh_key_path: ssh.keyPath, kinit_principal: ssh.principal, kinit_keytab: ssh.keytab, dry_run: false }
+          const har = await api.post(`/har-archiving/create/${cid}`, payload)
+          if ((har as any)?.task_id) tasks.push((har as any).task_id)
+        }
+      }
+      showPolicyDialog.value = false
+      if (tasks.length) { runScanTaskId.value = tasks[tasks.length - 1]; showRunDialog.value = true }
+      ElMessage.success('归档策略任务已提交')
+    } catch (e: any) {
+      console.error('runArchiveStrategy failed', e); ElMessage.error(e?.message || '提交失败')
+    }
+  }
+
   const loadTableInfo = async () => {
     loading.value = true
     try {
-      const metrics = await tablesApi.getMetrics(clusterId.value)
+      // Limit scope to current database to avoid large cluster-wide queries blocking the UI
+      const metrics = await tablesApi.getMetrics(clusterId.value, database.value)
       tableMetric.value =
         metrics.find(
           (metric: TableMetric) =>
@@ -632,6 +835,50 @@
     } catch (error) {
       console.error('Failed to trigger scan:', error)
       ElMessage.error('触发扫描失败')
+    }
+  }
+
+  const archiveTableBg = async (mode: 'move' | 'storage-policy' = 'storage-policy') => {
+    if (!tableMetric.value) return
+    try {
+      const resp = await tablesApi.archiveTableWithProgress(
+        clusterId.value,
+        database.value,
+        tableName.value,
+        false,
+        mode === 'storage-policy' ? { mode: 'storage-policy', policy: 'COLD', recursive: true } : { mode: 'move' }
+      )
+      const taskId = (resp as any)?.task_id
+      if (taskId) {
+        runScanTaskId.value = taskId
+        showRunDialog.value = true
+      }
+      ElMessage.success(mode === 'storage-policy' ? '策略归档任务已提交' : '目录迁移归档任务已提交')
+    } catch (e: any) {
+      console.error('archiveTableBg failed', e)
+      ElMessage.error(e?.message || '提交归档任务失败')
+    }
+  }
+
+  // 目录迁移归档已移除，仅保留存储策略归档
+
+  const restoreTableBg = async () => {
+    if (!tableMetric.value) return
+    try {
+      const resp = await tablesApi.restoreTableWithProgress(
+        clusterId.value,
+        database.value,
+        tableName.value
+      )
+      const taskId = (resp as any)?.task_id
+      if (taskId) {
+        runScanTaskId.value = taskId
+        showRunDialog.value = true
+      }
+      ElMessage.success('恢复任务已提交')
+    } catch (e: any) {
+      console.error('restoreTableBg failed', e)
+      ElMessage.error(e?.message || '提交恢复任务失败')
     }
   }
 

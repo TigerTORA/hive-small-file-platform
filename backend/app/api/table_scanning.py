@@ -19,6 +19,7 @@ from app.schemas.scan_task import ScanTaskLog, ScanTaskProgress, ScanTaskRespons
 from app.schemas.table_metric import ScanRequest
 from app.services.scan_service import scan_task_manager
 from app.utils.webhdfs_client import WebHDFSClient
+from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 
 router = APIRouter()
 
@@ -72,6 +73,8 @@ async def scan_all_cluster_databases_with_progress(
     cluster_id: int,
     strict_real: bool = Query(True, description="严格实连模式"),
     max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数(为空表示不限制)"),
+    include_cold: bool = Query(False, description="扫描完成后是否追加冷数据扫描"),
+    cold_threshold_days: Optional[int] = Query(None, description="冷数据阈值天数(默认90)"),
     db: Session = Depends(get_db),
 ):
     """集群级批量扫描（带进度追踪）
@@ -89,6 +92,8 @@ async def scan_all_cluster_databases_with_progress(
             cluster_id,
             max_tables_per_db=max_tables_per_db,
             strict_real=strict_real,
+            include_cold=include_cold,
+            cold_threshold_days=cold_threshold_days,
         )
 
         return {
@@ -186,12 +191,17 @@ async def get_partition_metrics(
     concurrency: int = Query(5, ge=1, le=20),
     db: Session = Depends(get_db),
 ):
-    """获取分区表的分区级小文件统计"""
+    """获取分区表的分区级小文件统计（分页）。
+
+    - 使用 MetaStore 获取分区路径
+    - 使用 WebHDFS 统计每个分区的文件数与小文件数
+    - 返回前端所需的统一结构: { items, total, page, page_size }
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
 
-    # 检查表是否存在
+    # 检查表是否存在且为分区表（依据最新一次扫描记录）
     table_metric = (
         db.query(TableMetric)
         .filter(
@@ -199,58 +209,81 @@ async def get_partition_metrics(
             TableMetric.database_name == database_name,
             TableMetric.table_name == table_name,
         )
+        .order_by(TableMetric.id.desc())
         .first()
     )
-
     if not table_metric:
-        raise HTTPException(
-            status_code=404, detail=f"Table {database_name}.{table_name} not found"
-        )
-
+        raise HTTPException(status_code=404, detail=f"Table {database_name}.{table_name} not found")
     if not table_metric.is_partitioned:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Table {database_name}.{table_name} is not a partitioned table",
-        )
+        raise HTTPException(status_code=400, detail=f"Table {database_name}.{table_name} is not a partitioned table")
 
     try:
-        # 使用WebHDFS扫描分区
-        webhdfs_client = WebHDFSClient(
-            namenode_url=cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
-        )
+        # 从 MetaStore 获取分页分区列表
+        with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
+            total = connector.get_table_partitions_count(database_name, table_name)
+            if total <= 0:
+                return {"items": [], "total": 0, "page": page, "page_size": page_size}
+            offset = (page - 1) * page_size
+            partitions = connector.get_table_partitions_paged(database_name, table_name, offset, page_size)
 
-        # 获取分区列表和统计信息
-        # 这里简化实现，实际应该调用专门的分区扫描服务
-        partition_metrics = []
+        # 并发扫描分区（每个线程各自创建 client，避免 Session 共享问题）
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # 模拟分区数据（实际应该从HDFS获取）
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
+        def scan_part(idx: int, name: str, path: str):
+            try:
+                client = WebHDFSClient(cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs")
+                try:
+                    stats = client.scan_directory_stats(
+                        path,
+                        small_file_threshold=cluster.small_file_threshold or 134217728,
+                    )
+                    item = {
+                        "partition_spec": name,
+                        "partition_path": path,
+                        "file_count": int(getattr(stats, "total_files", 0) or 0),
+                        "small_file_count": int(getattr(stats, "small_files_count", 0) or 0),
+                        "total_size": int(getattr(stats, "total_size", 0) or 0),
+                        "avg_file_size": float(getattr(stats, "average_file_size", 0) or 0.0),
+                    }
+                finally:
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
+                return idx, item
+            except Exception as e:
+                return idx, {
+                    "partition_spec": name,
+                    "partition_path": path,
+                    "file_count": 0,
+                    "small_file_count": 0,
+                    "total_size": 0,
+                    "avg_file_size": 0.0,
+                    "error": str(e),
+                }
 
-        # 这里应该实现真实的分区扫描逻辑
-        total_partitions = table_metric.partition_count or 0
+        futures = []
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            for idx, p in enumerate(partitions):
+                part_name = p.get("partition_name") or p.get("PART_NAME")
+                part_path = p.get("partition_path") or p.get("partition_path")
+                if not part_path:
+                    continue
+                futures.append(executor.submit(scan_part, idx, part_name, part_path))
 
-        return {
-            "table_info": {
-                "database_name": database_name,
-                "table_name": table_name,
-                "total_partitions": total_partitions,
-            },
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total_pages": (
-                    (total_partitions + page_size - 1) // page_size
-                    if total_partitions > 0
-                    else 0
-                ),
-            },
-            "scan_config": {"concurrency": concurrency},
-            "partition_metrics": partition_metrics,
-        }
+            results: list[tuple[int, dict]] = []
+            for fut in as_completed(futures):
+                results.append(fut.result())
 
+        results.sort(key=lambda x: x[0])
+        items = [item for _, item in results]
+
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Partition scan failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get partition metrics: {str(e)}")
 
 
 @router.post("/scan-table/{cluster_id}/{database_name}/{table_name}")

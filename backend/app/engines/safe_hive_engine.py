@@ -302,7 +302,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     size_saved=0,
                     db_session=db_session
                 )
-                self.log_task_event(task, 'INFO', result['message'], db_session=db_session)
+                self.log_task_event(task, 'INFO', result['message'], db_session=db_session,
+                                    details={'phase': 'completion', 'code': 'M900', 'partition_spec': spec, 'files_before': files_before, 'files_after': files_after})
                 return result
             except Exception as e:
                 # 若分区级失败，直接失败（不做整表替代）
@@ -310,7 +311,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 result['duration'] = time.time() - start_time
                 self._report_progress('failed', result['message'])
                 self.update_task_status(task, 'failed', error_message=str(e), db_session=db_session)
-                self.log_task_event(task, 'ERROR', result['message'], db_session=db_session)
+                self.log_task_event(task, 'ERROR', result['message'], db_session=db_session,
+                                    details={'phase': 'completion', 'code': 'E900', 'partition_spec': spec})
                 return result
         
         try:
@@ -523,8 +525,10 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 db_session=db_session
             )
             
-            self.log_task_event(task, 'INFO', result['message'], db_session=db_session)
-            self.log_task_event(task, 'INFO', f'Backup table created: {backup_table_name}. Drop it after verification.', db_session=db_session)
+            self.log_task_event(task, 'INFO', result['message'], db_session=db_session,
+                                details={'phase': 'completion', 'code': 'M900', 'files_before': files_before, 'files_after': files_after})
+            self.log_task_event(task, 'INFO', f'Backup table created: {backup_table_name}. Drop it after verification.', db_session=db_session,
+                                details={'phase': 'completion', 'code': 'M901', 'backup_table': backup_table_name})
             
         except Exception as e:
             error_message = str(e)
@@ -536,17 +540,21 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             # 执行回滚操作
             try:
                 self._report_progress('rolling_back', 'Starting rollback process to clean up temporary resources')
-                self.log_task_event(task, 'WARNING', 'Starting rollback process', db_session=db_session)
+                self.log_task_event(task, 'WARNING', 'Starting rollback process', db_session=db_session,
+                                    details={'phase': 'rollback', 'code': 'W801'})
                 rollback_sql = self._rollback_merge(task, temp_table_name, backup_table_name)
                 result['sql_executed'].extend(rollback_sql)
-                self.log_task_event(task, 'INFO', 'Rollback completed successfully', db_session=db_session)
+                self.log_task_event(task, 'INFO', 'Rollback completed successfully', db_session=db_session,
+                                    details={'phase': 'rollback', 'code': 'M802'})
             except Exception as rollback_error:
-                self.log_task_event(task, 'ERROR', f'Rollback failed: {rollback_error}', db_session=db_session)
+                self.log_task_event(task, 'ERROR', f'Rollback failed: {rollback_error}', db_session=db_session,
+                                    details={'phase': 'rollback', 'code': 'E803', 'error': str(rollback_error)})
                 result['message'] += f'. Rollback failed: {rollback_error}'
             
             # 更新任务状态为失败
             self.update_task_status(task, 'failed', error_message=error_message, db_session=db_session)
-            self.log_task_event(task, 'ERROR', result['message'], db_session=db_session)
+            self.log_task_event(task, 'ERROR', result['message'], db_session=db_session,
+                                details={'phase': 'completion', 'code': 'E900'})
             
             logger.error(f"Safe merge execution failed for task {task.id}: {e}")
         

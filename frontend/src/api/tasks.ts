@@ -99,12 +99,14 @@ export const tasksApi = {
 
   // 获取表信息（包括分区状态）
   getTableInfo(clusterId: number, databaseName: string, tableName: string): Promise<any> {
-    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/info`)
+    // Limit heavy HS2-based inspection to 10s to avoid blocking the page
+    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/info`, { timeout: 10000 })
   },
 
   // 获取表分区列表
   getTablePartitions(clusterId: number, databaseName: string, tableName: string): Promise<any> {
-    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/partitions`)
+    // SHOW PARTITIONS on Hive can hang in unhealthy clusters; bound to 10s
+    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/partitions`, { timeout: 10000 })
   },
 
   // 获取合并预览
@@ -115,7 +117,7 @@ export const tasksApi = {
     partitionFilter?: string
   ): Promise<any> {
     const params = partitionFilter ? `?partition_filter=${encodeURIComponent(partitionFilter)}` : ''
-    return api.post(`/tables/${clusterId}/${databaseName}/${tableName}/merge-preview${params}`)
+    return api.post(`/tables/${clusterId}/${databaseName}/${tableName}/merge-preview${params}`, null, { timeout: 10000 })
   },
 
   // 批量扫描所有数据库

@@ -186,6 +186,7 @@ const startPoll = () => {
   stopPoll()
   if (props.type === 'scan') poll = setInterval(load, 2000)
   if (props.type === 'merge') poll = setInterval(load, 3000)
+  if (props.type === 'archive') poll = setInterval(load, 2500)
 }
 const stopPoll = () => { if (poll) { clearInterval(poll); poll = null } }
 

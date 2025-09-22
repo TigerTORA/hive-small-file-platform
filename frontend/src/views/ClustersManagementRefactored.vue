@@ -299,8 +299,8 @@
 
 <style scoped>
   .clusters-management {
-    padding: var(--space-3) var(--space-4) 400px var(--space-4);
-    min-height: 150vh;
+    padding: var(--space-3) var(--space-4) var(--space-8) var(--space-4);
+    min-height: 100vh;
     background: var(--bg-app);
     overflow-y: visible;
   }

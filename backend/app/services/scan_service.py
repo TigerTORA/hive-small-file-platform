@@ -4,6 +4,7 @@ import json
 import threading
 from datetime import datetime
 from sqlalchemy.orm import Session
+import re
 from app.models.scan_task import ScanTask
 from app.models.cluster import Cluster
 from app.monitor.hybrid_table_scanner import HybridTableScanner
@@ -56,7 +57,23 @@ class ScanTaskManager:
     def get_task_logs(self, task_id: str) -> List[ScanTaskLog]:
         """获取任务日志"""
         with self._lock:
-            return self.task_logs.get(task_id, [])
+            logs = self.task_logs.get(task_id, [])
+            # 兜底清洗，保证历史内存日志不含图标符号
+            cleaned: List[ScanTaskLog] = []
+            for le in logs:
+                try:
+                    cleaned.append(
+                        ScanTaskLog(
+                            timestamp=le.timestamp,
+                            level=le.level,
+                            message=_sanitize_log_text(le.message),
+                            database_name=le.database_name,
+                            table_name=le.table_name,
+                        )
+                    )
+                except Exception:
+                    cleaned.append(le)
+            return cleaned
 
     def request_cancel(self, db: Session, task_id: str) -> bool:
         """请求取消任务：设置标记并记录日志"""
@@ -88,10 +105,12 @@ class ScanTaskManager:
         db: Optional[Session] = None,
     ):
         """添加任务日志（内存 + 可选持久化）"""
+        # 移除表情/图标，满足“日志中不出现图标符号”的要求
+        message_clean = _sanitize_log_text(message)
         log_entry = ScanTaskLog(
             timestamp=datetime.utcnow(),
             level=level,
-            message=message,
+            message=message_clean,
             database_name=database_name,
             table_name=table_name
         )
@@ -113,15 +132,49 @@ class ScanTaskManager:
                     db_row = ScanTaskLogDB(
                         scan_task_id=db_task.id,
                         level=level,
-                        message=message,
+                        message=message_clean,
                         database_name=database_name,
                         table_name=table_name,
+                        # 使用与内存日志相同的时间，避免“内存 + 持久化”合并时出现重复
+                        timestamp=log_entry.timestamp,
                     )
                     db.add(db_row)
                     db.commit()
             except Exception:
                 # 持久化失败不影响主流程
                 pass
+
+    # ---- Structured logging helpers (no emoji, consistent format) ----
+    def _format_msg(self, code: str, title: str, phase: Optional[str] = None, ctx: Optional[Dict[str, object]] = None) -> str:
+        parts = []
+        if phase:
+            parts.append(f"[{phase.upper()}]")
+        if code:
+            parts.append(code)
+        parts.append(title)
+        if ctx:
+            kv = " ".join(f"{k}={v}" for k, v in ctx.items() if v is not None)
+            if kv:
+                parts.append(kv)
+        return " ".join(parts)
+
+    def info(self, task_id: str, code: str, title: str, db: Optional[Session] = None,
+             phase: Optional[str] = None, ctx: Optional[Dict[str, object]] = None,
+             database_name: Optional[str] = None, table_name: Optional[str] = None):
+        self.add_log(task_id, 'INFO', self._format_msg(code, title, phase, ctx),
+                     database_name=database_name, table_name=table_name, db=db)
+
+    def warn(self, task_id: str, code: str, title: str, db: Optional[Session] = None,
+             phase: Optional[str] = None, ctx: Optional[Dict[str, object]] = None,
+             database_name: Optional[str] = None, table_name: Optional[str] = None):
+        self.add_log(task_id, 'WARN', self._format_msg(code, title, phase, ctx),
+                     database_name=database_name, table_name=table_name, db=db)
+
+    def error(self, task_id: str, code: str, title: str, db: Optional[Session] = None,
+              phase: Optional[str] = None, ctx: Optional[Dict[str, object]] = None,
+              database_name: Optional[str] = None, table_name: Optional[str] = None):
+        self.add_log(task_id, 'ERROR', self._format_msg(code, title, phase, ctx),
+                     database_name=database_name, table_name=table_name, db=db)
     
     def update_task_progress(
         self, 
@@ -220,7 +273,8 @@ class ScanTaskManager:
                 db.commit()
     
     from typing import Optional
-    def scan_cluster_with_progress(self, db: Session, cluster_id: int, max_tables_per_db: Optional[int] = None, strict_real: bool = False) -> str:
+    def scan_cluster_with_progress(self, db: Session, cluster_id: int, max_tables_per_db: Optional[int] = None, strict_real: bool = False,
+                                   include_cold: bool = False, cold_threshold_days: Optional[int] = None) -> str:
         """执行集群扫描（带进度追踪）"""
         # 获取集群信息
         cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
@@ -246,7 +300,8 @@ class ScanTaskManager:
                 if not cluster_t or not task_t:
                     raise RuntimeError('Failed to load task/cluster in thread-local session')
 
-                self._execute_cluster_scan(db_thread, task_t, cluster_t, max_tables_per_db, strict_real)
+                self._execute_cluster_scan(db_thread, task_t, cluster_t, max_tables_per_db, strict_real,
+                                           include_cold=include_cold, cold_threshold_days=cold_threshold_days)
             except Exception as e:
                 try:
                     self.add_log(task.task_id, 'ERROR', f'扫描失败: {str(e)}', db=db_thread)
@@ -266,15 +321,16 @@ class ScanTaskManager:
         
         return task.task_id
     
-    def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: Optional[int], strict_real: bool):
+    def _execute_cluster_scan(self, db: Session, task: ScanTask, cluster: Cluster, max_tables_per_db: Optional[int], strict_real: bool,
+                              include_cold: bool = False, cold_threshold_days: Optional[int] = None):
         """执行实际的集群扫描"""
         scan_start_time = time.time()
-        self.add_log(task.task_id, 'INFO', f'🚀 开始扫描集群: {cluster.name}', db=db)
+        self.info(task.task_id, 'S001', '开始扫描集群', db=db, phase='init', ctx={'cluster': cluster.name})
         self.safe_update_progress(db, task.task_id, status='running')
         
         try:
             # 步骤1: 测试连接
-            self.add_log(task.task_id, 'INFO', f'🔗 正在连接MetaStore: {cluster.hive_metastore_url}', db=db)
+            self.info(task.task_id, 'S101', '正在连接 MetaStore', db=db, phase='connect', ctx={'url': cluster.hive_metastore_url})
             
             # 获取所有数据库
             databases = []
@@ -283,15 +339,17 @@ class ScanTaskManager:
                 with MySQLHiveMetastoreConnector(cluster.hive_metastore_url) as connector:
                     databases = connector.get_databases()
                 metastore_connect_time = time.time() - metastore_connect_start
-                self.add_log(task.task_id, 'INFO', f'✅ MetaStore连接成功 (耗时: {metastore_connect_time:.2f}秒)', db=db)
-                self.add_log(task.task_id, 'INFO', f'📊 发现 {len(databases)} 个数据库: {", ".join(databases[:5])}{"..." if len(databases) > 5 else ""}', db=db)
+                self.info(task.task_id, 'S102', 'MetaStore 连接成功', db=db, phase='connect', ctx={'elapsed_s': f"{metastore_connect_time:.2f}", 'databases': len(databases)})
+                if databases:
+                    preview = ", ".join(databases[:5]) + ("..." if len(databases) > 5 else "")
+                    self.info(task.task_id, 'S103', '数据库列表', db=db, phase='connect', ctx={'top': preview})
             except Exception as conn_error:
-                self.add_log(task.task_id, 'ERROR', f'❌ MetaStore连接失败: {str(conn_error)}', db=db)
-                self.add_log(task.task_id, 'INFO', f'💡 建议检查: 1) 网络连通性 2) 数据库服务状态 3) 用户权限', db=db)
+                self.error(task.task_id, 'E101', f'MetaStore 连接失败: {str(conn_error)}', db=db, phase='connect')
+                self.info(task.task_id, 'H101', '建议检查', db=db, phase='diagnose', ctx={'1': '网络连通性', '2': '数据库服务状态', '3': '用户权限'})
                 raise conn_error
             
             # 步骤2: 初始化扫描器和HDFS连接
-            self.add_log(task.task_id, 'INFO', f'🔗 正在连接HDFS: {cluster.hdfs_namenode_url}', db=db)
+            self.info(task.task_id, 'S110', '正在连接 HDFS', db=db, phase='connect', ctx={'url': cluster.hdfs_namenode_url})
             scanner = HybridTableScanner(cluster)
             hdfs_connect_start = time.time()
             
@@ -302,22 +360,22 @@ class ScanTaskManager:
                 hdfs_ok = scanner.hdfs_scanner.connect() if scanner.hdfs_scanner else False
                 hdfs_connect_time = time.time() - hdfs_connect_start
                 if hdfs_ok:
-                    self.add_log(task.task_id, 'INFO', f'✅ HDFS连接成功 (耗时: {hdfs_connect_time:.2f}秒)', db=db)
+                    self.info(task.task_id, 'S111', 'HDFS 连接成功', db=db, phase='connect', ctx={'elapsed_s': f"{hdfs_connect_time:.2f}"})
                     scanner.hdfs_scanner.disconnect()
                 else:
                     if strict_real:
                         raise Exception('HDFS连接失败（严格模式），中止扫描')
-                    self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败，启用Mock模式继续扫描', db=db)
+                    self.warn(task.task_id, 'W110', 'HDFS 连接失败，启用 Mock 模式', db=db, phase='connect')
             except Exception as hdfs_error:
                 if strict_real:
                     raise
-                self.add_log(task.task_id, 'WARN', f'⚠️ HDFS连接失败: {str(hdfs_error)}', db=db)
-                self.add_log(task.task_id, 'INFO', f'🔄 启用Mock HDFS模式进行演示扫描', db=db)
+                self.warn(task.task_id, 'W111', f'HDFS 连接失败: {str(hdfs_error)}', db=db, phase='connect')
+                self.info(task.task_id, 'S112', '启用 Mock HDFS 模式进行演示扫描', db=db, phase='connect')
             
             # 步骤3: 开始批量扫描
             self.safe_update_progress(db, task.task_id, total_items=len(databases))
             estimated_total_time = len(databases) * 3  # 估算每个数据库3秒
-            self.add_log(task.task_id, 'INFO', f'⏱️ 预计总扫描时间: {estimated_total_time}秒，每数据库限制扫描{max_tables_per_db}张表', db=db)
+            self.info(task.task_id, 'S120', '预计总扫描时间', db=db, phase='plan', ctx={'seconds': estimated_total_time, 'max_tables_per_db': max_tables_per_db})
             
             total_tables_scanned = 0
             total_files_found = 0
@@ -329,7 +387,7 @@ class ScanTaskManager:
             for i, database_name in enumerate(databases, 1):
                 # 支持随时取消
                 if self._is_cancelled(task.task_id):
-                    self.add_log(task.task_id, 'INFO', '⏹️ 用户取消，停止后续数据库扫描', db=db)
+                    self.info(task.task_id, 'S890', '用户取消，停止后续数据库扫描', db=db, phase='cancel')
                     self.complete_task(db, task.task_id, success=False, error_message='Task cancelled by user')
                     return
                 db_scan_start = time.time()
@@ -338,7 +396,7 @@ class ScanTaskManager:
                     completed_items=i-1,
                     current_item=f'扫描数据库: {database_name}'
                 )
-                self.add_log(task.task_id, 'INFO', f'📁 [{i}/{len(databases)}] 开始扫描数据库: {database_name}', database_name=database_name, db=db)
+                self.info(task.task_id, 'S201', '开始扫描数据库', db=db, phase='scan', ctx={'index': f'{i}/{len(databases)}', 'database': database_name}, database_name=database_name)
                 
                 try:
                     # 扫描数据库中的表
@@ -364,14 +422,36 @@ class ScanTaskManager:
                     total_files_found += files_found
                     total_small_files += small_files
                     
-                    # 记录详细的扫描过程信息
-                    self.add_log(task.task_id, 'INFO', f'  └─ MetaStore查询: {metastore_time:.2f}秒, 发现{original_table_count}张表', database_name=database_name, db=db)
-                    
+                    # 记录详细的扫描过程信息（结构化、无前缀符号）
+                    self.info(
+                        task.task_id,
+                        'S204',
+                        'MetaStore 查询',
+                        db=db,
+                        phase='scan',
+                        ctx={'elapsed_s': f'{metastore_time:.2f}', 'tables_found': original_table_count},
+                        database_name=database_name,
+                    )
                     if limited_by_count > 0:
-                        self.add_log(task.task_id, 'INFO', f'  └─ 表数量限制: 跳过{limited_by_count}张表 (限制{max_tables_per_db}张/数据库)', database_name=database_name, db=db)
-                    
+                        self.info(
+                            task.task_id,
+                            'S205',
+                            '表数量限制',
+                            db=db,
+                            phase='scan',
+                            ctx={'skipped': limited_by_count, 'max_tables_per_db': max_tables_per_db},
+                            database_name=database_name,
+                        )
                     if hdfs_mode != 'real':
-                        self.add_log(task.task_id, 'INFO', f'  └─ HDFS连接: {hdfs_connect_time:.2f}秒 ({hdfs_mode}模式)', database_name=database_name, db=db)
+                        self.info(
+                            task.task_id,
+                            'S206',
+                            'HDFS 连接',
+                            db=db,
+                            phase='scan',
+                            ctx={'elapsed_s': f'{hdfs_connect_time:.2f}', 'mode': hdfs_mode},
+                            database_name=database_name,
+                        )
                     
                     # 计算小文件比例
                     small_file_ratio = (small_files / files_found * 100) if files_found > 0 else 0
@@ -385,7 +465,7 @@ class ScanTaskManager:
                     if partitioned_tables > 0:
                         status_parts.append(f'{partitioned_tables}个分区表')
                     
-                    log_message = f'✅ 数据库 {database_name} 扫描完成: {", ".join(status_parts)}, {files_found}文件, {small_files}小文件'
+                    log_message = f'数据库 {database_name} 扫描完成: {", ".join(status_parts)}, {files_found}文件, {small_files}小文件'
                     if files_found > 0:
                         log_message += f' ({small_file_ratio:.1f}%)'
                     
@@ -394,15 +474,33 @@ class ScanTaskManager:
                     
                     log_message += f' (耗时: {db_scan_time:.1f}秒, 平均{avg_table_scan_time:.2f}秒/表)'
                     
-                    self.add_log(task.task_id, 'INFO', log_message, database_name=database_name, db=db)
+                    # 使用统一格式输出概要
+                    self.info(
+                        task.task_id,
+                        'S202',
+                        '数据库扫描完成',
+                        db=db,
+                        phase='scan',
+                        ctx={
+                            'database': database_name,
+                            'tables': tables_scanned,
+                            'files': files_found,
+                            'small_files': small_files,
+                            'ratio_pct': f'{small_file_ratio:.1f}',
+                            'elapsed_s': f'{db_scan_time:.1f}',
+                            'avg_per_table_s': f'{avg_table_scan_time:.2f}',
+                            'mode': hdfs_mode,
+                        },
+                        database_name=database_name,
+                    )
                     
                     # 记录重要的警告和错误（过滤掉不重要的）
                     important_errors = [e for e in scan_errors if any(keyword in e for keyword in ['失败', '错误', '过高', 'Error', 'Failed'])]
                     for error in important_errors[:3]:  # 只显示前3个重要错误
                         if '小文件比例过高' in error:
-                            self.add_log(task.task_id, 'WARN', f'  ⚠️ {error}', database_name=database_name, db=db)
+                            self.warn(task.task_id, 'W201', error, database_name=database_name, db=db, phase='scan')
                         else:
-                            self.add_log(task.task_id, 'ERROR', f'  ❌ {error}', database_name=database_name, db=db)
+                            self.error(task.task_id, 'E201', error, database_name=database_name, db=db, phase='scan')
                     
                     # 更新进度和剩余时间估算
                     remaining_dbs = len(databases) - i
@@ -420,13 +518,7 @@ class ScanTaskManager:
                 except Exception as db_error:
                     failed_databases += 1
                     db_scan_time = time.time() - db_scan_start
-                    self.add_log(
-                        task.task_id,
-                        'ERROR',
-                        f'❌ 数据库 {database_name} 扫描失败: {str(db_error)} (耗时: {db_scan_time:.1f}秒)',
-                        database_name=database_name,
-                        db=db,
-                    )
+                    self.error(task.task_id, 'E202', f'数据库扫描失败: {str(db_error)}', database_name=database_name, db=db, phase='scan', ctx={'elapsed_s': f'{db_scan_time:.1f}', 'database': database_name})
                     # 提供具体的错误诊断建议
                     if "permission" in str(db_error).lower():
                         self.add_log(task.task_id, 'INFO', f'  💡 建议检查HDFS用户权限和访问策略', database_name=database_name, db=db)
@@ -447,41 +539,77 @@ class ScanTaskManager:
                 total_small_files=total_small_files
             )
             
+            # 可选：追加冷数据扫描
+            if include_cold:
+                try:
+                    threshold = cold_threshold_days if isinstance(cold_threshold_days, int) else 90
+                    self.info(task.task_id, 'S310', '开始冷数据扫描', db=db, phase='scan', ctx={'threshold_days': threshold})
+                    # 复用 scanner 执行冷数据扫描
+                    cold_result = scanner.scan_cold_data_for_cluster(db, threshold)
+                    if isinstance(cold_result, dict) and 'error' in cold_result:
+                        self.error(task.task_id, 'E310', f"冷数据扫描失败: {cold_result.get('error')}", db=db, phase='scan')
+                    else:
+                        cold_count = cold_result.get('cold_tables_found') if isinstance(cold_result, dict) else None
+                        self.info(task.task_id, 'S311', '冷数据扫描完成', db=db, phase='scan', ctx={'cold_tables_found': cold_count, 'threshold_days': threshold})
+                except Exception as ce:
+                    self.error(task.task_id, 'E311', f'冷数据扫描异常: {ce}', db=db, phase='scan')
+
             # 生成详细的完成报告
             overall_small_file_ratio = (total_small_files / total_files_found * 100) if total_files_found > 0 else 0
-            completion_message = f'🎉 集群扫描完成! 总计: {total_tables_scanned}表, {total_files_found}文件, {total_small_files}小文件 ({overall_small_file_ratio:.1f}%)'
-            self.add_log(task.task_id, 'INFO', completion_message, db=db)
+            self.info(task.task_id, 'S900', '集群扫描完成', db=db, phase='complete', ctx={'tables': total_tables_scanned, 'files': total_files_found, 'small_files': total_small_files, 'small_ratio_pct': f'{overall_small_file_ratio:.1f}'})
             
             # 性能统计
-            self.add_log(task.task_id, 'INFO', f'📈 扫描统计: 耗时{total_scan_time:.1f}秒, 成功率{success_rate:.1f}%, 平均每表{avg_time_per_table:.2f}秒', db=db)
-            self.add_log(task.task_id, 'INFO', f'📊 处理效率: {successful_databases}个数据库成功, {failed_databases}个失败', db=db)
+            self.info(task.task_id, 'S901', '扫描统计', db=db, phase='complete', ctx={'elapsed_s': f'{total_scan_time:.1f}', 'success_rate_pct': f'{success_rate:.1f}', 'avg_per_table_s': f'{avg_time_per_table:.2f}'})
+            self.info(task.task_id, 'S902', '处理效率', db=db, phase='complete', ctx={'databases_success': successful_databases, 'databases_failed': failed_databases})
             
             # 根据结果给出建议
             if overall_small_file_ratio > 70:
-                self.add_log(task.task_id, 'WARN', f'⚠️ 小文件比例过高({overall_small_file_ratio:.1f}%)，建议立即执行合并优化', db=db)
+                self.warn(task.task_id, 'W210', f'小文件比例过高({overall_small_file_ratio:.1f}%)，建议执行合并优化', db=db, phase='advice')
             elif overall_small_file_ratio > 50:
-                self.add_log(task.task_id, 'INFO', f'💡 建议对小文件比例较高的表进行合并处理', db=db)
+                self.info(task.task_id, 'H201', '建议对小文件比例较高的表进行合并处理', db=db, phase='advice')
             
             self.complete_task(db, task.task_id, success=True)
             
         except Exception as e:
             total_scan_time = time.time() - scan_start_time
             error_msg = str(e)
-            self.add_log(task.task_id, 'ERROR', f'💥 集群扫描失败: {error_msg} (运行时间: {total_scan_time:.1f}秒)', db=db)
+            self.error(task.task_id, 'E900', f'集群扫描失败: {error_msg}', db=db, phase='error', ctx={'elapsed_s': f'{total_scan_time:.1f}'})
             
             # 根据错误类型提供具体建议
             if "Failed to connect to MetaStore" in error_msg:
-                self.add_log(task.task_id, 'INFO', f'🔧 MetaStore连接问题排查:', db=db)
-                self.add_log(task.task_id, 'INFO', f'  1. 检查网络连通性: ping {cluster.hive_metastore_url}', db=db)
-                self.add_log(task.task_id, 'INFO', f'  2. 验证数据库服务状态和端口开放', db=db)
-                self.add_log(task.task_id, 'INFO', f'  3. 确认用户名密码和数据库权限', db=db)
+                self.info(task.task_id, 'H102', 'MetaStore 连接问题排查', db=db, phase='diagnose')
+                self.info(task.task_id, 'H103', f'检查网络连通性: ping {cluster.hive_metastore_url}', db=db, phase='diagnose')
+                self.info(task.task_id, 'H104', '验证数据库服务状态和端口开放', db=db, phase='diagnose')
+                self.info(task.task_id, 'H105', '确认用户名密码和数据库权限', db=db, phase='diagnose')
             elif "timeout" in error_msg.lower():
-                self.add_log(task.task_id, 'INFO', f'⏱️ 连接超时问题可能原因:', db=db)
-                self.add_log(task.task_id, 'INFO', f'  1. 网络延迟过高或防火墙阻挡', db=db)
-                self.add_log(task.task_id, 'INFO', f'  2. 目标服务过载或响应缓慢', db=db)
+                self.info(task.task_id, 'H110', '连接超时问题可能原因', db=db, phase='diagnose')
+                self.info(task.task_id, 'H111', '网络延迟过高或防火墙阻挡', db=db, phase='diagnose')
+                self.info(task.task_id, 'H112', '目标服务过载或响应缓慢', db=db, phase='diagnose')
             
             self.complete_task(db, task.task_id, success=False, error_message=error_msg)
 
 
 # 全局任务管理器实例
 scan_task_manager = ScanTaskManager()
+
+# ---------------- internal helpers ----------------
+# Emoji/符号清洗：
+#  - U+1F300–U+1FAFF (补充符号与图形等)
+#  - U+2600–U+26FF (杂项符号)
+#  - U+2700–U+27BF (装饰符)
+# 以及常见组合符：变体选择符 U+FE0F、零宽连接符 U+200D、键帽 U+20E3
+_EMOJI_RE = re.compile(r"[\U0001F300-\U0001FAFF\U00002600-\U000026FF\U00002700-\U000027BF]")
+_COMBINERS_RE = re.compile(r"[\u200D\uFE0F\u20E3]")
+
+
+def _sanitize_log_text(text: str) -> str:
+    try:
+        if not isinstance(text, str):
+            text = str(text)
+        s = _EMOJI_RE.sub("", text)
+        s = _COMBINERS_RE.sub("", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+    except Exception:
+        # 避免清洗异常影响主流程
+        return text

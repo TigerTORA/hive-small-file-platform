@@ -214,8 +214,7 @@
     Sunny,
     Refresh,
     Expand,
-    Fold,
-    FolderOpened
+    Fold
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
@@ -292,15 +291,25 @@
 
   /* 应用全局样式 */
   .cloudera-app {
-    min-height: 100vh;
-    overflow: visible;
+    height: 100vh;
+    overflow: hidden; /* 由内部 page-content 承担滚动，避免整页超长 */
   }
 
   /* 页面内容区域 */
+  /* 让主区域（含 header + content）占满视窗，并把滚动限制在内容区 */
+  .cloudera-main {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
   .page-content {
-    padding: 0;
-    min-height: auto;
-    overflow-y: visible;
+    padding: var(--space-4);
+    flex: 1 1 auto;
+    min-height: 0;        /* 配合 flex 容器，允许内部正确收缩 */
+    overflow-y: auto;     /* 内容区滚动，避免整页溢出 */
     background: var(--bg-app);
   }
   .page-fallback { padding: var(--space-6); }
