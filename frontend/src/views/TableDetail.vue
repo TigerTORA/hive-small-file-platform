@@ -606,6 +606,7 @@
   import { ElMessage } from 'element-plus'
   import { tablesApi, type TableMetric } from '@/api/tables'
   import { tasksApi, type MergeTaskCreate } from '@/api/tasks'
+  import { storageApi } from '@/api/storage'
   import { formatFileSize } from '@/utils/formatFileSize'
   import dayjs from 'dayjs'
   import TaskRunDialog from '@/components/TaskRunDialog.vue'
@@ -728,7 +729,6 @@
         const ssh = getHarSshDefaults()
         if (!ssh || !ssh.host) { ElMessage.warning('请先在集群管理维护 HAR SSH 配置'); }
         else {
-          const { storageApi } = await import('@/api/storage')
           const ecResp = await storageApi.setEcPolicy(cid, { path, policy: policyForm.value.ecPolicy || 'RS-6-3-1024k', recursive: policyForm.value.ecRecursive, ssh_host: ssh.host, ssh_user: ssh.user || 'hdfs', ssh_port: ssh.port || 22, ssh_key_path: ssh.keyPath, kinit_principal: ssh.principal, kinit_keytab: ssh.keytab })
           if ((ecResp as any)?.task_id) tasks.push((ecResp as any).task_id)
         }
@@ -737,7 +737,6 @@
         const ssh = getHarSshDefaults()
         if (!ssh || !ssh.host) { ElMessage.warning('请先在集群管理维护 HAR SSH 配置'); }
         else {
-          const { storageApi } = await import('@/api/storage')
           const mover = await storageApi.runMover(cid, { path, ssh_host: ssh.host, ssh_user: ssh.user || 'hdfs', ssh_port: ssh.port || 22, ssh_key_path: ssh.keyPath, kinit_principal: ssh.principal, kinit_keytab: ssh.keytab })
           if ((mover as any)?.task_id) tasks.push((mover as any).task_id)
         }
