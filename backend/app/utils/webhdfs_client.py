@@ -146,6 +146,97 @@ class WebHDFSClient:
             error_msg = f"WebHDFS连接异常: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
+
+    # ---- Storage policy helpers ----
+    def set_storage_policy(self, path: str, policy: str) -> Tuple[bool, str]:
+        """设置目录或文件的存储策略（如: HOT, COLD, WARM, ALL_SSD, ONE_SSD, LAZY_PERSIST）。
+
+        Returns: (ok, message)
+        """
+        try:
+            last_err = None
+            for base in self._alt_bases():
+                # Hadoop WebHDFS OP name is SETSTORAGEPOLICY; parameter key is 'storagepolicy'
+                url = self._build_url(path, "SETSTORAGEPOLICY", storagepolicy=policy).replace(self.webhdfs_base, base, 1)
+                try:
+                    resp = self.session.put(url, timeout=self.timeout)
+                    if resp.status_code in (200, 201):
+                        return True, f"Set storage policy to {policy}"
+                    last_err = f"HTTP {resp.status_code}: {resp.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            return False, last_err or "Unknown error"
+        except Exception as e:
+            return False, str(e)
+
+    def get_storage_policy(self, path: str) -> Tuple[bool, Optional[str], str]:
+        """获取路径的存储策略。Returns: (ok, policy|None, message)"""
+        try:
+            last_err = None
+            for base in self._alt_bases():
+                url = self._build_url(path, "GETSTORAGEPOLICY").replace(self.webhdfs_base, base, 1)
+                try:
+                    resp = self.session.get(url, timeout=self.timeout)
+                    if resp.status_code == 200:
+                        try:
+                            data = resp.json()
+                            # Different Hadoop versions return different shapes; try common keys
+                            policy = None
+                            if isinstance(data, dict):
+                                if 'StoragePolicy' in data and isinstance(data['StoragePolicy'], dict):
+                                    policy = data['StoragePolicy'].get('type') or data['StoragePolicy'].get('policyName')
+                                elif 'storagePolicy' in data:
+                                    policy = data.get('storagePolicy')
+                            return True, policy, "ok"
+                        except Exception:
+                            return True, None, "ok"
+                    last_err = f"HTTP {resp.status_code}: {resp.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            return False, None, last_err or "Unknown error"
+        except Exception as e:
+            return False, None, str(e)
+
+    def set_storage_policy_recursive(self, path: str, policy: str, max_entries: int = 5000) -> Tuple[int, int, List[str]]:
+        """递归设置存储策略（简易版）。返回: (success_count, fail_count, errors)。
+        为避免遍历过大目录导致 OOM，设置一个最大遍历条目数。
+        """
+        ok, msg = self.set_storage_policy(path, policy)
+        success = 1 if ok else 0
+        fail = 0 if ok else 1
+        errors: List[str] = [] if ok else [msg]
+
+        try:
+            # 广度优先遍历子目录（仅目录）
+            queue = [path]
+            visited = 0
+            while queue:
+                cur = queue.pop(0)
+                if visited > max_entries:
+                    errors.append("reach_max_entries")
+                    break
+                try:
+                    items = self.list_directory(cur)
+                except Exception as e:
+                    errors.append(str(e))
+                    continue
+                for it in items:
+                    if it.is_directory:
+                        visited += 1
+                        # 应用策略
+                        ok2, msg2 = self.set_storage_policy(it.path, policy)
+                        if ok2:
+                            success += 1
+                        else:
+                            fail += 1
+                            errors.append(f"{it.path}: {msg2}")
+                        queue.append(it.path)
+            return success, fail, errors
+        except Exception as e:
+            errors.append(str(e))
+            return success, fail, errors
     
     def get_file_status(self, path: str) -> Optional[HDFSFileInfo]:
         """
