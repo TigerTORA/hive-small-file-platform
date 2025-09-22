@@ -30,6 +30,7 @@ async def scan_cold_data(
     ),
     cold_threshold_days: Optional[int] = Query(None, description="冷数据阈值天数"),
     database_name: Optional[str] = Query(None, description="指定数据库名称"),
+    background: bool = Query(True, description="是否后台任务运行并输出任务日志"),
     db: Session = Depends(get_db),
 ):
     """扫描集群中的冷数据表"""
@@ -38,61 +39,103 @@ async def scan_cold_data(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     try:
-        cold_scanner = SimpleColdDataScanner(cluster)
-
         threshold = (
             cold_days_threshold
             if cold_days_threshold is not None
             else (cold_threshold_days if cold_threshold_days is not None else 90)
         )
 
-        scan_result = cold_scanner.scan_cold_data(
-            threshold_days=threshold, database_filter=database_name
+        if not background:
+            cold_scanner = SimpleColdDataScanner(cluster)
+            scan_result = cold_scanner.scan_cold_data(
+                threshold_days=threshold, database_filter=database_name
+            )
+            cold_tables = scan_result.get("cold_tables", [])
+            updated_count = 0
+            for cold_table in cold_tables:
+                db_name = cold_table.get("database_name")
+                table_name = cold_table.get("table_name")
+                last_access_time = cold_table.get("last_access_time")
+                days_since_access = cold_table.get("days_since_last_access", 0)
+                latest_metric = (
+                    db.query(TableMetric)
+                    .filter(
+                        TableMetric.cluster_id == cluster_id,
+                        TableMetric.database_name == db_name,
+                        TableMetric.table_name == table_name,
+                    )
+                    .order_by(TableMetric.scan_time.desc())
+                    .first()
+                )
+                if latest_metric:
+                    latest_metric.is_cold_data = 1
+                    latest_metric.last_access_time = last_access_time
+                    latest_metric.days_since_last_access = days_since_access
+                    updated_count += 1
+            db.commit()
+            return {
+                "message": "Cold data scan completed",
+                "cluster_id": cluster_id,
+                "scan_config": {
+                    "threshold_days": threshold,
+                    "database_filter": database_name,
+                },
+                "scan_result": {
+                    "cold_tables_found": len(cold_tables),
+                    "database_records_updated": updated_count,
+                    "scan_timestamp": datetime.utcnow().isoformat(),
+                },
+            }
+
+        # 后台任务模式：集成任务视图 + 结构化日志
+        task = scan_task_manager.create_scan_task(
+            db, cluster_id, 'cold-table-scan', f'扫描冷数据表(阈值{threshold}天)'
         )
 
-        # 更新数据库中的冷数据标记
-        cold_tables = scan_result.get("cold_tables", [])
-        updated_count = 0
+        def run_cold_scan():
+            db_thread = SessionLocal()
+            try:
+                cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+                cold_scanner = SimpleColdDataScanner(cluster_t)
+                scan_task_manager.info(task.task_id, 'T301', '开始冷数据表扫描', db=db_thread, phase='scan', ctx={'threshold_days': threshold, 'db': database_name})
+                scan_result = cold_scanner.scan_cold_data(threshold_days=threshold, database_filter=database_name)
+                cold_tables = scan_result.get('cold_tables', []) if isinstance(scan_result, dict) else []
+                updated_count = 0
+                for cold_table in cold_tables:
+                    db_name = cold_table.get('database_name')
+                    table_name = cold_table.get('table_name')
+                    last_access_time = cold_table.get('last_access_time')
+                    days_since_access = cold_table.get('days_since_last_access', 0)
+                    latest_metric = (
+                        db_thread.query(TableMetric)
+                        .filter(
+                            TableMetric.cluster_id == cluster_id,
+                            TableMetric.database_name == db_name,
+                            TableMetric.table_name == table_name,
+                        )
+                        .order_by(TableMetric.scan_time.desc())
+                        .first()
+                    )
+                    if latest_metric:
+                        latest_metric.is_cold_data = 1
+                        latest_metric.last_access_time = last_access_time
+                        latest_metric.days_since_last_access = days_since_access
+                        updated_count += 1
+                db_thread.commit()
+                scan_task_manager.info(task.task_id, 'T390', '冷数据表扫描完成', db=db_thread, phase='scan', ctx={'found': len(cold_tables), 'updated': updated_count})
+                scan_task_manager.complete_task(db_thread, task.task_id, success=True)
+            except Exception as e:
+                scan_task_manager.error(task.task_id, 'ET390', f'冷数据表扫描失败: {e}', db=db_thread, phase='scan')
+                scan_task_manager.complete_task(db_thread, task.task_id, success=False, error_message=str(e))
+            finally:
+                try:
+                    db_thread.close()
+                except Exception:
+                    pass
 
-        for cold_table in cold_tables:
-            db_name = cold_table.get("database_name")
-            table_name = cold_table.get("table_name")
-            last_access_time = cold_table.get("last_access_time")
-            days_since_access = cold_table.get("days_since_last_access", 0)
-
-            # 更新最新的表指标记录
-            latest_metric = (
-                db.query(TableMetric)
-                .filter(
-                    TableMetric.cluster_id == cluster_id,
-                    TableMetric.database_name == db_name,
-                    TableMetric.table_name == table_name,
-                )
-                .order_by(TableMetric.scan_time.desc())
-                .first()
-            )
-
-            if latest_metric:
-                latest_metric.is_cold_data = 1
-                latest_metric.last_access_time = last_access_time
-                latest_metric.days_since_last_access = days_since_access
-                updated_count += 1
-
-        db.commit()
-
-        return {
-            "message": "Cold data scan completed",
-            "cluster_id": cluster_id,
-            "scan_config": {
-                "threshold_days": threshold,
-                "database_filter": database_name,
-            },
-            "scan_result": {
-                "cold_tables_found": len(cold_tables),
-                "database_records_updated": updated_count,
-                "scan_timestamp": datetime.utcnow().isoformat(),
-            },
-        }
+        import threading
+        threading.Thread(target=run_cold_scan, daemon=True).start()
+        return {"message": "Cold data scan started", "task_id": task.task_id}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cold data scan failed: {str(e)}")
@@ -206,60 +249,8 @@ async def archive_table(
     force: bool = Query(False, description="强制归档，跳过检查"),
     db: Session = Depends(get_db),
 ):
-    """归档指定表到冷存储"""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-
-    # 检查表是否存在
-    table_metric = (
-        db.query(TableMetric)
-        .filter(
-            TableMetric.cluster_id == cluster_id,
-            TableMetric.database_name == database_name,
-            TableMetric.table_name == table_name,
-        )
-        .order_by(TableMetric.scan_time.desc())
-        .first()
-    )
-
-    if not table_metric:
-        raise HTTPException(
-            status_code=404, detail=f"Table {database_name}.{table_name} not found"
-        )
-
-    # 检查是否已经归档
-    if table_metric.archive_status == "archived" and not force:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Table {database_name}.{table_name} is already archived",
-        )
-
-    try:
-        archive_engine = SimpleArchiveEngine(cluster)
-
-        archive_result = archive_engine.archive_table(
-            db_session=db, database_name=database_name, table_name=table_name, force=force
-        )
-
-        # 更新数据库记录
-        table_metric.archive_status = "archived"
-        table_metric.archive_location = archive_result.get("archive_location")
-        table_metric.archived_at = datetime.utcnow()
-        db.commit()
-
-        return {
-            "message": f"Table {database_name}.{table_name} archived successfully",
-            "table_info": {
-                "database_name": database_name,
-                "table_name": table_name,
-                "original_size": table_metric.total_size,
-            },
-            "archive_result": archive_result,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Archive failed: {str(e)}")
+    # 目录迁移归档已移除
+    raise HTTPException(status_code=410, detail="Directory-move archive removed. Use /archive-with-progress?mode=storage-policy")
 
 
 @router.post("/archive-with-progress/{cluster_id}/{database_name}/{table_name}")
@@ -268,6 +259,9 @@ async def archive_table_with_progress(
     database_name: str,
     table_name: str,
     force: bool = Query(False, description="强制归档，跳过检查"),
+    mode: str = Query('storage-policy', description="归档模式：仅支持 storage-policy"),
+    policy: Optional[str] = Query('COLD', description="当 mode=storage-policy 时的策略名称"),
+    recursive: bool = Query(True, description="当 mode=storage-policy 时是否递归应用到子目录"),
     db: Session = Depends(get_db),
 ):
     """以后台任务形式执行归档，提供阶段与日志。返回 task_id 以供追踪。"""
@@ -276,10 +270,11 @@ async def archive_table_with_progress(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     # 创建任务
+    task_type = 'archive-table-policy' if mode == 'storage-policy' else 'archive-table'
     task = scan_task_manager.create_scan_task(
         db,
         cluster_id=cluster_id,
-        task_type="archive-table",
+        task_type=task_type,
         task_name=f"归档表: {database_name}.{table_name}",
         target_database=database_name,
         target_table=table_name,
@@ -287,41 +282,35 @@ async def archive_table_with_progress(
 
     task_id = task.task_id
 
-    # 后台线程执行归档
+    # 后台线程执行归档（结构化日志）
     def run_archive():
         db_thread = SessionLocal()
         try:
-            # 附带初始日志
-            scan_task_manager.add_log(task_id, "INFO", "初始化归档上下文", database_name, table_name, db=db_thread)
-            scan_task_manager.update_task_progress(db_thread, task_id, status="running", total_items=5, completed_items=0, current_item="准备")
-
-            # 前置校验
-            scan_task_manager.add_log(task_id, "INFO", "检查表状态与冷数据标记", database_name, table_name, db=db_thread)
-            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=1, current_item="校验")
-
-            archive_engine = SimpleArchiveEngine(cluster)
-
-            # 获取位置
-            scan_task_manager.add_log(task_id, "INFO", "获取存储位置并计算归档路径", database_name, table_name, db=db_thread)
-            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=2, current_item="定位")
-
-            # 执行归档
-            scan_task_manager.add_log(task_id, "INFO", "开始移动数据文件到归档位置", database_name, table_name, db=db_thread)
-            result = archive_engine.archive_table(
-                db_session=db_thread, database_name=database_name, table_name=table_name, force=force
-            )
-            scan_task_manager.add_log(task_id, "INFO", f"移动完成: {result.get('files_moved', 0)} 个文件", database_name, table_name, db=db_thread)
-            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=4, current_item="更新元数据")
-
-            # 元数据更新已在引擎内完成
-            scan_task_manager.add_log(task_id, "INFO", "更新元数据并提交", database_name, table_name, db=db_thread)
-            scan_task_manager.update_task_progress(db_thread, task_id, completed_items=5, current_item="完成")
-            scan_task_manager.complete_task(db_thread, task_id, success=True)
+            # 线程内重新获取 Cluster，避免跨会话对象导致的 attribute refresh 异常
+            cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            if not cluster_t:
+                raise RuntimeError('Cluster not found in thread session')
+            archive_engine = SimpleArchiveEngine(cluster_t)
+            if mode == 'storage-policy':
+                # 策略归档：设置存储策略
+                scan_task_manager.safe_update_progress(db_thread, task_id, status='running', total_items=3, completed_items=0, current_item='init')
+                scan_task_manager.info(task_id, 'PL101', '开始策略归档', db=db_thread, phase='archive', ctx={'db': database_name, 'table': table_name, 'policy': policy, 'recursive': recursive}, database_name=database_name, table_name=table_name)
+                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=1, current_item='apply')
+                res = archive_engine.apply_storage_policy_table(db_thread, database_name, table_name, policy=policy or 'COLD', recursive=recursive)
+                scan_task_manager.info(task_id, 'PL120', '设置存储策略完成', db=db_thread, phase='archive', ctx={'paths_success': res.get('paths_success'), 'paths_failed': res.get('paths_failed'), 'effective': res.get('policy_effective')}, database_name=database_name, table_name=table_name)
+                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=2, current_item='finalize')
+                scan_task_manager.info(task_id, 'PL190', '策略归档完成', db=db_thread, phase='archive', ctx={'mover_hint': True}, database_name=database_name, table_name=table_name)
+                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=3, current_item='done')
+                scan_task_manager.complete_task(db_thread, task_id, success=True)
+            else:
+                raise RuntimeError('Directory-move archive is disabled; use storage-policy')
         except Exception as e:
-            try:
-                scan_task_manager.add_log(task_id, "ERROR", f"归档失败: {e}", database_name, table_name, db=db_thread)
-            finally:
-                scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
+            # 区分错误码
+            if mode == 'storage-policy':
+                scan_task_manager.error(task_id, 'EL190', f'策略归档失败: {e}', db=db_thread, phase='archive', database_name=database_name, table_name=table_name)
+            else:
+                scan_task_manager.error(task_id, 'EA190', f'表归档失败: {e}', db=db_thread, phase='archive', database_name=database_name, table_name=table_name)
+            scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
         finally:
             try:
                 db_thread.close()
@@ -340,57 +329,65 @@ async def archive_table_with_progress(
     }
 
 
-@router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")
-async def restore_table(
-    cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
+@router.post("/restore-with-progress/{cluster_id}/{database_name}/{table_name}")
+async def restore_table_with_progress(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db),
 ):
-    """从归档存储恢复表"""
+    """以后台任务形式执行“策略恢复”（将存储策略设置回 HOT）。返回 task_id。"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
 
-    # 检查表是否存在且已归档
-    table_metric = (
-        db.query(TableMetric)
-        .filter(
-            TableMetric.cluster_id == cluster_id,
-            TableMetric.database_name == database_name,
-            TableMetric.table_name == table_name,
-            TableMetric.archive_status == "archived",
-        )
-        .order_by(TableMetric.scan_time.desc())
-        .first()
+    task = scan_task_manager.create_scan_task(
+        db,
+        cluster_id=cluster_id,
+        task_type="restore-table-policy",
+        task_name=f"恢复表策略: {database_name}.{table_name}",
+        target_database=database_name,
+        target_table=table_name,
     )
+    task_id = task.task_id
 
-    if not table_metric:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Archived table {database_name}.{table_name} not found",
-        )
+    def run_restore():
+        db_thread = SessionLocal()
+        try:
+            # 线程内重新获取 Cluster
+            cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            if not cluster_t:
+                raise RuntimeError('Cluster not found in thread session')
+            scan_task_manager.safe_update_progress(db_thread, task_id, status='running', total_items=3, completed_items=0, current_item='init')
+            scan_task_manager.info(task_id, 'PL101', '开始策略归档', db=db_thread, phase='restore', ctx={'db': database_name, 'table': table_name, 'policy': 'HOT', 'recursive': True}, database_name=database_name, table_name=table_name)
+            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=1, current_item='apply')
+            engine = SimpleArchiveEngine(cluster_t)
+            res = engine.apply_storage_policy_table(db_thread, database_name, table_name, policy='HOT', recursive=True)
+            scan_task_manager.info(task_id, 'PL120', '设置存储策略完成', db=db_thread, phase='restore', ctx={'paths_success': res.get('paths_success'), 'paths_failed': res.get('paths_failed'), 'effective': res.get('policy_effective')}, database_name=database_name, table_name=table_name)
+            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=2, current_item='finalize')
+            scan_task_manager.info(task_id, 'PL190', '策略归档完成', db=db_thread, phase='restore', ctx={'mover_hint': False}, database_name=database_name, table_name=table_name)
+            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=3, current_item='done')
+            scan_task_manager.complete_task(db_thread, task_id, success=True)
+        except Exception as e:
+            scan_task_manager.error(task_id, 'EL190', f'策略归档失败: {e}', db=db_thread, phase='restore', database_name=database_name, table_name=table_name)
+            scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
+        finally:
+            try:
+                db_thread.close()
+            except Exception:
+                pass
 
-    try:
-        archive_engine = SimpleArchiveEngine(cluster)
+    import threading
+    threading.Thread(target=run_restore, daemon=True).start()
+    return {"message": "Restore started", "task_id": task_id, "cluster_id": cluster_id, "status": "started"}
 
-        restore_result = archive_engine.restore_table(
-            database_name=database_name,
-            table_name=table_name,
-            archive_location=table_metric.archive_location,
-        )
 
-        # 更新数据库记录
-        table_metric.archive_status = "active"
-        table_metric.archive_location = None
-        table_metric.archived_at = None
-        db.commit()
-
-        return {
-            "message": f"Table {database_name}.{table_name} restored successfully",
-            "table_info": {"database_name": database_name, "table_name": table_name},
-            "restore_result": restore_result,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+@router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")
+async def restore_table(
+    cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
+):
+    # 目录迁移恢复已移除
+    raise HTTPException(status_code=410, detail="Directory-move restore removed. Use /restore-with-progress for storage-policy=HOT")
 
 
 @router.get("/archive-status/{cluster_id}/{database_name}/{table_name}")
