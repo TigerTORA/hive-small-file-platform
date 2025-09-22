@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.models.merge_task import MergeTask
+from app.services.scan_service import _sanitize_log_text  # 复用统一日志清洗
+from typing import Dict
 from app.models.cluster import Cluster
 
 class BaseMergeEngine(ABC):
@@ -69,13 +71,39 @@ class BaseMergeEngine(ABC):
             details: 详细信息（可选）
             db_session: 数据库会话（可选）
         """
+        # 结构化消息（可选）：若 details 为 dict，支持 phase/code/kv
+        def _format_structured_msg(msg: str, details_obj):
+            try:
+                phase = None
+                code = None
+                kv: Dict[str, object] = {}
+                if isinstance(details_obj, dict):
+                    phase = details_obj.get('phase')
+                    code = details_obj.get('code')
+                    kv = {k: v for k, v in details_obj.items() if k not in ('phase', 'code') and v is not None}
+                parts = []
+                if phase:
+                    parts.append(f"[{str(phase).upper()}]")
+                if code:
+                    parts.append(str(code))
+                parts.append(msg)
+                if kv:
+                    parts.append(" ".join(f"{k}={v}" for k, v in kv.items()))
+                return " ".join(parts)
+            except Exception:
+                return msg
+
+        message_fmt = _format_structured_msg(message, details)
+
         if db_session:
             from app.models.task_log import TaskLog
+            msg = _sanitize_log_text(message_fmt)
+            det = _sanitize_log_text(details) if isinstance(details, str) else details
             log_entry = TaskLog(
                 task_id=task.id,
                 log_level=level,
-                message=message,
-                details=details
+                message=msg,
+                details=det
             )
             db_session.add(log_entry)
             db_session.commit()
@@ -83,7 +111,7 @@ class BaseMergeEngine(ABC):
             # 如果没有数据库会话，至少记录到应用日志
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"Task {task.id} [{level}]: {message}")
+            logger.info(f"Task {task.id} [{level}]: {_sanitize_log_text(message_fmt)}")
     
     def update_task_status(self, task: MergeTask, status: str, 
                           error_message: Optional[str] = None,

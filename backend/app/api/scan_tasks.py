@@ -9,6 +9,7 @@ from app.schemas.scan_task import ScanTaskResponse, ScanTaskLog
 from app.models.scan_task_log import ScanTaskLogDB
 from app.models.scan_task import ScanTask as ScanTaskModel
 from app.services.scan_service import scan_task_manager
+from app.services.scan_service import _sanitize_log_text  # 使用统一的日志清洗函数
 
 router = APIRouter()
 
@@ -72,16 +73,21 @@ async def get_scan_task_logs(task_id: str, db: Session = Depends(get_db)):
         .order_by(ScanTaskLogDB.timestamp.asc())
         .all()
     )
-    persisted = [
-        ScanTaskLog(
-            timestamp=r.timestamp,
-            level=r.level,
-            message=r.message,
-            database_name=r.database_name,
-            table_name=r.table_name,
+    persisted = []
+    for r in rows:
+        try:
+            msg = _sanitize_log_text(r.message)
+        except Exception:
+            msg = r.message
+        persisted.append(
+            ScanTaskLog(
+                timestamp=r.timestamp,
+                level=r.level,
+                message=msg,
+                database_name=r.database_name,
+                table_name=r.table_name,
+            )
         )
-        for r in rows
-    ]
 
     # Append in-memory logs that might not be persisted yet
     mem_logs = scan_task_manager.get_task_logs(task_id)

@@ -145,6 +145,15 @@ class MergeTaskLogger:
             hdfs_stats: Optional[Dict[str, Any]] = None, 
             yarn_application_id: Optional[str] = None):
         """记录详细日志"""
+        # 统一生成结构化 code 与耗时（秒），便于前端筛选
+        det: Dict[str, Any] = dict(details) if isinstance(details, dict) else {}
+        if 'code' not in det:
+            det['code'] = self._default_code(phase, level, message)
+        if duration_ms is not None and 'elapsed_s' not in det:
+            try:
+                det['elapsed_s'] = f"{duration_ms/1000.0:.2f}"
+            except Exception:
+                pass
         
         # 创建日志条目
         log_entry = MergeLogEntry(
@@ -153,7 +162,7 @@ class MergeTaskLogger:
             phase=phase.value,
             level=level.value,
             message=message,
-            details=details or {},
+            details=det,
             duration_ms=duration_ms,
             sql_statement=sql_statement,
             affected_rows=affected_rows,
@@ -182,6 +191,28 @@ class MergeTaskLogger:
         
         # 保存到数据库
         self._save_to_database(log_entry)
+
+    def _default_code(self, phase: MergePhase, level: MergeLogLevel, message: str) -> str:
+        """为合并日志生成默认事件码（Mxxx）。"""
+        base = {
+            MergePhase.INITIALIZATION: 'M001',
+            MergePhase.CONNECTION_TEST: 'M101',
+            MergePhase.PRE_VALIDATION: 'M150',
+            MergePhase.FILE_ANALYSIS: 'M201',
+            MergePhase.TEMP_TABLE_CREATION: 'M301',
+            MergePhase.DATA_VALIDATION: 'M401',
+            MergePhase.ATOMIC_SWAP: 'M501',
+            MergePhase.POST_VALIDATION: 'M601',
+            MergePhase.CLEANUP: 'M701',
+            MergePhase.ROLLBACK: 'M801',
+            MergePhase.COMPLETION: 'M900',
+        }.get(phase, 'M000')
+        # 错误场景在基码上追加后缀，突出严重性
+        if level in (MergeLogLevel.ERROR, MergeLogLevel.CRITICAL):
+            return base.replace('M', 'E')  # Exxx 与扫描保持风格
+        if level == MergeLogLevel.WARNING:
+            return base.replace('M', 'W')
+        return base
     
     def log_sql_execution(self, sql_statement: str, phase: MergePhase, 
                          affected_rows: Optional[int] = None, 
@@ -384,33 +415,52 @@ class MergeTaskLogger:
         return json.dumps(logs_data, indent=2, ensure_ascii=False)
     
     def _format_log_message(self, entry: MergeLogEntry) -> str:
-        """格式化日志消息"""
-        message = f"[{entry.phase.upper()}] {entry.message}"
-        
-        if entry.details:
-            # 只显示关键详情，避免日志过于冗长
-            key_details = []
-            for key in ["duration_ms", "affected_rows", "files_before", "files_after"]:
-                if key in entry.details and entry.details[key] is not None:
-                    key_details.append(f"{key}={entry.details[key]}")
-            
-            if key_details:
-                message += f" ({', '.join(key_details)})"
-        
-        return message
+        """格式化日志消息（结构化、与扫描日志一致风格）"""
+        # 支持 details 中的 code；其余字段按 k=v 展开
+        code = None
+        if isinstance(entry.details, dict) and 'code' in entry.details:
+            code = entry.details.get('code')
+        parts = [f"[{entry.phase.upper()}]"]
+        if code:
+            parts.append(str(code))
+        parts.append(entry.message)
+
+        # 关键 kv 优先
+        kv_order = [
+            'elapsed_s', 'duration_ms', 'affected_rows', 'files_before', 'files_after',
+            'table_name', 'hdfs_operation', 'hdfs_path', 'yarn_application_id',
+        ]
+        kv_items = []
+        if isinstance(entry.details, dict):
+            # 先按优先级输出
+            for k in kv_order:
+                v = entry.details.get(k)
+                if v is not None:
+                    kv_items.append(f"{k}={v}")
+            # 再输出其余字段
+            for k, v in entry.details.items():
+                if k in kv_order or v is None or k == 'code':
+                    continue
+                kv_items.append(f"{k}={v}")
+
+        if kv_items:
+            parts.append(" ".join(kv_items))
+
+        return " ".join(parts)
     
     def _save_to_database(self, entry: MergeLogEntry):
         """保存日志条目到数据库"""
         try:
             # 导入TaskLog模型
             from app.models.task_log import TaskLog
+            from app.services.scan_service import _sanitize_log_text
             import json
             
             # 创建数据库日志条目
             task_log = TaskLog(
                 task_id=entry.task_id,
                 log_level=entry.level,
-                message=entry.message,
+                message=_sanitize_log_text(entry.message),
                 details=json.dumps(entry.details, ensure_ascii=False) if entry.details else None,
                 phase=entry.phase,
                 duration_ms=entry.duration_ms,
