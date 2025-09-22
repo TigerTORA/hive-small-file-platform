@@ -471,13 +471,22 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 )
                 hdfs: WebHDFSClient = self.webhdfs_client
                 ts_id = int(time.time())
-                # 备份目录也落在 .merge_shadow 根下，避免额外授权
+                # 首选：备份到 .merge_shadow 根
                 shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ''
                 backup_dir = f"{shadow_root}/backup_{ts_id}"
                 ok1, msg1 = hdfs.move_file(original_location, backup_dir)
                 if not ok1:
+                    # 对部分 HttpFS 环境，rename 至 .merge_shadow 可能抛 500 IllegalStateException；回退到父目录下的 .merge_backup_<ts>
+                    alt_backup_dir = f"{parent_dir}/.merge_backup_{ts_id}" if parent_dir else ''
                     merge_logger.log_hdfs_operation("rename", original_location, MergePhase.ATOMIC_SWAP, success=False, error_message=msg1)
-                    raise RuntimeError(f"备份原目录失败: {msg1}")
+                    if alt_backup_dir:
+                        ok1b, msg1b = hdfs.move_file(original_location, alt_backup_dir)
+                        if ok1b:
+                            backup_dir = alt_backup_dir
+                        else:
+                            raise RuntimeError(f"备份原目录失败: {msg1}; fallback: {msg1b}")
+                    else:
+                        raise RuntimeError(f"备份原目录失败: {msg1}")
                 merge_logger.log_hdfs_operation("rename", original_location, MergePhase.ATOMIC_SWAP, success=True, stats={"to": backup_dir})
                 ok2, msg2 = hdfs.move_file(temp_location, original_location)
                 if not ok2:
