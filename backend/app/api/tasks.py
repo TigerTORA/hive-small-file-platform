@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from app.config.database import get_db
+from app.config.database import get_db, SessionLocal
 from app.models.merge_task import MergeTask
 from app.models.cluster import Cluster
 from app.schemas.merge_task import MergeTaskCreate, MergeTaskResponse
@@ -90,61 +90,64 @@ async def get_task(task_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/execute")
 async def execute_task(task_id: int, db: Session = Depends(get_db)):
-    """Execute a merge task"""
+    """Execute a merge task in background to avoid blocking the API worker."""
     task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     if task.status in ["running", "success"]:
         raise HTTPException(status_code=400, detail=f"Task is already {task.status}")
-    
-    # 执行合并任务（支持演示模式与真实执行）
-    try:
-        # 获取集群信息
-        cluster = db.query(Cluster).filter(Cluster.id == task.cluster_id).first()
-        if not cluster:
-            raise HTTPException(status_code=404, detail="Cluster not found")
-        
-        # 更新任务状态为运行中
-        task.status = "running"
-        task.started_time = datetime.utcnow()
-        task.execution_phase = "initialization"
-        task.progress_percentage = 5.0
-        task.current_operation = "初始化合并任务"
-        db.commit()
-        
-        # 引擎选择：DEMO_MODE 使用 DemoMergeEngine，本地即可验证全流程；否则走真实引擎
-        if settings.DEMO_MODE:
-            from app.engines.demo_merge_engine import DemoMergeEngine
-            engine = DemoMergeEngine(cluster)
-        else:
-            # 使用引擎工厂，默认返回 SafeHiveMergeEngine（基于 HiveServer2/pyhive，兼容 LDAP）
-            from app.engines.engine_factory import MergeEngineFactory
-            engine = MergeEngineFactory.get_engine(cluster)
-        
-        # 执行合并
-        result = engine.execute_merge(task, db)
-        
-        return {
-            "message": "Task execution completed", 
-            "task_id": task_id,
-            "status": task.status,
-            "result": result
-        }
-    except Exception as e:
-        # 任务失败时更新状态
-        task.status = "failed"
-        task.error_message = str(e)
-        task.execution_phase = "error"
-        task.current_operation = f"执行失败: {str(e)}"
-        db.commit()
-        
-        return {
-            "message": f"Task execution failed: {str(e)}", 
-            "task_id": task_id,
-            "status": "failed",
-            "error": str(e)
-        }
+
+    # Mark as running and return immediately
+    cluster = db.query(Cluster).filter(Cluster.id == task.cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    task.status = "running"
+    task.started_time = datetime.utcnow()
+    task.execution_phase = "initialization"
+    task.progress_percentage = 5.0
+    task.current_operation = "初始化合并任务"
+    db.commit()
+
+    # Run merge in a dedicated thread with its own DB session
+    import threading
+
+    def _run_merge(tid: int, cluster_id: int):
+        s = SessionLocal()
+        try:
+            t = s.query(MergeTask).filter(MergeTask.id == tid).first()
+            c = s.query(Cluster).filter(Cluster.id == cluster_id).first()
+            if not (t and c):
+                return
+            if settings.DEMO_MODE:
+                from app.engines.demo_merge_engine import DemoMergeEngine
+                engine = DemoMergeEngine(c)
+            else:
+                from app.engines.engine_factory import MergeEngineFactory
+                engine = MergeEngineFactory.get_engine(c)
+            engine.execute_merge(t, s)
+        except Exception as e:
+            try:
+                t = s.query(MergeTask).filter(MergeTask.id == tid).first()
+                if t:
+                    t.status = "failed"
+                    t.error_message = str(e)
+                    t.execution_phase = "error"
+                    t.current_operation = f"执行失败: {e}"
+                    s.commit()
+            except Exception:
+                s.rollback()
+        finally:
+            s.close()
+
+    threading.Thread(target=_run_merge, args=(task_id, cluster.id), daemon=True).start()
+
+    return {
+        "message": "Task started",
+        "task_id": task_id,
+        "status": "running",
+    }
 
 @router.post("/{task_id}/cancel")
 async def cancel_task(task_id: int, db: Session = Depends(get_db)):
@@ -177,11 +180,12 @@ async def get_task_logs(task_id: int, db: Session = Depends(get_db)):
         TaskLog.task_id == task_id
     ).order_by(TaskLog.timestamp.asc()).all()
     
-    return [
-        {
+    sanitized = []
+    for log in logs:
+        sanitized.append({
             "id": log.id,
             "log_level": log.log_level,
-            "message": log.message,
+            "message": _sanitize_log_text(log.message),
             "details": log.details,
             "timestamp": log.timestamp,
             "phase": log.phase,
@@ -193,9 +197,8 @@ async def get_task_logs(task_id: int, db: Session = Depends(get_db)):
             "hdfs_stats": log.hdfs_stats,
             "yarn_application_id": log.yarn_application_id,
             "progress_percentage": log.progress_percentage
-        }
-        for log in logs
-    ]
+        })
+    return sanitized
 
 @router.get("/{task_id}/preview")
 async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
@@ -240,3 +243,4 @@ async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
             status_code=500, 
             detail=f"Failed to generate preview: {str(e)}"
         )
+from app.services.scan_service import _sanitize_log_text
