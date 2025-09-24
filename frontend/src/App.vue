@@ -53,6 +53,19 @@
 
             <div class="nav-section">
               <div class="nav-section-title">系统管理</div>
+              <!-- 治理指引 -->
+              <div class="nav-item">
+                <router-link
+                  to="/governance-flow"
+                  class="nav-link"
+                  :class="{ active: $route.path === '/governance-flow' }"
+                >
+                  <div class="nav-icon">
+                    <el-icon><Guide /></el-icon>
+                  </div>
+                  <span class="nav-text">治理流程</span>
+                </router-link>
+              </div>
               <!-- 任务管理（统一：扫描/合并/归档） → 全局可见 -->
               <div class="nav-item">
                 <router-link
@@ -202,7 +215,6 @@
   import {
     User,
     CaretBottom,
-    DataBoard,
     Connection,
     Grid,
     List,
@@ -214,7 +226,8 @@
     Sunny,
     Refresh,
     Expand,
-    Fold
+    Fold,
+    Guide
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
@@ -240,6 +253,7 @@
       '/clusters': '集群管理',
       '/tables': '表管理',
       '/tasks': '任务管理',
+      '/governance-flow': '治理流程',
       '/settings': '系统设置'
     }
 

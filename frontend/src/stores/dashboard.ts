@@ -66,12 +66,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   })
 
   // 操作方法
-  async function loadSummary() {
+  async function loadSummary(clusterId?: number) {
     loading.value.summary = true
     errors.value.summary = null
 
     try {
-      const data = await dashboardApi.getSummary()
+      const data = await dashboardApi.getSummary(clusterId)
       summary.value = data
     } catch (error: any) {
       errors.value.summary = error.message || '加载概要数据失败'
@@ -159,7 +159,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 加载所有数据
   async function loadAllData(clusterId?: number) {
     await Promise.all([
-      loadSummary(),
+      loadSummary(clusterId),
       loadTrends(clusterId, 7), // 默认加载7天数据
       loadFileDistribution(clusterId),
       loadTopTables(clusterId, 10),

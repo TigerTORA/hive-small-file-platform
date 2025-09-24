@@ -50,50 +50,72 @@
       </div>
     </div>
 
-    <!-- 双饼状图布局 -->
+    <!-- 四饼状图布局 -->
     <div class="pie-charts-section">
 
-      <!-- 双饼状图容器 -->
-      <div class="dual-pie-charts">
-        <!-- 文件压缩性分析饼状图 -->
+      <!-- 三饼状图容器 -->
+      <div class="triple-pie-charts">
+        <!-- 小文件分析饼状图 -->
         <div class="chart-card">
           <div class="chart-header">
             <h3>
               <el-icon><Files /></el-icon>
-              文件压缩性分析
+              小文件分析
             </h3>
-            <el-tag size="small" type="info">
+            <el-tag size="small" type="primary">
               总文件：{{ fileClassificationTotal.toLocaleString() }}
             </el-tag>
           </div>
           <div class="chart-content">
             <PieChart
               :data="fileClassificationData"
-              :height="320"
+              :height="380"
               :color-scheme="compressionColorScheme"
               @sector-click="onFileClassificationClick"
             />
           </div>
         </div>
 
-        <!-- 冷数据时间分布饼状图 -->
+        <!-- 最后访问时间分布饼状图 -->
         <div class="chart-card">
           <div class="chart-header">
             <h3>
               <el-icon><Clock /></el-icon>
-              冷数据时间分布
+              最后访问时间分布
             </h3>
-            <el-tag size="small" type="warning">
+            <el-tag size="small" type="primary">
               总大小：{{ coldDataTotal.toFixed(2) }}GB
             </el-tag>
           </div>
           <div class="chart-content">
             <PieChart
               :data="coldnessDistributionData"
-              :height="320"
+              :height="380"
               :color-scheme="coldnessColorScheme"
               :tooltip-formatter="formatColdnessTooltip"
               @sector-click="onColdnessDistributionClick"
+            />
+          </div>
+        </div>
+
+        <!-- 存储&压缩格式组合分布饼状图 -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>
+              <el-icon><Setting /></el-icon>
+              存储&压缩格式分布
+            </h3>
+            <el-tag size="small" type="primary">
+              总表数：{{ formatCompressionTotal.toLocaleString() }}
+            </el-tag>
+          </div>
+          <div class="chart-content">
+            <PieChart
+              :data="formatCompressionData"
+              :height="380"
+              :color-scheme="formatCompressionColorScheme"
+              :tooltip-formatter="formatCompressionTooltip"
+              @sector-click="onFormatCompressionClick"
             />
           </div>
         </div>
@@ -215,21 +237,23 @@
     Coin,
     Monitor,
     List,
-    DataAnalysis
+    DataAnalysis,
+    Setting
   } from '@element-plus/icons-vue'
   import { ElMessage } from 'element-plus'
   import { useMonitoringStore } from '@/stores/monitoring'
   import { clustersApi } from '@/api/clusters'
   import PieChart from '@/components/charts/PieChart.vue'
-  import { dashboardApi, type FileClassificationItem, type EnhancedColdnessDistribution, type TopTable, type ColdDataItem, type DashboardSummary, type RecentTask, type FileDistributionItem, type TrendPoint } from '@/api/dashboard'
+  import { dashboardApi, type FileClassificationItem, type EnhancedColdnessDistribution, type TopTable, type ColdDataItem, type DashboardSummary, type RecentTask, type FileDistributionItem, type TrendPoint, type StorageFormatItem, type CompressionFormatItem, type FormatCompressionItem } from '@/api/dashboard'
 
-  // 双饼状图相关数据
+  // 四饼状图相关数据
   const monitoringStore = useMonitoringStore()
   const selectedClusterId = ref<number | null>(monitoringStore.settings.selectedCluster)
   const renderError = ref<string | null>(null)
   const isLoadingCharts = ref(false)
   const fileClassificationItems = ref<FileClassificationItem[]>([])
   const coldnessDistribution = ref<EnhancedColdnessDistribution | null>(null)
+  const formatCompressionItems = ref<FormatCompressionItem[]>([])
   const topTables = ref<TopTable[]>([])
   const coldestData = ref<ColdDataItem[]>([])
   const dashboardSummary = ref<DashboardSummary | null>(null)
@@ -328,12 +352,86 @@
         partitions: item.partitions,
         tables: item.tables
       }
-    })).filter(item => item.value > 0) // 过滤掉没有数据的时间段
+    })) // 显示所有时间段，包括0值的
   })
 
   // 冷数据总大小
   const coldDataTotal = computed(() => {
     return coldnessDistributionData.value.reduce((sum, item) => sum + item.value, 0)
+  })
+
+  // 存储格式数据转换为饼状图数据
+  const storageFormatData = computed(() => {
+    return storageFormatItems.value.map(item => ({
+      name: item.format_name,
+      value: item.table_count,
+      description: `${item.format_name} 格式`,
+      details: {
+        table_count: item.table_count,
+        total_size_gb: item.total_size_gb,
+        small_files: item.small_files,
+        total_files: item.total_files,
+        percentage: item.percentage
+      }
+    }))
+  })
+
+  // 存储格式总表数
+  const storageFormatTotal = computed(() => {
+    return storageFormatItems.value.reduce((sum, item) => sum + item.table_count, 0)
+  })
+
+  // 压缩格式数据转换为饼状图数据
+  const compressionFormatData = computed(() => {
+    return compressionFormatItems.value.map(item => ({
+      name: item.compression_name,
+      value: item.table_count,
+      description: `${item.compression_name} 压缩`,
+      details: {
+        table_count: item.table_count,
+        total_size_gb: item.total_size_gb,
+        small_files: item.small_files,
+        total_files: item.total_files,
+        percentage: item.percentage
+      }
+    }))
+  })
+
+  // 压缩格式总表数
+  const compressionFormatTotal = computed(() => {
+    return compressionFormatItems.value.reduce((sum, item) => sum + item.table_count, 0)
+  })
+
+  // 组合格式数据转换为饼状图数据
+  const formatCompressionData = computed(() => {
+    return formatCompressionItems.value.map(item => {
+      // 简化图例显示文字
+      let shortName = item.format_combination
+        .replace('(无压缩)', '·无压缩')
+        .replace('(ZLIB压缩)', '·ZLIB')
+        .replace('(SNAPPY压缩)', '·SNAPPY')
+        .replace('(GZIP压缩)', '·GZIP')
+        .replace('(LZ4压缩)', '·LZ4')
+
+      return {
+        name: shortName,
+        value: item.table_count,
+        description: `${item.format_combination}`,
+        details: {
+          table_count: item.table_count,
+          total_size_gb: item.total_size_gb,
+          small_files: item.small_files,
+          total_files: item.total_files,
+          percentage: item.percentage,
+          original_name: item.format_combination
+        }
+      }
+    })
+  })
+
+  // 组合格式总表数
+  const formatCompressionTotal = computed(() => {
+    return formatCompressionItems.value.reduce((sum, item) => sum + item.table_count, 0)
   })
 
   // 颜色配置
@@ -348,12 +446,34 @@
     '#9a60b4'
   ]
 
+  const compressionFormatColorScheme = [
+    '#8C8C8C', // NONE - 灰色
+    '#1890FF', // ZLIB - 蓝色
+    '#52C41A', // SNAPPY - 绿色
+    '#FAAD14', // GZIP - 橙色
+    '#722ED1', // LZ4 - 紫色
+    '#EB2F96', // BZIP2 - 品红
+    '#13C2C2', // DEFLATE - 青色
+    '#FA8C16'  // OTHER - 橘色
+  ]
+
   const coldnessColorScheme = [
     '#67C23A', // 1-7天 - 绿色
     '#E6A23C', // 1周-1月 - 橙色
     '#F56C6C', // 1-6月 - 红色
     '#409EFF', // 6-12月 - 蓝色
     '#909399'  // 1年以上 - 灰色
+  ]
+
+  const formatCompressionColorScheme = [
+    '#faad14', // TEXT(无压缩) - 橙色
+    '#52c41a', // ORC(ZLIB压缩) - 绿色
+    '#2f54eb', // PARQUET(SNAPPY压缩) - 蓝色
+    '#722ed1', // OTHER(无压缩) - 紫色
+    '#eb2f96', // 其他组合 - 品红
+    '#13c2c2', // 青色
+    '#fa8c16', // 橘色
+    '#a0d911'  // 青绿色
   ]
 
   // 冷数据饼状图提示框格式化
@@ -369,19 +489,71 @@
     `
   }
 
-  // 加载双饼状图数据
+  // 存储格式饼状图提示框格式化
+  const formatStorageFormatTooltip = (item: any) => {
+    const details = item.details
+    if (!details) return ''
+
+    const smallFileRatio = details.total_files > 0 ? (details.small_files / details.total_files * 100).toFixed(1) : '0'
+
+    return `
+      <div style="font-weight: bold; margin-bottom: 8px;">${item.name} 格式</div>
+      <div>📊 表数量：${details.table_count}个 (${details.percentage}%)</div>
+      <div>📁 总文件：${details.total_files.toLocaleString()}个</div>
+      <div>⚠️ 小文件：${details.small_files.toLocaleString()}个 (${smallFileRatio}%)</div>
+      <div style="margin-top: 4px; font-weight: bold;">💾 总大小：${details.total_size_gb.toFixed(2)}GB</div>
+    `
+  }
+
+  // 组合格式tooltip格式化函数
+  const formatCompressionTooltip = (item: any) => {
+    const details = item.details
+    if (!details) return ''
+
+    const smallFileRatio = details.total_files > 0 ? (details.small_files / details.total_files * 100).toFixed(1) : '0'
+
+    return `
+      <div style="font-weight: bold; margin-bottom: 8px;">${item.name}</div>
+      <div>📊 表数量：${details.table_count}个 (${details.percentage}%)</div>
+      <div>📁 总文件：${details.total_files.toLocaleString()}个</div>
+      <div>⚠️ 小文件：${details.small_files.toLocaleString()}个 (${smallFileRatio}%)</div>
+      <div style="margin-top: 4px; font-weight: bold;">💾 总大小：${details.total_size_gb.toFixed(2)}GB</div>
+    `
+  }
+
+  // 存储格式点击处理
+  const onStorageFormatClick = (item: any) => {
+    console.log('点击存储格式:', item)
+    // 可以添加跳转到表管理页面等逻辑
+  }
+
+  // 压缩格式点击处理
+  const onCompressionFormatClick = (item: any) => {
+    console.log('点击压缩格式:', item)
+    // 可以添加跳转到表管理页面等逻辑
+  }
+
+  // 组合格式点击处理
+  const onFormatCompressionClick = (item: any) => {
+    console.log('点击组合格式:', item)
+    // 可以添加跳转到表管理页面等逻辑
+  }
+
+
+  // 加载四饼状图数据
   const loadChartData = async () => {
     isLoadingCharts.value = true
     try {
       const clusterId = selectedClusterId.value
 
       // 并行加载所有API的数据
-      const [fileClassificationResult, coldnessResult, topTablesResult, coldestDataResult, summaryResult, recentTasksResult, fileDistributionResult, trendsResult] = await Promise.all([
+      const [fileClassificationResult, coldnessResult, formatCompressionResult, topTablesResult, coldestDataResult, summaryResult, recentTasksResult, fileDistributionResult, trendsResult] = await Promise.all([
         dashboardApi.getFileClassification(clusterId || undefined),
         dashboardApi.getEnhancedColdnessDistribution(clusterId || undefined),
+        dashboardApi.getFormatCompressionDistribution(clusterId || undefined),
         dashboardApi.getTopTables(clusterId || undefined, 10),
         dashboardApi.getColdestData(10),
-        dashboardApi.getSummary(),
+        dashboardApi.getSummary(clusterId || undefined),
         dashboardApi.getRecentTasks(5),
         dashboardApi.getFileDistribution(clusterId || undefined),
         dashboardApi.getTrends(clusterId || undefined, 30)
@@ -389,6 +561,7 @@
 
       fileClassificationItems.value = fileClassificationResult
       coldnessDistribution.value = coldnessResult
+      formatCompressionItems.value = formatCompressionResult
       topTables.value = topTablesResult
       coldestData.value = coldestDataResult
       dashboardSummary.value = summaryResult
@@ -398,7 +571,23 @@
 
       console.log('图表数据加载完成:', {
         fileClassification: fileClassificationResult,
-        coldness: coldnessResult
+        coldness: coldnessResult,
+        formatCompression: formatCompressionResult
+      })
+
+      console.log('🔍 Debug 格式压缩分布数据:', {
+        apiResponse: formatCompressionResult,
+        computedData: formatCompressionData.value,
+        totalSize: formatCompressionResult?.reduce((sum, item) => sum + item.total_size_gb, 0)
+      })
+
+      // 添加更详细的PieChart props调试
+      console.log('📊 PieChart组件Props:', {
+        formatCompressionData: formatCompressionData.value,
+        dataType: typeof formatCompressionData.value,
+        isArray: Array.isArray(formatCompressionData.value),
+        itemCount: formatCompressionData.value?.length,
+        firstItem: formatCompressionData.value?.[0]
       })
     } catch (error) {
       console.error('加载图表数据失败:', error)
@@ -425,6 +614,7 @@
     console.log('冷数据分布点击:', item)
     ElMessage.info(`点击了 ${item.name}：${item.value.toFixed(2)}GB`)
   }
+
 
   // 任务状态类型映射
   const getTaskStatusType = (status: string) => {
@@ -626,11 +816,11 @@
 
 
 
-  .dual-pie-charts {
+  .triple-pie-charts {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-5);
-    min-height: 420px;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--space-4);
+    min-height: 480px;
   }
 
   .chart-card {
@@ -759,15 +949,37 @@
 
   /* 响应式适配 */
   @media (max-width: 1200px) {
-    .dual-pie-charts,
+    .quad-pie-charts {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
+    }
+
+    .triple-pie-charts {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
+      min-height: 400px;
+    }
+
     .dual-rankings {
       grid-template-columns: 1fr;
       gap: var(--space-4);
     }
 
-
     .overview-stats {
       grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .quad-pie-charts {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+
+    .triple-pie-charts {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+      min-height: 360px;
     }
   }
 

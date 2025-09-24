@@ -103,6 +103,35 @@ export interface ColdDataItem {
   file_count: number
 }
 
+export interface StorageFormatItem {
+  format_name: string
+  table_count: number
+  total_size_gb: number
+  small_files: number
+  total_files: number
+  percentage: number
+}
+
+export interface CompressionFormatItem {
+  compression_name: string
+  table_count: number
+  total_size_gb: number
+  small_files: number
+  total_files: number
+  percentage: number
+}
+
+export interface FormatCompressionItem {
+  format_combination: string
+  storage_format: string
+  compression_format: string
+  table_count: number
+  total_size_gb: number
+  small_files: number
+  total_files: number
+  percentage: number
+}
+
 export interface DetailedColdnessStats {
   partitions: { count: number; size_gb: number }
   tables: { count: number; size_gb: number }
@@ -126,14 +155,19 @@ export interface EnhancedColdnessDistribution {
     total_partitions: number
     total_tables: number
     total_size_gb: number
+    partition_total_size_gb?: number
   }
   distribution_timestamp: string
 }
 
 export const dashboardApi = {
   // 获取仪表盘概要统计
-  getSummary(): Promise<DashboardSummary> {
-    return api.get('/dashboard/summary')
+  getSummary(clusterId?: number): Promise<DashboardSummary> {
+    const params: Record<string, number> = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/summary', { params })
   },
 
   // 获取文件分类统计
@@ -220,5 +254,32 @@ export const dashboardApi = {
   getColdestData(limit: number = 10): Promise<ColdDataItem[]> {
     const params = { limit }
     return api.get('/dashboard/coldest-data', { params })
+  },
+
+  // 获取存储格式分布统计
+  getStorageFormatDistribution(clusterId?: number): Promise<StorageFormatItem[]> {
+    const params: any = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/storage-format-distribution', { params })
+  },
+
+  // 获取压缩格式分布统计
+  getCompressionFormatDistribution(clusterId?: number): Promise<CompressionFormatItem[]> {
+    const params: any = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/compression-format-distribution', { params })
+  },
+
+  // 获取存储格式和压缩格式组合分布统计
+  getFormatCompressionDistribution(clusterId?: number): Promise<FormatCompressionItem[]> {
+    const params: any = {}
+    if (clusterId) {
+      params.cluster_id = clusterId
+    }
+    return api.get('/dashboard/format-compression-distribution', { params })
   }
 }

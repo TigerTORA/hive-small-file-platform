@@ -43,6 +43,12 @@ const router = createRouter({
       meta: { title: '任务管理' }
     },
     {
+      path: '/governance-flow',
+      name: 'GovernanceFlow',
+      component: () => import('@/views/GovernanceFlow.vue'),
+      meta: { title: '治理流程' }
+    },
+    {
       path: '/partition-archive',
       name: 'PartitionArchive',
       component: () => import('@/views/PartitionArchive.vue'),
