@@ -1,20 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from sqlalchemy.orm import Session
+
+from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
 from app.services.scan_service import _sanitize_log_text  # 复用统一日志清洗
-from typing import Dict
-from app.models.cluster import Cluster
+
 
 class BaseMergeEngine(ABC):
     """
     文件合并引擎基类
     定义所有合并引擎必须实现的接口
     """
-    
+
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
-    
+
     @abstractmethod
     def validate_task(self, task: MergeTask) -> Dict[str, Any]:
         """
@@ -25,7 +27,7 @@ class BaseMergeEngine(ABC):
             验证结果字典，包含 valid 和 message 字段
         """
         pass
-    
+
     @abstractmethod
     def execute_merge(self, task: MergeTask, db_session: Session) -> Dict[str, Any]:
         """
@@ -37,7 +39,7 @@ class BaseMergeEngine(ABC):
             执行结果字典，包含状态、文件数量变化等信息
         """
         pass
-    
+
     @abstractmethod
     def get_merge_preview(self, task: MergeTask) -> Dict[str, Any]:
         """
@@ -48,7 +50,7 @@ class BaseMergeEngine(ABC):
             预览信息字典，包含预计的文件数量变化等
         """
         pass
-    
+
     @abstractmethod
     def estimate_duration(self, task: MergeTask) -> int:
         """
@@ -59,9 +61,15 @@ class BaseMergeEngine(ABC):
             预计执行时间（秒）
         """
         pass
-    
-    def log_task_event(self, task: MergeTask, level: str, message: str, 
-                      details: Optional[str] = None, db_session: Optional[Session] = None):
+
+    def log_task_event(
+        self,
+        task: MergeTask,
+        level: str,
+        message: str,
+        details: Optional[str] = None,
+        db_session: Optional[Session] = None,
+    ):
         """
         记录任务执行日志
         Args:
@@ -71,6 +79,7 @@ class BaseMergeEngine(ABC):
             details: 详细信息（可选）
             db_session: 数据库会话（可选）
         """
+
         # 结构化消息（可选）：若 details 为 dict，支持 phase/code/kv
         def _format_structured_msg(msg: str, details_obj):
             try:
@@ -78,9 +87,13 @@ class BaseMergeEngine(ABC):
                 code = None
                 kv: Dict[str, object] = {}
                 if isinstance(details_obj, dict):
-                    phase = details_obj.get('phase')
-                    code = details_obj.get('code')
-                    kv = {k: v for k, v in details_obj.items() if k not in ('phase', 'code') and v is not None}
+                    phase = details_obj.get("phase")
+                    code = details_obj.get("code")
+                    kv = {
+                        k: v
+                        for k, v in details_obj.items()
+                        if k not in ("phase", "code") and v is not None
+                    }
                 parts = []
                 if phase:
                     parts.append(f"[{str(phase).upper()}]")
@@ -97,28 +110,31 @@ class BaseMergeEngine(ABC):
 
         if db_session:
             from app.models.task_log import TaskLog
+
             msg = _sanitize_log_text(message_fmt)
             det = _sanitize_log_text(details) if isinstance(details, str) else details
             log_entry = TaskLog(
-                task_id=task.id,
-                log_level=level,
-                message=msg,
-                details=det
+                task_id=task.id, log_level=level, message=msg, details=det
             )
             db_session.add(log_entry)
             db_session.commit()
         else:
             # 如果没有数据库会话，至少记录到应用日志
             import logging
+
             logger = logging.getLogger(__name__)
             logger.info(f"Task {task.id} [{level}]: {_sanitize_log_text(message_fmt)}")
-    
-    def update_task_status(self, task: MergeTask, status: str, 
-                          error_message: Optional[str] = None,
-                          files_before: Optional[int] = None,
-                          files_after: Optional[int] = None,
-                          size_saved: Optional[int] = None,
-                          db_session: Optional[Session] = None):
+
+    def update_task_status(
+        self,
+        task: MergeTask,
+        status: str,
+        error_message: Optional[str] = None,
+        files_before: Optional[int] = None,
+        files_after: Optional[int] = None,
+        size_saved: Optional[int] = None,
+        db_session: Optional[Session] = None,
+    ):
         """
         更新任务状态
         Args:
@@ -131,7 +147,7 @@ class BaseMergeEngine(ABC):
             db_session: 数据库会话（可选）
         """
         from datetime import datetime
-        
+
         task.status = status
         if error_message:
             task.error_message = error_message
@@ -141,15 +157,15 @@ class BaseMergeEngine(ABC):
             task.files_after = files_after
         if size_saved is not None:
             task.size_saved = size_saved
-        
-        if status == 'running' and not task.started_time:
+
+        if status == "running" and not task.started_time:
             task.started_time = datetime.utcnow()
-        elif status in ['success', 'failed'] and not task.completed_time:
+        elif status in ["success", "failed"] and not task.completed_time:
             task.completed_time = datetime.utcnow()
-        
+
         if db_session:
             db_session.commit()
-    
+
     def _build_table_path(self, database_name: str, table_name: str) -> str:
         """
         构建表的 HDFS 路径（子类可以重写此方法）

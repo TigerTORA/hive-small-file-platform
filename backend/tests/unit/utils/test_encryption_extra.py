@@ -1,8 +1,13 @@
 import os
+
 import pytest
 
-from app.utils.encryption import PasswordEncryptor, encrypt_cluster_password, decrypt_cluster_password
 from app.config.settings import settings
+from app.utils.encryption import (
+    PasswordEncryptor,
+    decrypt_cluster_password,
+    encrypt_cluster_password,
+)
 
 
 @pytest.mark.unit
@@ -57,4 +62,3 @@ def test_encrypt_decrypt_cluster_password(monkeypatch):
     assert ok is True and isinstance(c.hive_password, str)
     dec = decrypt_cluster_password(c)
     assert dec == "pwd!"
-

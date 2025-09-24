@@ -1,22 +1,35 @@
 """
 Pytest configuration and fixtures
 """
-import pytest
+
 import asyncio
 from typing import Generator
+
+import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 
-from app.main import app
 from app.config.database import Base, get_db
-from app.models import Cluster, TableMetric, PartitionMetric, MergeTask, TaskLog, ClusterStatusHistory, ScanTask, ScanTaskLogDB
+from app.main import app
+from app.models import (
+    Cluster,
+    ClusterStatusHistory,
+    MergeTask,
+    PartitionMetric,
+    ScanTask,
+    ScanTaskLogDB,
+    TableMetric,
+    TaskLog,
+)
 
 # Test database URL (SQLite in memory)
 TEST_DATABASE_URL = "sqlite:///./test.db"
 
 # Create test engine
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+test_engine = create_engine(
+    TEST_DATABASE_URL, connect_args={"check_same_thread": False}
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
@@ -33,7 +46,7 @@ def db_session():
     """Create test database session"""
     # Create all tables
     Base.metadata.create_all(bind=test_engine)
-    
+
     session = TestingSessionLocal()
     try:
         yield session
@@ -46,17 +59,18 @@ def db_session():
 @pytest.fixture(scope="function")
 def client(db_session):
     """Create test client with database override"""
+
     def override_get_db():
         try:
             yield db_session
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -71,16 +85,16 @@ def sample_cluster_data():
         "metastore_url": "mysql://user:pass@localhost:3306/hive",
         "hdfs_namenode": "hdfs://localhost:9000",
         "small_file_threshold": 134217728,
-        "is_active": True
+        "is_active": True,
     }
 
 
-@pytest.fixture  
+@pytest.fixture
 def sample_table_metric_data():
     """Sample table metric data for testing"""
     return {
         "database_name": "test_db",
-        "table_name": "test_table", 
+        "table_name": "test_table",
         "table_type": "MANAGED_TABLE",
         "is_partitioned": False,
         "total_files": 100,
@@ -88,7 +102,7 @@ def sample_table_metric_data():
         "total_size": 1073741824,
         "small_files_size": 536870912,
         "avg_file_size": 10737418.24,
-        "compression_ratio": 0.5
+        "compression_ratio": 0.5,
     }
 
 
@@ -102,5 +116,5 @@ def sample_merge_task_data():
         "merge_strategy": "CONCATENATE",
         "estimated_duration": 300,
         "priority": 1,
-        "description": "Test merge task"
+        "description": "Test merge task",
     }

@@ -33,8 +33,12 @@ def test_get_table_location_via_metastore():
 def test_get_table_location_fallback_default_path():
     # 当 metastore 与 hs2 都失败时，回退到默认仓库路径
     cluster = DummyCluster("postgresql://u:p@localhost:5432/hive")
-    with patch("app.services.path_resolver.HiveMetastoreConnector", side_effect=Exception("x")):
-        with patch("app.services.path_resolver.PathResolver._resolve_via_hs2", return_value=None):
+    with patch(
+        "app.services.path_resolver.HiveMetastoreConnector", side_effect=Exception("x")
+    ):
+        with patch(
+            "app.services.path_resolver.PathResolver._resolve_via_hs2",
+            return_value=None,
+        ):
             loc = PathResolver.get_table_location(cluster, "db2", "tbl2")
             assert loc.endswith("/db2.db/tbl2")
-

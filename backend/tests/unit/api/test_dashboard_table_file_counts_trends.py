@@ -16,7 +16,8 @@ def _mk_cluster(db, name="c-trend") -> Cluster:
         hdfs_namenode_url="hdfs://localhost:9000",
     )
     db.add(c)
-    db.commit(); db.refresh(c)
+    db.commit()
+    db.refresh(c)
     return c
 
 
@@ -30,7 +31,9 @@ def _mk_metric(db, cluster_id: int, dbn: str, tbl: str, files: int, when: dateti
         total_size=files * 1024,
         scan_time=when,
     )
-    db.add(m); db.commit(); db.refresh(m)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
     return m
 
 
@@ -56,4 +59,3 @@ def test_table_file_counts_trends_up_and_down(client, db_session):
     by_table = {f"{x['database_name']}.{x['table_name']}": x for x in body}
     assert by_table["db1.t1"]["trend_7d"] >= 49.9  # 接近 +50.0
     assert by_table["db1.t2"]["trend_7d"] <= -49.9  # 接近 -50.0
-

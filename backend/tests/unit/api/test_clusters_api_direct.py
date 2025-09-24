@@ -1,6 +1,6 @@
-import pytest
 from datetime import datetime
 
+import pytest
 
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
@@ -17,7 +17,7 @@ def _cluster_payload(name="c-cls"):
         "hdfs_namenode_url": "hdfs://localhost:9000",
         "hdfs_user": "hdfs",
         "auth_type": "NONE",
-        "small_file_threshold": 128*1024*1024,
+        "small_file_threshold": 128 * 1024 * 1024,
         "scan_enabled": True,
     }
 
@@ -66,7 +66,9 @@ async def test_create_list_get_update_delete_cluster(db_session, monkeypatch):
     assert one.id == created.id
 
     # update
-    upd = await clusters_api.update_cluster(created.id, ClusterUpdate(description="d1"), db_session)
+    upd = await clusters_api.update_cluster(
+        created.id, ClusterUpdate(description="d1"), db_session
+    )
     assert upd.description == "d1"
 
     # avoid raw SQL incompatibility in SQLAlchemy 2.x for delete_cluster here
@@ -107,7 +109,9 @@ async def test_cluster_stats_and_databases(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cluster_databases_when_empty_uses_metastore_error_path(db_session, monkeypatch):
+async def test_get_cluster_databases_when_empty_uses_metastore_error_path(
+    db_session, monkeypatch
+):
     import app.api.clusters as clusters_api
 
     c = _mk_cluster(db_session, name="c-empty")
@@ -115,13 +119,16 @@ async def test_get_cluster_databases_when_empty_uses_metastore_error_path(db_ses
     class _Conn:
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc, tb):
             return False
+
         def get_databases(self):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(clusters_api, "HybridTableScanner", lambda cluster: object())
     from app.monitor import mysql_hive_connector as meta_mod
+
     monkeypatch.setattr(meta_mod, "MySQLHiveMetastoreConnector", lambda url: _Conn())
 
     res = await clusters_api.get_cluster_databases(c.id, db_session)
@@ -133,14 +140,20 @@ async def test_get_cluster_databases_when_empty_uses_metastore_error_path(db_ses
 async def test_health_and_batch_checks(db_session, monkeypatch):
     import app.api.clusters as clusters_api
 
-    monkeypatch.setattr(clusters_api.cluster_status_service, "get_cluster_health_metrics", lambda db, days: {"ok": True})
+    monkeypatch.setattr(
+        clusters_api.cluster_status_service,
+        "get_cluster_health_metrics",
+        lambda db, days: {"ok": True},
+    )
     r = await clusters_api.get_health_metrics(7, db_session)
     assert r["ok"] is True
 
     async def fake_batch(db, ids, limit):
         return {1: {"overall_status": "ok"}, 2: {"overall_status": "ok"}}
 
-    monkeypatch.setattr(clusters_api.cluster_status_service, "batch_health_check", fake_batch)
+    monkeypatch.setattr(
+        clusters_api.cluster_status_service, "batch_health_check", fake_batch
+    )
     r2 = await clusters_api.batch_health_check([1, 2], 5, db_session)
     assert r2["successful_checks"] == 2 and r2["total_clusters"] == 2
 
@@ -154,6 +167,7 @@ async def test_create_cluster_with_validation_failure(db_session, monkeypatch):
     class _Scanner:
         def __init__(self, cluster):
             pass
+
         def test_connections(self):
             return {
                 "overall_status": "failed",

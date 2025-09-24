@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.config.database import get_db
 from app.models.scan_task import ScanTask
-from app.schemas.scan_task import ScanTaskResponse, ScanTaskLog
-from app.models.scan_task_log import ScanTaskLogDB
 from app.models.scan_task import ScanTask as ScanTaskModel
-from app.services.scan_service import scan_task_manager
+from app.models.scan_task_log import ScanTaskLogDB
+from app.schemas.scan_task import ScanTaskLog, ScanTaskResponse
 from app.services.scan_service import _sanitize_log_text  # 使用统一的日志清洗函数
+from app.services.scan_service import scan_task_manager
 
 router = APIRouter()
 
@@ -42,7 +43,7 @@ async def list_scan_tasks(
         last_map = {scan_task_id: ts for scan_task_id, ts in rows}
         for t in tasks:
             # 优先日志时间，其次 end_time，最后 start_time
-            setattr(t, 'last_update', last_map.get(t.id) or t.end_time or t.start_time)
+            setattr(t, "last_update", last_map.get(t.id) or t.end_time or t.start_time)
 
     return tasks
 
@@ -108,7 +109,10 @@ async def cancel_scan_task(task_id: str, db: Session = Depends(get_db)):
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
     if db_task.status not in ("running", "pending"):
-        return {"status": "ignored", "message": f"Task is {db_task.status}, cannot cancel"}
+        return {
+            "status": "ignored",
+            "message": f"Task is {db_task.status}, cannot cancel",
+        }
 
     # 标记取消并由执行线程尽快中止
     scan_task_manager.request_cancel(db, task_id)

@@ -15,7 +15,9 @@ def _mk_cluster(db, name="c-edge") -> Cluster:
         hive_metastore_url="mysql://user:pass@localhost:3306/hive",
         hdfs_namenode_url="hdfs://localhost:9000",
     )
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
     return c
 
 
@@ -41,7 +43,9 @@ def test_connection_cache_put_get_and_expire(db_session):
     assert cached and cached["status"] == "success"
 
     # 过期：将时间回拨
-    svc._connection_cache[c.id]["metastore"]["timestamp"] = datetime.now() - timedelta(seconds=999)
+    svc._connection_cache[c.id]["metastore"]["timestamp"] = datetime.now() - timedelta(
+        seconds=999
+    )
     svc._cache_ttl = 1
     assert svc.get_connection_status_cached(c.id, "metastore") is None
 
@@ -59,4 +63,3 @@ async def test_test_cluster_connections_invalid_cluster_raises(db_session):
     svc = ClusterStatusService()
     with pytest.raises(ValueError):
         await svc.test_cluster_connections(db_session, 9999)
-

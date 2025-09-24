@@ -13,4 +13,3 @@ def test_resolve_via_hs2_import_error_returns_none():
     cluster = DummyCluster()
     loc = PathResolver._resolve_via_hs2(cluster, "db", "tbl")
     assert loc is None
-

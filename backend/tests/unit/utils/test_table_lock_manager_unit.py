@@ -29,6 +29,7 @@ def _make_task(db, cluster_id: int, db_name="db", tbl="tbl", name="t1") -> Merge
         database_name=db_name,
         table_name=tbl,
         status="pending",
+        use_ec=False,
     )
     db.add(t)
     db.commit()
@@ -42,14 +43,18 @@ def test_acquire_and_release_lock_flow(db_session):
     task = _make_task(db_session, c.id)
 
     # acquire
-    r = TableLockManager.acquire_table_lock(db_session, c.id, task.database_name, task.table_name, task.id)
+    r = TableLockManager.acquire_table_lock(
+        db_session, c.id, task.database_name, task.table_name, task.id
+    )
     assert r["success"] is True
 
     db_session.refresh(task)
     assert task.table_lock_acquired is True and task.lock_holder == f"task_{task.id}"
 
     # check status
-    st = TableLockManager.check_table_lock_status(db_session, c.id, task.database_name, task.table_name)
+    st = TableLockManager.check_table_lock_status(
+        db_session, c.id, task.database_name, task.table_name
+    )
     assert st.get("locked") is True and st.get("locked_by_task") == task.id
 
     # release
@@ -70,7 +75,9 @@ def test_acquire_when_other_task_holds_lock(db_session):
 
     me = _make_task(db_session, c.id, name="me")
 
-    r = TableLockManager.acquire_table_lock(db_session, c.id, holder.database_name, holder.table_name, me.id)
+    r = TableLockManager.acquire_table_lock(
+        db_session, c.id, holder.database_name, holder.table_name, me.id
+    )
     assert r["success"] is False
     assert r.get("locked_by_task") == holder.id
 
@@ -130,5 +137,11 @@ def test_cleanup_expired_locks_and_get_all(db_session):
     # 仅检查结构完整性
     if locks["total_locks"]:
         entry = locks["locks"][0]
-        assert {"task_id", "cluster_id", "database_name", "table_name", "lock_holder", "task_status"} <= set(entry.keys())
-
+        assert {
+            "task_id",
+            "cluster_id",
+            "database_name",
+            "table_name",
+            "lock_holder",
+            "task_status",
+        } <= set(entry.keys())

@@ -1,11 +1,11 @@
 import pytest
 
+from app.config.settings import settings
 from app.utils.encryption import (
     PasswordEncryptor,
-    encrypt_cluster_password,
     decrypt_cluster_password,
+    encrypt_cluster_password,
 )
-from app.config.settings import settings
 
 
 @pytest.mark.unit
@@ -30,4 +30,3 @@ def test_decrypt_cluster_password_none_returns_none():
 
     c = _C()
     assert decrypt_cluster_password(c) is None
-

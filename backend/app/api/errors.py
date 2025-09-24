@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
 import sentry_sdk
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
+
 
 @router.get("/test-error")
 async def test_error():
@@ -11,6 +12,7 @@ async def test_error():
     except Exception as e:
         sentry_sdk.capture_exception(e)
         raise HTTPException(status_code=500, detail="Test error captured by Sentry")
+
 
 @router.get("/test-manual-error")
 async def test_manual_error():

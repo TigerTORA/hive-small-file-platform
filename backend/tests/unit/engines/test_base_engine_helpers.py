@@ -1,8 +1,8 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 from app.engines.base_engine import BaseMergeEngine
-from app.models.merge_task import MergeTask
 from app.models.cluster import Cluster
+from app.models.merge_task import MergeTask
 
 
 class _FakeEngine(BaseMergeEngine):
@@ -38,12 +38,15 @@ def test_update_task_status_without_db_session():
         table_name="tbl",
         database_name="db",
         merge_strategy="safe_merge",
+        use_ec=False,
     )
 
     engine.update_task_status(task, "running")
     assert task.status == "running"
 
-    engine.update_task_status(task, "success", files_before=10, files_after=2, size_saved=123)
+    engine.update_task_status(
+        task, "success", files_before=10, files_after=2, size_saved=123
+    )
     assert task.status == "success"
     assert task.files_before == 10
     assert task.files_after == 2
@@ -58,8 +61,8 @@ def test_log_task_event_without_db_session(caplog):
         table_name="tbl",
         database_name="db",
         merge_strategy="safe_merge",
+        use_ec=False,
     )
     with caplog.at_level("INFO"):
         engine.log_task_event(task, "INFO", "hello")
     assert any("hello" in r.message for r in caplog.records)
-

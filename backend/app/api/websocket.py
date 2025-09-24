@@ -2,11 +2,18 @@
 WebSocket API 端点
 提供实时数据推送功能
 """
+
 import json
 import logging
 from typing import Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
-from app.services.websocket_service import websocket_manager, notification_service, WebSocketMessage
+
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+
+from app.services.websocket_service import (
+    WebSocketMessage,
+    notification_service,
+    websocket_manager,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -16,7 +23,7 @@ router = APIRouter()
 async def websocket_endpoint(
     websocket: WebSocket,
     user_id: Optional[str] = Query(default="anonymous", description="用户ID"),
-    topics: Optional[str] = Query(default="", description="订阅主题，用逗号分隔")
+    topics: Optional[str] = Query(default="", description="订阅主题，用逗号分隔"),
 ):
     """
     WebSocket连接端点
@@ -54,18 +61,16 @@ async def websocket_endpoint(
                 await websocket_manager._send_to_websocket(
                     websocket,
                     WebSocketMessage(
-                        type="error",
-                        data={"message": "Invalid JSON format"}
-                    )
+                        type="error", data={"message": "Invalid JSON format"}
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Error handling client message: {e}")
                 await websocket_manager._send_to_websocket(
                     websocket,
                     WebSocketMessage(
-                        type="error",
-                        data={"message": "Internal server error"}
-                    )
+                        type="error", data={"message": "Internal server error"}
+                    ),
                 )
 
     except WebSocketDisconnect:
@@ -88,10 +93,7 @@ async def handle_client_message(websocket: WebSocket, user_id: str, message: dic
 
         await websocket_manager._send_to_websocket(
             websocket,
-            WebSocketMessage(
-                type="subscription_confirmed",
-                data={"topics": topics}
-            )
+            WebSocketMessage(type="subscription_confirmed", data={"topics": topics}),
         )
 
     elif message_type == "unsubscribe":
@@ -101,31 +103,21 @@ async def handle_client_message(websocket: WebSocket, user_id: str, message: dic
 
         await websocket_manager._send_to_websocket(
             websocket,
-            WebSocketMessage(
-                type="unsubscription_confirmed",
-                data={"topics": topics}
-            )
+            WebSocketMessage(type="unsubscription_confirmed", data={"topics": topics}),
         )
 
     elif message_type == "ping":
         # 心跳检测
         await websocket_manager._send_to_websocket(
             websocket,
-            WebSocketMessage(
-                type="pong",
-                data={"timestamp": data.get("timestamp")}
-            )
+            WebSocketMessage(type="pong", data={"timestamp": data.get("timestamp")}),
         )
 
     elif message_type == "get_status":
         # 请求状态信息
         stats = websocket_manager.get_connection_stats()
         await websocket_manager._send_to_websocket(
-            websocket,
-            WebSocketMessage(
-                type="status_response",
-                data=stats
-            )
+            websocket, WebSocketMessage(type="status_response", data=stats)
         )
 
     else:
@@ -133,9 +125,8 @@ async def handle_client_message(websocket: WebSocket, user_id: str, message: dic
         await websocket_manager._send_to_websocket(
             websocket,
             WebSocketMessage(
-                type="error",
-                data={"message": f"Unknown message type: {message_type}"}
-            )
+                type="error", data={"message": f"Unknown message type: {message_type}"}
+            ),
         )
 
 
@@ -146,25 +137,18 @@ async def get_websocket_stats():
 
 
 @router.post("/ws/broadcast")
-async def broadcast_message(
-    topic: str,
-    message_type: str,
-    data: dict
-):
+async def broadcast_message(topic: str, message_type: str, data: dict):
     """
     手动广播消息（用于测试和管理）
     """
-    message = WebSocketMessage(
-        type=message_type,
-        data=data
-    )
+    message = WebSocketMessage(type=message_type, data=data)
 
     await websocket_manager.broadcast_to_topic(topic, message)
 
     return {
         "status": "success",
         "message": f"Broadcasted to topic '{topic}'",
-        "stats": websocket_manager.get_connection_stats()
+        "stats": websocket_manager.get_connection_stats(),
     }
 
 

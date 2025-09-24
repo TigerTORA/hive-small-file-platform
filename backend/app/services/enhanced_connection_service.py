@@ -2,21 +2,23 @@
 增强的连接检测服务
 提供连接超时控制、重试机制、故障识别和连接池管理功能
 """
+
 import asyncio
-import time
 import logging
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
-from enum import Enum
-from datetime import datetime, timedelta
-from urllib.parse import urlparse
 import socket
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from app.models.cluster import Cluster
-from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.hive_connector import HiveMetastoreConnector
+from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.webhdfs_scanner import WebHDFSScanner
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ConnectionType(Enum):
     """连接类型枚举"""
+
     METASTORE = "metastore"
     HDFS = "hdfs"
     HIVESERVER2 = "hiveserver2"
@@ -31,6 +34,7 @@ class ConnectionType(Enum):
 
 class FailureType(Enum):
     """故障类型枚举"""
+
     NETWORK_TIMEOUT = "network_timeout"
     CONNECTION_REFUSED = "connection_refused"
     AUTHENTICATION_FAILED = "authentication_failed"
@@ -44,6 +48,7 @@ class FailureType(Enum):
 @dataclass
 class ConnectionResult:
     """连接测试结果"""
+
     connection_type: ConnectionType
     status: str  # success, failed, timeout
     response_time_ms: float
@@ -61,6 +66,7 @@ class ConnectionResult:
 @dataclass
 class ConnectionConfig:
     """连接配置"""
+
     timeout_seconds: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -74,13 +80,17 @@ class EnhancedConnectionService:
 
     def __init__(self, config: ConnectionConfig = None):
         self.config = config or ConnectionConfig()
-        self.executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="conn-test")
+        self.executor = ThreadPoolExecutor(
+            max_workers=10, thread_name_prefix="conn-test"
+        )
         self._connection_history: Dict[int, List[ConnectionResult]] = {}
         self._circuit_breakers: Dict[Tuple[int, ConnectionType], int] = {}  # 熔断器状态
         self._last_successful_check: Dict[Tuple[int, ConnectionType], datetime] = {}
         self._lock = threading.Lock()
 
-    def _classify_error(self, error: Exception, connection_type: ConnectionType) -> FailureType:
+    def _classify_error(
+        self, error: Exception, connection_type: ConnectionType
+    ) -> FailureType:
         """分类连接错误类型"""
         error_str = str(error).lower()
 
@@ -97,7 +107,10 @@ class EnhancedConnectionService:
             return FailureType.DNS_RESOLUTION_FAILED
 
         # 认证失败
-        if any(keyword in error_str for keyword in ["authentication", "login", "password", "unauthorized"]):
+        if any(
+            keyword in error_str
+            for keyword in ["authentication", "login", "password", "unauthorized"]
+        ):
             return FailureType.AUTHENTICATION_FAILED
 
         # 权限拒绝
@@ -109,64 +122,59 @@ class EnhancedConnectionService:
             return FailureType.SSL_ERROR
 
         # 服务不可用
-        if any(keyword in error_str for keyword in ["service unavailable", "bad gateway", "not found"]):
+        if any(
+            keyword in error_str
+            for keyword in ["service unavailable", "bad gateway", "not found"]
+        ):
             return FailureType.SERVICE_UNAVAILABLE
 
         return FailureType.UNKNOWN_ERROR
 
-    def _generate_failure_suggestions(self, failure_type: FailureType, connection_type: ConnectionType) -> List[str]:
+    def _generate_failure_suggestions(
+        self, failure_type: FailureType, connection_type: ConnectionType
+    ) -> List[str]:
         """根据故障类型生成修复建议"""
         suggestions = []
 
         if failure_type == FailureType.NETWORK_TIMEOUT:
-            suggestions.extend([
-                "检查网络连接是否正常",
-                "验证目标服务器是否可达",
-                "考虑增加连接超时时间",
-                "检查防火墙设置"
-            ])
+            suggestions.extend(
+                [
+                    "检查网络连接是否正常",
+                    "验证目标服务器是否可达",
+                    "考虑增加连接超时时间",
+                    "检查防火墙设置",
+                ]
+            )
 
         elif failure_type == FailureType.CONNECTION_REFUSED:
-            suggestions.extend([
-                "确认目标服务正在运行",
-                "检查端口配置是否正确",
-                "验证服务监听地址配置"
-            ])
+            suggestions.extend(
+                ["确认目标服务正在运行", "检查端口配置是否正确", "验证服务监听地址配置"]
+            )
 
         elif failure_type == FailureType.DNS_RESOLUTION_FAILED:
-            suggestions.extend([
-                "检查域名配置是否正确",
-                "验证DNS服务器设置",
-                "尝试使用IP地址代替域名"
-            ])
+            suggestions.extend(
+                ["检查域名配置是否正确", "验证DNS服务器设置", "尝试使用IP地址代替域名"]
+            )
 
         elif failure_type == FailureType.AUTHENTICATION_FAILED:
-            suggestions.extend([
-                "检查用户名和密码是否正确",
-                "验证用户权限设置",
-                "确认认证方式配置"
-            ])
+            suggestions.extend(
+                ["检查用户名和密码是否正确", "验证用户权限设置", "确认认证方式配置"]
+            )
 
         elif failure_type == FailureType.PERMISSION_DENIED:
-            suggestions.extend([
-                "检查用户访问权限",
-                "验证文件系统权限设置",
-                "确认服务账户配置"
-            ])
+            suggestions.extend(
+                ["检查用户访问权限", "验证文件系统权限设置", "确认服务账户配置"]
+            )
 
         elif failure_type == FailureType.SSL_ERROR:
-            suggestions.extend([
-                "检查SSL证书配置",
-                "验证证书有效期",
-                "确认SSL协议版本兼容性"
-            ])
+            suggestions.extend(
+                ["检查SSL证书配置", "验证证书有效期", "确认SSL协议版本兼容性"]
+            )
 
         elif failure_type == FailureType.SERVICE_UNAVAILABLE:
-            suggestions.extend([
-                "检查目标服务状态",
-                "验证服务配置",
-                "确认服务依赖是否正常"
-            ])
+            suggestions.extend(
+                ["检查目标服务状态", "验证服务配置", "确认服务依赖是否正常"]
+            )
 
         # 连接类型特定建议
         if connection_type == ConnectionType.METASTORE:
@@ -181,14 +189,18 @@ class EnhancedConnectionService:
 
         return suggestions[:5]  # 限制建议数量
 
-    def _is_circuit_breaker_open(self, cluster_id: int, connection_type: ConnectionType) -> bool:
+    def _is_circuit_breaker_open(
+        self, cluster_id: int, connection_type: ConnectionType
+    ) -> bool:
         """检查熔断器是否开启"""
         key = (cluster_id, connection_type)
         with self._lock:
             failures = self._circuit_breakers.get(key, 0)
             return failures >= self.config.circuit_breaker_threshold
 
-    def _update_circuit_breaker(self, cluster_id: int, connection_type: ConnectionType, success: bool):
+    def _update_circuit_breaker(
+        self, cluster_id: int, connection_type: ConnectionType, success: bool
+    ):
         """更新熔断器状态"""
         key = (cluster_id, connection_type)
         with self._lock:
@@ -219,9 +231,9 @@ class EnhancedConnectionService:
         try:
             # 创建连接器
             parsed = urlparse(cluster.hive_metastore_url)
-            scheme = (parsed.scheme or '').lower()
+            scheme = (parsed.scheme or "").lower()
 
-            if scheme.startswith('mysql'):
+            if scheme.startswith("mysql"):
                 connector = MySQLHiveMetastoreConnector(cluster.hive_metastore_url)
             else:
                 connector = HiveMetastoreConnector(cluster.hive_metastore_url)
@@ -230,20 +242,20 @@ class EnhancedConnectionService:
             test_result = connector.test_connection()
             response_time = (time.time() - start_time) * 1000
 
-            if test_result.get('status') == 'success':
+            if test_result.get("status") == "success":
                 return ConnectionResult(
                     connection_type=connection_type,
                     status="success",
-                    response_time_ms=response_time
+                    response_time_ms=response_time,
                 )
             else:
-                error_msg = test_result.get('message', 'Unknown error')
+                error_msg = test_result.get("message", "Unknown error")
                 return ConnectionResult(
                     connection_type=connection_type,
                     status="failed",
                     response_time_ms=response_time,
                     failure_type=FailureType.SERVICE_UNAVAILABLE,
-                    error_message=error_msg
+                    error_message=error_msg,
                 )
 
         except Exception as e:
@@ -255,7 +267,7 @@ class EnhancedConnectionService:
                 status="failed",
                 response_time_ms=response_time,
                 failure_type=failure_type,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def _test_hdfs_connection(self, cluster: Cluster) -> ConnectionResult:
@@ -266,7 +278,7 @@ class EnhancedConnectionService:
         try:
             scanner = WebHDFSScanner(
                 cluster.hdfs_namenode_url,
-                user=getattr(cluster, 'hdfs_user', 'hdfs') or 'hdfs'
+                user=getattr(cluster, "hdfs_user", "hdfs") or "hdfs",
             )
 
             # 测试连接
@@ -282,7 +294,7 @@ class EnhancedConnectionService:
                 return ConnectionResult(
                     connection_type=connection_type,
                     status="success",
-                    response_time_ms=response_time
+                    response_time_ms=response_time,
                 )
             else:
                 return ConnectionResult(
@@ -290,7 +302,7 @@ class EnhancedConnectionService:
                     status="failed",
                     response_time_ms=response_time,
                     failure_type=FailureType.SERVICE_UNAVAILABLE,
-                    error_message="HDFS connection failed"
+                    error_message="HDFS connection failed",
                 )
 
         except Exception as e:
@@ -302,7 +314,7 @@ class EnhancedConnectionService:
                 status="failed",
                 response_time_ms=response_time,
                 failure_type=failure_type,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def _test_hiveserver2_connection(self, cluster: Cluster) -> ConnectionResult:
@@ -328,7 +340,7 @@ class EnhancedConnectionService:
                     status="failed",
                     response_time_ms=response_time,
                     failure_type=FailureType.CONNECTION_REFUSED,
-                    error_message=f"Cannot connect to {host}:{port}"
+                    error_message=f"Cannot connect to {host}:{port}",
                 )
 
             # TCP连接成功，尝试真实的Hive连接测试
@@ -365,7 +377,7 @@ class EnhancedConnectionService:
                 return ConnectionResult(
                     connection_type=connection_type,
                     status="success",
-                    response_time_ms=response_time
+                    response_time_ms=response_time,
                 )
 
             except Exception as hive_error:
@@ -376,7 +388,7 @@ class EnhancedConnectionService:
                     status="failed",
                     response_time_ms=response_time,
                     failure_type=FailureType.SERVICE_UNAVAILABLE,
-                    error_message=f"HiveServer2 service unavailable: {str(hive_error)}"
+                    error_message=f"HiveServer2 service unavailable: {str(hive_error)}",
                 )
 
         except Exception as e:
@@ -388,10 +400,12 @@ class EnhancedConnectionService:
                 status="failed",
                 response_time_ms=response_time,
                 failure_type=failure_type,
-                error_message=str(e)
+                error_message=str(e),
             )
 
-    def _test_connection_with_retry(self, cluster: Cluster, connection_type: ConnectionType) -> ConnectionResult:
+    def _test_connection_with_retry(
+        self, cluster: Cluster, connection_type: ConnectionType
+    ) -> ConnectionResult:
         """带重试机制的连接测试"""
         last_result = None
         total_attempts = 1 + self.config.max_retries
@@ -400,11 +414,15 @@ class EnhancedConnectionService:
             try:
                 # 执行连接测试
                 if connection_type == ConnectionType.METASTORE:
-                    future = self.executor.submit(self._test_metastore_connection, cluster)
+                    future = self.executor.submit(
+                        self._test_metastore_connection, cluster
+                    )
                 elif connection_type == ConnectionType.HDFS:
                     future = self.executor.submit(self._test_hdfs_connection, cluster)
                 elif connection_type == ConnectionType.HIVESERVER2:
-                    future = self.executor.submit(self._test_hiveserver2_connection, cluster)
+                    future = self.executor.submit(
+                        self._test_hiveserver2_connection, cluster
+                    )
                 else:
                     raise ValueError(f"Unsupported connection type: {connection_type}")
 
@@ -421,7 +439,9 @@ class EnhancedConnectionService:
 
                 # 如果不是最后一次尝试，等待后重试
                 if attempt < total_attempts - 1:
-                    delay = self.config.retry_delay * (self.config.retry_backoff ** attempt)
+                    delay = self.config.retry_delay * (
+                        self.config.retry_backoff**attempt
+                    )
                     time.sleep(delay)
 
             except FutureTimeoutError:
@@ -432,11 +452,13 @@ class EnhancedConnectionService:
                     failure_type=FailureType.NETWORK_TIMEOUT,
                     error_message=f"Connection timeout after {self.config.timeout_seconds}s",
                     attempt_count=attempt + 1,
-                    retry_count=attempt
+                    retry_count=attempt,
                 )
 
                 if attempt < total_attempts - 1:
-                    delay = self.config.retry_delay * (self.config.retry_backoff ** attempt)
+                    delay = self.config.retry_delay * (
+                        self.config.retry_backoff**attempt
+                    )
                     time.sleep(delay)
 
             except Exception as e:
@@ -447,7 +469,7 @@ class EnhancedConnectionService:
                     failure_type=self._classify_error(e, connection_type),
                     error_message=str(e),
                     attempt_count=attempt + 1,
-                    retry_count=attempt
+                    retry_count=attempt,
                 )
                 break  # 非超时错误不重试
 
@@ -456,17 +478,19 @@ class EnhancedConnectionService:
             status="failed",
             response_time_ms=0,
             failure_type=FailureType.UNKNOWN_ERROR,
-            error_message="All connection attempts failed"
+            error_message="All connection attempts failed",
         )
 
     async def test_cluster_connections(
-        self,
-        cluster: Cluster,
-        connection_types: List[ConnectionType] = None
+        self, cluster: Cluster, connection_types: List[ConnectionType] = None
     ) -> Dict[str, Any]:
         """异步测试集群连接"""
         if connection_types is None:
-            connection_types = [ConnectionType.METASTORE, ConnectionType.HDFS, ConnectionType.HIVESERVER2]
+            connection_types = [
+                ConnectionType.METASTORE,
+                ConnectionType.HDFS,
+                ConnectionType.HIVESERVER2,
+            ]
 
         start_time = time.time()
         results = {}
@@ -479,13 +503,15 @@ class EnhancedConnectionService:
             # 检查熔断器
             if self._is_circuit_breaker_open(cluster.id, conn_type):
                 last_success = self._last_successful_check.get((cluster.id, conn_type))
-                if last_success and datetime.now() - last_success < timedelta(minutes=5):
+                if last_success and datetime.now() - last_success < timedelta(
+                    minutes=5
+                ):
                     # 熔断器开启且最近没有成功，跳过测试
                     result = ConnectionResult(
                         connection_type=conn_type,
                         status="circuit_breaker_open",
                         response_time_ms=0,
-                        error_message="Circuit breaker is open due to consecutive failures"
+                        error_message="Circuit breaker is open due to consecutive failures",
                     )
                     results[conn_type.value] = result
                     continue
@@ -503,36 +529,48 @@ class EnhancedConnectionService:
                 results[conn_type.value] = result
 
                 # 更新熔断器状态
-                self._update_circuit_breaker(cluster.id, conn_type, result.status == "success")
+                self._update_circuit_breaker(
+                    cluster.id, conn_type, result.status == "success"
+                )
 
                 # 记录结果
                 self._record_connection_result(cluster.id, result)
 
                 # 生成日志
                 if result.status == "success":
-                    logs.append({
-                        "level": "INFO",
-                        "message": f"{conn_type.value}: Connected successfully ({result.response_time_ms:.1f}ms)"
-                    })
+                    logs.append(
+                        {
+                            "level": "INFO",
+                            "message": f"{conn_type.value}: Connected successfully ({result.response_time_ms:.1f}ms)",
+                        }
+                    )
                 else:
-                    logs.append({
-                        "level": "ERROR",
-                        "message": f"{conn_type.value}: {result.error_message} (attempts: {result.attempt_count})"
-                    })
+                    logs.append(
+                        {
+                            "level": "ERROR",
+                            "message": f"{conn_type.value}: {result.error_message} (attempts: {result.attempt_count})",
+                        }
+                    )
 
                     # 生成修复建议
                     if result.failure_type:
-                        conn_suggestions = self._generate_failure_suggestions(result.failure_type, conn_type)
+                        conn_suggestions = self._generate_failure_suggestions(
+                            result.failure_type, conn_type
+                        )
                         suggestions.extend(conn_suggestions)
 
             except Exception as e:
-                logs.append({
-                    "level": "ERROR",
-                    "message": f"{conn_type.value}: Unexpected error - {str(e)}"
-                })
+                logs.append(
+                    {
+                        "level": "ERROR",
+                        "message": f"{conn_type.value}: Unexpected error - {str(e)}",
+                    }
+                )
 
         # 计算整体状态
-        successful_connections = sum(1 for r in results.values() if r.status == "success")
+        successful_connections = sum(
+            1 for r in results.values() if r.status == "success"
+        )
         total_connections = len(results)
 
         if successful_connections == total_connections:
@@ -552,18 +590,22 @@ class EnhancedConnectionService:
                 conn_type: {
                     "status": result.status,
                     "response_time_ms": result.response_time_ms,
-                    "failure_type": result.failure_type.value if result.failure_type else None,
+                    "failure_type": (
+                        result.failure_type.value if result.failure_type else None
+                    ),
                     "error_message": result.error_message,
                     "attempt_count": result.attempt_count,
-                    "retry_count": result.retry_count
+                    "retry_count": result.retry_count,
                 }
                 for conn_type, result in results.items()
             },
             "logs": logs,
-            "suggestions": list(set(suggestions))  # 去重
+            "suggestions": list(set(suggestions)),  # 去重
         }
 
-    def get_connection_history(self, cluster_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_connection_history(
+        self, cluster_id: int, limit: int = 50
+    ) -> List[Dict[str, Any]]:
         """获取连接历史记录"""
         with self._lock:
             history = self._connection_history.get(cluster_id, [])
@@ -574,16 +616,20 @@ class EnhancedConnectionService:
                     "connection_type": result.connection_type.value,
                     "status": result.status,
                     "response_time_ms": result.response_time_ms,
-                    "failure_type": result.failure_type.value if result.failure_type else None,
+                    "failure_type": (
+                        result.failure_type.value if result.failure_type else None
+                    ),
                     "error_message": result.error_message,
                     "attempt_count": result.attempt_count,
                     "retry_count": result.retry_count,
-                    "timestamp": result.timestamp.isoformat()
+                    "timestamp": result.timestamp.isoformat(),
                 }
                 for result in recent_history
             ]
 
-    def get_connection_statistics(self, cluster_id: int, hours: int = 24) -> Dict[str, Any]:
+    def get_connection_statistics(
+        self, cluster_id: int, hours: int = 24
+    ) -> Dict[str, Any]:
         """获取连接统计信息"""
         since_time = datetime.now() - timedelta(hours=hours)
 
@@ -597,7 +643,7 @@ class EnhancedConnectionService:
                     "success_rate": 0,
                     "average_response_time_ms": 0,
                     "failure_types": {},
-                    "period_hours": hours
+                    "period_hours": hours,
                 }
 
             # 计算统计指标
@@ -608,8 +654,10 @@ class EnhancedConnectionService:
             # 平均响应时间（只计算成功的连接）
             successful_results = [r for r in recent_history if r.status == "success"]
             avg_response_time = (
-                sum(r.response_time_ms for r in successful_results) / len(successful_results)
-                if successful_results else 0
+                sum(r.response_time_ms for r in successful_results)
+                / len(successful_results)
+                if successful_results
+                else 0
             )
 
             # 故障类型统计
@@ -625,7 +673,7 @@ class EnhancedConnectionService:
                 "success_rate": round(success_rate, 2),
                 "average_response_time_ms": round(avg_response_time, 2),
                 "failure_types": failure_types,
-                "period_hours": hours
+                "period_hours": hours,
             }
 
 

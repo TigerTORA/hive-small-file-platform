@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from app.services.websocket_service import WebSocketManager, WebSocketMessage
 from app.api import websocket as ws_api
+from app.services.websocket_service import WebSocketManager, WebSocketMessage
 
 
 class DummyWS:
@@ -34,11 +34,15 @@ def capture_send(monkeypatch):
 @pytest.mark.asyncio
 async def test_handle_subscribe_unsubscribe(patched_manager, capture_send):
     ws = DummyWS()
-    await ws_api.handle_client_message(ws, "u1", {"type": "subscribe", "data": {"topics": ["a", "b"]}})
+    await ws_api.handle_client_message(
+        ws, "u1", {"type": "subscribe", "data": {"topics": ["a", "b"]}}
+    )
     assert capture_send[-1]["type"] == "subscription_confirmed"
     assert set(capture_send[-1]["data"]["topics"]) == {"a", "b"}
 
-    await ws_api.handle_client_message(ws, "u1", {"type": "unsubscribe", "data": {"topics": ["a"]}})
+    await ws_api.handle_client_message(
+        ws, "u1", {"type": "unsubscribe", "data": {"topics": ["a"]}}
+    )
     assert capture_send[-1]["type"] == "unsubscription_confirmed"
     assert capture_send[-1]["data"]["topics"] == ["a"]
 
@@ -47,13 +51,20 @@ async def test_handle_subscribe_unsubscribe(patched_manager, capture_send):
 @pytest.mark.asyncio
 async def test_handle_ping_and_get_status(patched_manager, capture_send):
     ws = DummyWS()
-    await ws_api.handle_client_message(ws, "u1", {"type": "ping", "data": {"timestamp": "t"}})
+    await ws_api.handle_client_message(
+        ws, "u1", {"type": "ping", "data": {"timestamp": "t"}}
+    )
     assert capture_send[-1]["type"] == "pong"
     assert capture_send[-1]["data"]["timestamp"] == "t"
 
     await ws_api.handle_client_message(ws, "u1", {"type": "get_status", "data": {}})
     assert capture_send[-1]["type"] == "status_response"
-    assert set(capture_send[-1]["data"].keys()) >= {"total_connections", "total_users", "topic_subscriptions", "avg_connections_per_user"}
+    assert set(capture_send[-1]["data"].keys()) >= {
+        "total_connections",
+        "total_users",
+        "topic_subscriptions",
+        "avg_connections_per_user",
+    }
 
 
 @pytest.mark.unit
@@ -63,4 +74,3 @@ async def test_handle_unknown_message_type(patched_manager, capture_send):
     await ws_api.handle_client_message(ws, "u1", {"type": "unknown_type", "data": {}})
     assert capture_send[-1]["type"] == "error"
     assert "Unknown message type" in capture_send[-1]["data"]["message"]
-

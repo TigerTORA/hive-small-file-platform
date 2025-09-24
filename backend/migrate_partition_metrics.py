@@ -6,6 +6,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+
 def migrate_partition_metrics():
     """为partition_metrics表添加新的归档相关字段"""
 
@@ -22,7 +23,9 @@ def migrate_partition_metrics():
         cursor = conn.cursor()
 
         # 检查表是否存在
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='partition_metrics'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='partition_metrics'"
+        )
         if not cursor.fetchone():
             print("partition_metrics表不存在")
             return False
@@ -40,7 +43,7 @@ def migrate_partition_metrics():
             ("is_cold_data", "INTEGER DEFAULT 0"),
             ("archive_status", "VARCHAR(50) DEFAULT 'active'"),
             ("archive_location", "VARCHAR(1000)"),
-            ("archived_at", "DATETIME")
+            ("archived_at", "DATETIME"),
         ]
 
         # 添加缺失的字段
@@ -48,7 +51,9 @@ def migrate_partition_metrics():
         for col_name, col_def in new_columns:
             if col_name not in columns:
                 try:
-                    sql = f"ALTER TABLE partition_metrics ADD COLUMN {col_name} {col_def}"
+                    sql = (
+                        f"ALTER TABLE partition_metrics ADD COLUMN {col_name} {col_def}"
+                    )
                     print(f"执行: {sql}")
                     cursor.execute(sql)
                     added_columns.append(col_name)
@@ -62,7 +67,7 @@ def migrate_partition_metrics():
                 "CREATE INDEX IF NOT EXISTS ix_partition_metrics_scan_time ON partition_metrics (scan_time)",
                 "CREATE INDEX IF NOT EXISTS ix_partition_metrics_last_access_time ON partition_metrics (last_access_time)",
                 "CREATE INDEX IF NOT EXISTS ix_partition_metrics_archive_status ON partition_metrics (archive_status)",
-                "CREATE INDEX IF NOT EXISTS ix_partition_metrics_archived_at ON partition_metrics (archived_at)"
+                "CREATE INDEX IF NOT EXISTS ix_partition_metrics_archived_at ON partition_metrics (archived_at)",
             ]
 
             for sql in index_sqls:
@@ -91,8 +96,9 @@ def migrate_partition_metrics():
         print(f"数据库操作失败: {e}")
         return False
     finally:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
+
 
 if __name__ == "__main__":
     print("开始迁移partition_metrics表...")

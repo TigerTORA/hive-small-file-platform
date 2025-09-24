@@ -4,8 +4,9 @@ import pytest
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_websocket_endpoint_invalid_json_then_disconnect(monkeypatch):
-    import app.api.websocket as ws_api
     from fastapi import WebSocketDisconnect
+
+    import app.api.websocket as ws_api
 
     class _WS:
         def __init__(self):
@@ -41,14 +42,19 @@ async def test_websocket_endpoint_invalid_json_then_disconnect(monkeypatch):
     ws = _WS()
     await ws_api.websocket_endpoint(ws, user_id="u1", topics="a,b")
     assert subs and subs[-1] == ["a", "b"]
-    assert any(x.get("type") == "error" and x.get("data", {}).get("message") == "Invalid JSON format" for x in sent)
+    assert any(
+        x.get("type") == "error"
+        and x.get("data", {}).get("message") == "Invalid JSON format"
+        for x in sent
+    )
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_websocket_endpoint_internal_error_then_disconnect(monkeypatch):
-    import app.api.websocket as ws_api
     from fastapi import WebSocketDisconnect
+
+    import app.api.websocket as ws_api
 
     class _WS:
         def __init__(self):
@@ -82,7 +88,11 @@ async def test_websocket_endpoint_internal_error_then_disconnect(monkeypatch):
 
     ws = _WS()
     await ws_api.websocket_endpoint(ws, user_id="u2", topics="")
-    assert any(x.get("type") == "error" and x.get("data", {}).get("message") == "Internal server error" for x in sent)
+    assert any(
+        x.get("type") == "error"
+        and x.get("data", {}).get("message") == "Internal server error"
+        for x in sent
+    )
 
 
 @pytest.mark.unit

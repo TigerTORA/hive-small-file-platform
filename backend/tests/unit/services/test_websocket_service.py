@@ -5,9 +5,9 @@ from typing import List, Tuple
 import pytest
 
 from app.services.websocket_service import (
+    RealTimeNotificationService,
     WebSocketManager,
     WebSocketMessage,
-    RealTimeNotificationService,
 )
 
 
@@ -74,7 +74,7 @@ async def test_subscribe_unsubscribe_and_stats():
     await mgr.connect(ws2, user_id="u2")
 
     await mgr.subscribe("u1", ["t1", "t2"])  # u1 -> t1, t2
-    await mgr.subscribe("u2", ["t2"])          # u2 -> t2
+    await mgr.subscribe("u2", ["t2"])  # u2 -> t2
 
     stats = mgr.get_connection_stats()
     assert stats["total_connections"] == 2
@@ -101,7 +101,7 @@ async def test_broadcast_to_topic_sends_only_to_subscribers_and_disconnects_on_e
     await mgr.connect(bad, user_id="u3")
 
     await mgr.subscribe("u1", ["alpha"])  # subscribed
-    await mgr.subscribe("u2", ["beta"])   # not subscribed to alpha
+    await mgr.subscribe("u2", ["beta"])  # not subscribed to alpha
     await mgr.subscribe("u3", ["alpha"])  # subscribed but will raise on send
 
     msg = WebSocketMessage(type="foo", data={"hello": 123})
@@ -115,7 +115,9 @@ async def test_broadcast_to_topic_sends_only_to_subscribers_and_disconnects_on_e
     assert ok2.last_payload()["type"] == "connection_established"
 
     # bad socket should have been disconnected after failure
-    assert "u3" not in mgr.active_connections or bad not in mgr.active_connections.get("u3", set())
+    assert "u3" not in mgr.active_connections or bad not in mgr.active_connections.get(
+        "u3", set()
+    )
 
 
 @pytest.mark.unit
@@ -170,7 +172,9 @@ async def test_realtime_notification_service_topics_and_types(monkeypatch):
     monkeypatch.setattr(mgr, "broadcast_to_topic", fake_broadcast)
 
     # trigger each notification path
-    await svc.notify_connection_status_changed(1, "c1", {"overall_status": "success", "tests": {}, "suggestions": []})
+    await svc.notify_connection_status_changed(
+        1, "c1", {"overall_status": "success", "tests": {}, "suggestions": []}
+    )
     await svc.notify_health_check_completed(1, "healthy", {"d": 1})
     await svc.notify_scan_progress(1, 99, 0.5, current_table="db.tbl")
     await svc.notify_task_status_changed(77, "merge", "running", progress=0.1)
@@ -182,9 +186,9 @@ async def test_realtime_notification_service_topics_and_types(monkeypatch):
     # verify topics routing
     assert topics == [
         "cluster_status",  # connection_status
-        "health_check",    # health_update
-        "scan_progress",   # scan_progress
-        "task_updates",    # task_update
+        "health_check",  # health_update
+        "scan_progress",  # scan_progress
+        "task_updates",  # task_update
         "cluster_status",  # cluster_stats
     ]
 
@@ -196,4 +200,3 @@ async def test_realtime_notification_service_topics_and_types(monkeypatch):
         "task_update",
         "cluster_stats",
     ]
-

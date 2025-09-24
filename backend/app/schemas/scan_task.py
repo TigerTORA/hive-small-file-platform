@@ -1,10 +1,12 @@
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class ScanTaskCreate(BaseModel):
     """创建扫描任务的请求模式"""
+
     cluster_id: int
     task_type: str  # 'database', 'table', 'cluster'
     task_name: str
@@ -15,6 +17,7 @@ class ScanTaskCreate(BaseModel):
 
 class ScanTaskUpdate(BaseModel):
     """更新扫描任务状态的模式"""
+
     status: str
     completed_items: int
     current_item: Optional[str] = None
@@ -26,42 +29,44 @@ class ScanTaskUpdate(BaseModel):
 
 class ScanTaskResponse(BaseModel):
     """扫描任务响应模式"""
+
     id: int
     task_id: str
     cluster_id: int
     task_type: str
     task_name: str
     status: str
-    
+
     # 进度信息
     total_items: int
     completed_items: int
     current_item: Optional[str] = None
     progress_percentage: float
     estimated_remaining_seconds: float
-    
+
     # 结果统计
     total_tables_scanned: int
     total_files_found: int
     total_small_files: int
-    
+
     # 时间信息
     start_time: datetime
     end_time: Optional[datetime] = None
     duration: Optional[float] = None
-    
+
     # 错误信息
     error_message: Optional[str] = None
     warnings: Optional[str] = None
     # 最近更新时间（派生：取最新日志时间，若无则 end_time 或 start_time）
     last_update: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class ScanTaskLog(BaseModel):
     """扫描任务日志条目"""
+
     timestamp: datetime
     level: str  # INFO, WARNING, ERROR
     message: str
@@ -71,6 +76,7 @@ class ScanTaskLog(BaseModel):
 
 class ScanTaskProgress(BaseModel):
     """实时进度响应"""
+
     task_id: str
     status: str
     progress_percentage: float

@@ -3,7 +3,13 @@ import pytest
 
 @pytest.mark.unit
 def test_retry_timeout_and_unsupported(monkeypatch):
-    from app.services.enhanced_connection_service import EnhancedConnectionService, ConnectionConfig, ConnectionType, FailureType, FutureTimeoutError
+    from app.services.enhanced_connection_service import (
+        ConnectionConfig,
+        ConnectionType,
+        EnhancedConnectionService,
+        FailureType,
+        FutureTimeoutError,
+    )
 
     cfg = ConnectionConfig(timeout_seconds=0.01, max_retries=1, retry_delay=0)
     svc = EnhancedConnectionService(cfg)
@@ -11,11 +17,14 @@ def test_retry_timeout_and_unsupported(monkeypatch):
     class _Fut:
         def __init__(self, exc):
             self._exc = exc
+
         def result(self, timeout=None):
             raise self._exc
 
     # timeout path
-    monkeypatch.setattr(svc.executor, "submit", lambda func, cluster: _Fut(FutureTimeoutError()))
+    monkeypatch.setattr(
+        svc.executor, "submit", lambda func, cluster: _Fut(FutureTimeoutError())
+    )
     r = svc._test_connection_with_retry(object(), ConnectionType.METASTORE)
     assert r.status == "timeout" and r.failure_type == FailureType.NETWORK_TIMEOUT
 
@@ -26,7 +35,12 @@ def test_retry_timeout_and_unsupported(monkeypatch):
 
 @pytest.mark.unit
 def test_retry_then_success(monkeypatch):
-    from app.services.enhanced_connection_service import EnhancedConnectionService, ConnectionConfig, ConnectionType, ConnectionResult
+    from app.services.enhanced_connection_service import (
+        ConnectionConfig,
+        ConnectionResult,
+        ConnectionType,
+        EnhancedConnectionService,
+    )
 
     cfg = ConnectionConfig(timeout_seconds=0.1, max_retries=1, retry_delay=0)
     svc = EnhancedConnectionService(cfg)
@@ -39,6 +53,7 @@ def test_retry_then_success(monkeypatch):
     class _Fut:
         def __init__(self, res):
             self._res = res
+
         def result(self, timeout=None):
             return self._res
 

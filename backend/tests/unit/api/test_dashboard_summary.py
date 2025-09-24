@@ -19,4 +19,3 @@ def test_dashboard_summary_empty_db(client):
     assert isinstance(data.get("small_file_ratio"), float)
     assert isinstance(data.get("total_size_gb"), float)
     assert isinstance(data.get("small_file_size_gb"), float)
-

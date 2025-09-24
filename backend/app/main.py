@@ -4,10 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
-from app.api import clusters, dashboard, errors, table_archiving, partition_archiving
-from app.api import har_archiving, storage_admin
+from app.api import clusters, dashboard, errors, partition_archiving
 from app.api import scan_tasks as scan_tasks_api
-from app.api import tables_refactored, tasks, websocket
+from app.api import storage_admin, table_archiving, tables_refactored, tasks, websocket
 from app.config.database import Base, engine
 from app.config.settings import settings
 from app.models import (
@@ -72,9 +71,14 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboar
 app.include_router(
     scan_tasks_api.router, prefix="/api/v1/scan-tasks", tags=["scan-tasks"]
 )
-app.include_router(table_archiving.router, prefix="/api/v1/table-archiving", tags=["table-archiving"])
-app.include_router(partition_archiving.router, prefix="/api/v1/partition-archiving", tags=["partition-archiving"])
-app.include_router(har_archiving.router, prefix="/api/v1/har-archiving", tags=["har-archiving"])
+app.include_router(
+    table_archiving.router, prefix="/api/v1/table-archiving", tags=["table-archiving"]
+)
+app.include_router(
+    partition_archiving.router,
+    prefix="/api/v1/partition-archiving",
+    tags=["partition-archiving"],
+)
 app.include_router(storage_admin.router, prefix="/api/v1", tags=["storage-admin"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 

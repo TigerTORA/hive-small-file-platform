@@ -2,18 +2,19 @@
 合并任务日志系统单元测试
 """
 
-import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
+from app.models.merge_task import MergeTask
 from app.utils.merge_logger import (
-    MergeTaskLogger,
+    MergeLogEntry,
     MergeLogLevel,
     MergePhase,
-    MergeLogEntry
+    MergeTaskLogger,
 )
-from app.models.merge_task import MergeTask
 
 
 class TestMergeLogLevel:
@@ -36,9 +37,17 @@ class TestMergePhase:
     def test_merge_phases(self):
         """测试所有合并阶段"""
         expected_phases = [
-            "initialization", "connection_test", "pre_validation",
-            "file_analysis", "temp_table_creation", "data_validation",
-            "atomic_swap", "post_validation", "cleanup", "rollback", "completion"
+            "initialization",
+            "connection_test",
+            "pre_validation",
+            "file_analysis",
+            "temp_table_creation",
+            "data_validation",
+            "atomic_swap",
+            "post_validation",
+            "cleanup",
+            "rollback",
+            "completion",
         ]
 
         actual_phases = [phase.value for phase in MergePhase]
@@ -58,7 +67,7 @@ class TestMergeLogEntry:
             level="INFO",
             message="测试消息",
             details={"key": "value"},
-            duration_ms=1000
+            duration_ms=1000,
         )
 
         assert entry.timestamp == "2023-01-01T12:00:00"
@@ -86,8 +95,8 @@ class TestMergeTaskLogger:
         self.mock_db_session = Mock()
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_logger_initialization(self, mock_time, mock_logging):
         """测试日志记录器初始化"""
         mock_time.time.return_value = 1640995200  # 2022-01-01 00:00:00
@@ -100,8 +109,8 @@ class TestMergeTaskLogger:
         assert logger.log_file_path.startswith("/tmp/merge_task_1_")
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_start_and_end_phase(self, mock_time, mock_logging):
         """测试阶段开始和结束"""
         mock_time.time.side_effect = [1640995200, 1640995201, 1640995202]
@@ -110,9 +119,7 @@ class TestMergeTaskLogger:
 
         # 开始阶段
         logger.start_phase(
-            MergePhase.CONNECTION_TEST,
-            "测试连接",
-            {"host": "localhost"}
+            MergePhase.CONNECTION_TEST, "测试连接", {"host": "localhost"}
         )
 
         # 结束阶段
@@ -120,7 +127,7 @@ class TestMergeTaskLogger:
             MergePhase.CONNECTION_TEST,
             "连接成功",
             {"result": "connected"},
-            success=True
+            success=True,
         )
 
         # 验证日志条目
@@ -138,8 +145,8 @@ class TestMergeTaskLogger:
         assert end_entry.duration_ms == 1000  # 1秒
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_log_sql_execution(self, mock_time, mock_logging):
         """测试SQL执行日志"""
         mock_time.time.return_value = 1640995200
@@ -151,7 +158,7 @@ class TestMergeTaskLogger:
             sql_statement=sql,
             phase=MergePhase.TEMP_TABLE_CREATION,
             affected_rows=1000,
-            success=True
+            success=True,
         )
 
         # 验证SQL日志
@@ -164,25 +171,22 @@ class TestMergeTaskLogger:
         assert sql_entry.details["execution_success"] is True
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_log_hdfs_operation(self, mock_time, mock_logging):
         """测试HDFS操作日志"""
         mock_time.time.return_value = 1640995200
 
         logger = MergeTaskLogger(self.mock_task, self.mock_db_session)
 
-        hdfs_stats = {
-            "files_scanned": 100,
-            "total_size": 1024*1024*100
-        }
+        hdfs_stats = {"files_scanned": 100, "total_size": 1024 * 1024 * 100}
 
         logger.log_hdfs_operation(
             operation="list_files",
             path="/data/table/dt=2023-01-01",
             phase=MergePhase.FILE_ANALYSIS,
             stats=hdfs_stats,
-            success=True
+            success=True,
         )
 
         # 验证HDFS日志
@@ -194,8 +198,8 @@ class TestMergeTaskLogger:
         assert hdfs_entry.hdfs_stats == hdfs_stats
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_log_file_statistics(self, mock_time, mock_logging):
         """测试文件统计日志"""
         mock_time.time.return_value = 1640995200
@@ -207,7 +211,7 @@ class TestMergeTaskLogger:
             table_name="test_table",
             files_before=500,
             files_after=10,
-            hdfs_stats={"space_saved": 1024*1024*50}
+            hdfs_stats={"space_saved": 1024 * 1024 * 50},
         )
 
         # 验证文件统计日志
@@ -219,8 +223,8 @@ class TestMergeTaskLogger:
         assert stats_entry.files_after == 10
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_get_log_summary(self, mock_time, mock_logging):
         """测试日志摘要生成"""
         mock_time.time.return_value = 1640995200
@@ -242,8 +246,8 @@ class TestMergeTaskLogger:
         assert summary["log_file_path"].startswith("/tmp/merge_task_1_")
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_export_logs_to_json(self, mock_time, mock_logging):
         """测试日志JSON导出"""
         mock_time.time.return_value = 1640995200
@@ -263,9 +267,9 @@ class TestMergeTaskLogger:
         assert logs_data["task_info"]["table_name"] == "test_table"
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
-    @patch('app.utils.merge_logger.MergeTaskLogger._save_to_database')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
+    @patch("app.utils.merge_logger.MergeTaskLogger._save_to_database")
     def test_database_save_called(self, mock_save_db, mock_time, mock_logging):
         """测试数据库保存被调用"""
         mock_time.time.return_value = 1640995200
@@ -277,8 +281,8 @@ class TestMergeTaskLogger:
         assert mock_save_db.call_count >= 2  # 初始化日志 + 测试日志
 
     @pytest.mark.unit
-    @patch('app.utils.merge_logger.logging')
-    @patch('app.utils.merge_logger.time')
+    @patch("app.utils.merge_logger.logging")
+    @patch("app.utils.merge_logger.time")
     def test_database_save_error_handling(self, mock_time, mock_logging):
         """测试数据库保存错误处理"""
         mock_time.time.return_value = 1640995200

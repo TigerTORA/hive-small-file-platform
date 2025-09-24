@@ -1,8 +1,9 @@
-import pytest
 from datetime import datetime, timedelta
 
-from app.models.scan_task import ScanTask
+import pytest
+
 from app.models.cluster import Cluster
+from app.models.scan_task import ScanTask
 from app.models.scan_task_log import ScanTaskLogDB
 
 
@@ -15,7 +16,9 @@ def _mk_cluster(db, name="c-scan") -> Cluster:
         hive_metastore_url="mysql://user:pass@localhost:3306/hive",
         hdfs_namenode_url="hdfs://localhost:9000",
     )
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
     return c
 
 
@@ -28,7 +31,9 @@ def _mk_task(db, cluster_id=1, task_id="task-1", status="running") -> ScanTask:
         status=status,
         start_time=datetime.utcnow() - timedelta(minutes=5),
     )
-    db.add(t); db.commit(); db.refresh(t)
+    db.add(t)
+    db.commit()
+    db.refresh(t)
     return t
 
 
@@ -61,12 +66,22 @@ def test_scan_task_logs_persisted_and_memory_merge(client, db_session, monkeypat
         database_name="db1",
         table_name="t1",
     )
-    db_session.add(row); db_session.commit()
+    db_session.add(row)
+    db_session.commit()
 
     # memory log newer
     from app.schemas.scan_task import ScanTaskLog
-    mem_log = ScanTaskLog(timestamp=datetime.utcnow(), level="INFO", message="mem", database_name="db1", table_name="t1")
-    monkeypatch.setattr(scan_service_mod.scan_task_manager, "get_task_logs", lambda task_id: [mem_log])
+
+    mem_log = ScanTaskLog(
+        timestamp=datetime.utcnow(),
+        level="INFO",
+        message="mem",
+        database_name="db1",
+        table_name="t1",
+    )
+    monkeypatch.setattr(
+        scan_service_mod.scan_task_manager, "get_task_logs", lambda task_id: [mem_log]
+    )
 
     r = client.get(f"/api/v1/scan-tasks/{t.task_id}/logs")
     assert r.status_code == 200
@@ -77,13 +92,18 @@ def test_scan_task_logs_persisted_and_memory_merge(client, db_session, monkeypat
 @pytest.mark.unit
 def test_cancel_scan_task(client, db_session, monkeypatch):
     from app.services import scan_service as scan_service_mod
+
     c = _mk_cluster(db_session)
     t = _mk_task(db_session, cluster_id=c.id, task_id="task-cancel", status="running")
 
     called = {"ok": False}
+
     def fake_cancel(db, task_id):
         called["ok"] = True
-    monkeypatch.setattr(scan_service_mod.scan_task_manager, "request_cancel", fake_cancel)
+
+    monkeypatch.setattr(
+        scan_service_mod.scan_task_manager, "request_cancel", fake_cancel
+    )
 
     r = client.post(f"/api/v1/scan-tasks/{t.task_id}/cancel")
     assert r.status_code == 200 and called["ok"] is True

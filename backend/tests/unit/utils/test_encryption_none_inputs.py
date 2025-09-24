@@ -11,4 +11,3 @@ def test_encrypt_password_none_returns_none():
 @pytest.mark.unit
 def test_decrypt_password_none_returns_none():
     assert PasswordEncryptor.decrypt_password("") is None
-

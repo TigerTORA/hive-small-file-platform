@@ -22,4 +22,3 @@ def test_ws_broadcast_empty_topic(client):
     )
     assert r.status_code == 200
     assert r.json().get("status") == "success"
-

@@ -1,9 +1,10 @@
-import pytest
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.models.cluster import Cluster
-from app.services.cluster_status_service import ClusterStatusService
 from app.models.cluster_status_history import ClusterStatusHistory
+from app.services.cluster_status_service import ClusterStatusService
 
 
 def _mk(db, name, status="active", health="unknown"):
@@ -30,8 +31,12 @@ def test_status_history_and_metrics(db_session):
     c2 = _mk(db_session, "c2", status="inactive", health="unhealthy")
 
     # 写入若干历史记录（只需确保最近有一条）
-    svc.record_status_change(db_session, c1.id, new_status="maintenance", reason="manual", message="maint")
-    svc.record_status_change(db_session, c1.id, new_status="active", reason="manual", message="back")
+    svc.record_status_change(
+        db_session, c1.id, new_status="maintenance", reason="manual", message="maint"
+    )
+    svc.record_status_change(
+        db_session, c1.id, new_status="active", reason="manual", message="back"
+    )
 
     hist = svc.get_cluster_status_history(db_session, c1.id, limit=10)
     assert len(hist) >= 2
@@ -46,4 +51,3 @@ def test_status_history_and_metrics(db_session):
     assert stats["health_distribution"].get("healthy", 0) >= 1
     assert stats["health_distribution"].get("unhealthy", 0) >= 1
     assert stats["recent_status_changes"] >= 1
-

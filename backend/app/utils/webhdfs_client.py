@@ -2,19 +2,23 @@
 WebHDFS客户端工具类
 通过REST API与HDFS交互，支持Simple认证
 """
-import os
+
 import json
 import logging
-import requests
-from typing import List, Dict, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+import os
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urljoin, urlparse
+
+import requests
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class HDFSFileInfo:
     """HDFS文件信息"""
+
     path: str
     size: int
     modification_time: int
@@ -25,9 +29,11 @@ class HDFSFileInfo:
     owner: str
     group: str
 
+
 @dataclass
 class HDFSDirectoryStats:
     """HDFS目录统计信息"""
+
     total_files: int
     total_size: int
     small_files_count: int
@@ -37,31 +43,34 @@ class HDFSDirectoryStats:
     average_file_size: int
     directory_count: int
 
+
 class WebHDFSClient:
     """WebHDFS客户端"""
-    
+
     def __init__(self, namenode_url: str, user: str = "hdfs", timeout: int = 30):
         """
         初始化WebHDFS客户端
-        
+
         Args:
             namenode_url: NameNode的WebHDFS URL (如: http://192.168.0.100:50070)
             user: HDFS用户名，默认hdfs
             timeout: 请求超时时间（秒）
         """
-        self.namenode_url = namenode_url.rstrip('/')
+        self.namenode_url = namenode_url.rstrip("/")
         self.user = user
         self.timeout = timeout
         self.session = requests.Session()
-        
+
         # WebHDFS API基础路径
         if namenode_url.endswith("/webhdfs/v1"):
             self.webhdfs_base = self.namenode_url
         else:
             self.webhdfs_base = f"{self.namenode_url}/webhdfs/v1"
-        
-        logger.info(f"Initialized WebHDFS client: {self.namenode_url}, user: {self.user}")
-    
+
+        logger.info(
+            f"Initialized WebHDFS client: {self.namenode_url}, user: {self.user}"
+        )
+
     def _build_url(self, path: str, operation: str, **params) -> str:
         """构建WebHDFS API URL（自动归一化 hdfs:// 路径为 HTTP 路径）"""
         # 归一化：将 hdfs://nameservice1/... 转为 /... 路径
@@ -69,7 +78,7 @@ class WebHDFSClient:
             normalized = self._normalize_path(path)
         except Exception:
             normalized = path
-        normalized = normalized.lstrip('/')
+        normalized = normalized.lstrip("/")
         url = f"{self.webhdfs_base}/{normalized}?op={operation}&user.name={self.user}"
 
         # 添加其他参数
@@ -83,57 +92,63 @@ class WebHDFSClient:
         """将 hdfs:// 或 viewfs:// 开头的 URI 归一为纯路径 /..."""
         try:
             if not path:
-                return '/'
-            if isinstance(path, str) and (path.startswith('hdfs://') or path.startswith('viewfs://')):
+                return "/"
+            if isinstance(path, str) and (
+                path.startswith("hdfs://") or path.startswith("viewfs://")
+            ):
                 p = urlparse(path)
-                return p.path or '/'
+                return p.path or "/"
             return path
         except Exception:
             return path
 
     def _alt_bases(self) -> list:
-        """生成备选的 WebHDFS 基础地址（用于 HttpFS 不支持深路径时回退到 NN 9870/50070）。"""
-        bases = [self.webhdfs_base]
+        """返回可用的 WebHDFS 基础地址列表。
+
+        出于稳定性考虑，当集群配置的是 HttpFS（如 14000 端口）或非默认端口时，
+        不再回退到 9870/50070（很多环境未开放，易引起连接拒绝）。
+        只有在明确使用默认 NN 端口（9870/50070）时，才保留单一基址。
+        """
         try:
             parsed = urlparse(self.webhdfs_base)
-            host = parsed.hostname
-            if host:
-                # 常见 NN 端口
-                for port in (9870, 50070):
-                    alt = f"{parsed.scheme}://{host}:{port}/webhdfs/v1"
-                    if alt not in bases:
-                        bases.append(alt)
+            port = parsed.port
+            # 非默认端口（如 HttpFS 14000）时，仅使用配置的基址，避免回退导致的连接拒绝
+            if port and port not in (9870, 50070):
+                return [self.webhdfs_base]
         except Exception:
-            pass
-        return bases
-    
+            return [self.webhdfs_base]
+        # 默认端口场景：只返回当前基址
+        return [self.webhdfs_base]
+
     def test_connection(self) -> Tuple[bool, str]:
         """
         测试WebHDFS连接
-        
+
         Returns:
             (是否连接成功, 错误信息或成功信息)
         """
         try:
-            url = self._build_url("/", "LISTSTATUS")
-            logger.info(f"Testing WebHDFS connection: {url}")
-            
-            response = self.session.get(url, timeout=self.timeout)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'FileStatuses' in data:
-                    logger.info("WebHDFS connection successful")
-                    return True, "WebHDFS连接成功"
-                else:
-                    error_msg = f"WebHDFS响应格式异常: {data}"
-                    logger.error(error_msg)
-                    return False, error_msg
-            else:
-                error_msg = f"WebHDFS连接失败: HTTP {response.status_code}, {response.text}"
-                logger.error(error_msg)
-                return False, error_msg
-                
+            # 一次主探测 + 两次回退（/warehouse/...、/tmp）
+            probe_paths = ["/", "/warehouse/tablespace/external/hive", "/tmp"]
+            for p in probe_paths:
+                url = self._build_url(p, "LISTSTATUS")
+                logger.info(f"Testing WebHDFS connection: {url}")
+                try:
+                    response = self.session.get(url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "FileStatuses" in data:
+                            logger.info("WebHDFS connection successful")
+                            return True, "WebHDFS连接成功"
+                    # 某些环境不允许 LISTSTATUS 根目录，尝试 GETFILESTATUS
+                    fs = self.get_file_status(p)
+                    if fs is not None:
+                        logger.info("WebHDFS connection successful via GETFILESTATUS")
+                        return True, "WebHDFS连接成功"
+                except Exception:
+                    continue
+            return False, "WebHDFS连接失败（多路径探测均失败）"
+
         except requests.exceptions.Timeout:
             error_msg = f"WebHDFS连接超时 ({self.timeout}秒)"
             logger.error(error_msg)
@@ -157,11 +172,39 @@ class WebHDFSClient:
             last_err = None
             for base in self._alt_bases():
                 # Hadoop WebHDFS OP name is SETSTORAGEPOLICY; parameter key is 'storagepolicy'
-                url = self._build_url(path, "SETSTORAGEPOLICY", storagepolicy=policy).replace(self.webhdfs_base, base, 1)
+                url = self._build_url(
+                    path, "SETSTORAGEPOLICY", storagepolicy=policy
+                ).replace(self.webhdfs_base, base, 1)
                 try:
                     resp = self.session.put(url, timeout=self.timeout)
                     if resp.status_code in (200, 201):
                         return True, f"Set storage policy to {policy}"
+                    last_err = f"HTTP {resp.status_code}: {resp.text}"
+                except Exception as e:
+                    last_err = str(e)
+                    continue
+            return False, last_err or "Unknown error"
+        except Exception as e:
+            return False, str(e)
+
+    def set_replication(
+        self, path: str, replication: int, recursive: bool = False
+    ) -> Tuple[bool, str]:
+        """设置路径的副本数。Returns: (ok, message)"""
+        try:
+            last_err = None
+            recursion = "true" if recursive else None
+            for base in self._alt_bases():
+                url = self._build_url(
+                    path,
+                    "SETREPLICATION",
+                    replication=int(replication),
+                    recursive=recursion,
+                ).replace(self.webhdfs_base, base, 1)
+                try:
+                    resp = self.session.put(url, timeout=self.timeout)
+                    if resp.status_code in (200, 201):
+                        return True, "Set replication succeeded"
                     last_err = f"HTTP {resp.status_code}: {resp.text}"
                 except Exception as e:
                     last_err = str(e)
@@ -175,7 +218,9 @@ class WebHDFSClient:
         try:
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "GETSTORAGEPOLICY").replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "GETSTORAGEPOLICY").replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     resp = self.session.get(url, timeout=self.timeout)
                     if resp.status_code == 200:
@@ -184,10 +229,14 @@ class WebHDFSClient:
                             # Different Hadoop versions return different shapes; try common keys
                             policy = None
                             if isinstance(data, dict):
-                                if 'StoragePolicy' in data and isinstance(data['StoragePolicy'], dict):
-                                    policy = data['StoragePolicy'].get('type') or data['StoragePolicy'].get('policyName')
-                                elif 'storagePolicy' in data:
-                                    policy = data.get('storagePolicy')
+                                if "StoragePolicy" in data and isinstance(
+                                    data["StoragePolicy"], dict
+                                ):
+                                    policy = data["StoragePolicy"].get("type") or data[
+                                        "StoragePolicy"
+                                    ].get("policyName")
+                                elif "storagePolicy" in data:
+                                    policy = data.get("storagePolicy")
                             return True, policy, "ok"
                         except Exception:
                             return True, None, "ok"
@@ -199,7 +248,9 @@ class WebHDFSClient:
         except Exception as e:
             return False, None, str(e)
 
-    def set_storage_policy_recursive(self, path: str, policy: str, max_entries: int = 5000) -> Tuple[int, int, List[str]]:
+    def set_storage_policy_recursive(
+        self, path: str, policy: str, max_entries: int = 5000
+    ) -> Tuple[int, int, List[str]]:
         """递归设置存储策略（简易版）。返回: (success_count, fail_count, errors)。
         为避免遍历过大目录导致 OOM，设置一个最大遍历条目数。
         """
@@ -237,14 +288,14 @@ class WebHDFSClient:
         except Exception as e:
             errors.append(str(e))
             return success, fail, errors
-    
+
     def get_file_status(self, path: str) -> Optional[HDFSFileInfo]:
         """
         获取文件或目录状态
-        
+
         Args:
             path: HDFS路径
-            
+
         Returns:
             文件信息对象，失败返回None
         """
@@ -252,23 +303,25 @@ class WebHDFSClient:
             logger.debug(f"Getting file status: {path}")
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "GETFILESTATUS").replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "GETFILESTATUS").replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     response = self.session.get(url, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
-                        if 'FileStatus' in data:
-                            fs = data['FileStatus']
+                        if "FileStatus" in data:
+                            fs = data["FileStatus"]
                             return HDFSFileInfo(
                                 path=path,
-                                size=fs['length'],
-                                modification_time=fs['modificationTime'],
-                                is_directory=fs['type'] == 'DIRECTORY',
-                                block_size=fs.get('blockSize', 0),
-                                replication=fs.get('replication', 0),
-                                permission=fs['permission'],
-                                owner=fs['owner'],
-                                group=fs['group']
+                                size=fs["length"],
+                                modification_time=fs["modificationTime"],
+                                is_directory=fs["type"] == "DIRECTORY",
+                                block_size=fs.get("blockSize", 0),
+                                replication=fs.get("replication", 0),
+                                permission=fs["permission"],
+                                owner=fs["owner"],
+                                group=fs["group"],
                             )
                     last_err = f"HTTP {response.status_code}"
                 except Exception as e:
@@ -279,14 +332,14 @@ class WebHDFSClient:
         except Exception as e:
             logger.error(f"Error getting file status for {path}: {str(e)}")
             return None
-    
+
     def list_directory(self, path: str) -> List[HDFSFileInfo]:
         """
         列出目录内容
-        
+
         Args:
             path: 目录路径
-            
+
         Returns:
             文件信息列表
         """
@@ -294,26 +347,32 @@ class WebHDFSClient:
             logger.debug(f"Listing directory: {path}")
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "LISTSTATUS").replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "LISTSTATUS").replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     response = self.session.get(url, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
-                        file_statuses = data['FileStatuses']['FileStatus']
+                        file_statuses = data["FileStatuses"]["FileStatus"]
                         files = []
                         for file_status in file_statuses:
-                            file_path = os.path.join(path, file_status['pathSuffix']).replace('\\', '/')
-                            files.append(HDFSFileInfo(
-                                path=file_path,
-                                size=file_status['length'],
-                                modification_time=file_status['modificationTime'],
-                                is_directory=file_status['type'] == 'DIRECTORY',
-                                block_size=file_status.get('blockSize', 0),
-                                replication=file_status.get('replication', 0),
-                                permission=file_status['permission'],
-                                owner=file_status['owner'],
-                                group=file_status['group']
-                            ))
+                            file_path = os.path.join(
+                                path, file_status["pathSuffix"]
+                            ).replace("\\", "/")
+                            files.append(
+                                HDFSFileInfo(
+                                    path=file_path,
+                                    size=file_status["length"],
+                                    modification_time=file_status["modificationTime"],
+                                    is_directory=file_status["type"] == "DIRECTORY",
+                                    block_size=file_status.get("blockSize", 0),
+                                    replication=file_status.get("replication", 0),
+                                    permission=file_status["permission"],
+                                    owner=file_status["owner"],
+                                    group=file_status["group"],
+                                )
+                            )
                         logger.debug(f"Listed {len(files)} items in {path}")
                         return files
                     last_err = f"HTTP {response.status_code}"
@@ -325,23 +384,28 @@ class WebHDFSClient:
         except Exception as e:
             logger.error(f"Error listing directory {path}: {str(e)}")
             return []
-    
-    def scan_directory_stats(self, path: str, small_file_threshold: int = 128 * 1024 * 1024,
-                           max_depth: int = 10, current_depth: int = 0) -> HDFSDirectoryStats:
+
+    def scan_directory_stats(
+        self,
+        path: str,
+        small_file_threshold: int = 128 * 1024 * 1024,
+        max_depth: int = 10,
+        current_depth: int = 0,
+    ) -> HDFSDirectoryStats:
         """
         扫描目录统计信息（递归）
-        
+
         Args:
             path: 目录路径
             small_file_threshold: 小文件阈值（字节）
             max_depth: 最大递归深度
             current_depth: 当前递归深度
-            
+
         Returns:
             目录统计信息
         """
         logger.info(f"Scanning directory stats: {path} (depth: {current_depth})")
-        
+
         stats = HDFSDirectoryStats(
             total_files=0,
             total_size=0,
@@ -350,22 +414,25 @@ class WebHDFSClient:
             large_files_count=0,
             large_files_size=0,
             average_file_size=0,
-            directory_count=0
+            directory_count=0,
         )
-        
+
         if current_depth >= max_depth:
             logger.warning(f"Max depth {max_depth} reached for path: {path}")
             return stats
-        
+
         try:
             files = self.list_directory(path)
-            
+
             for file_info in files:
                 if file_info.is_directory:
                     stats.directory_count += 1
                     # 递归扫描子目录
                     sub_stats = self.scan_directory_stats(
-                        file_info.path, small_file_threshold, max_depth, current_depth + 1
+                        file_info.path,
+                        small_file_threshold,
+                        max_depth,
+                        current_depth + 1,
                     )
                     # 累加子目录统计
                     stats.total_files += sub_stats.total_files
@@ -379,53 +446,75 @@ class WebHDFSClient:
                     # 处理文件
                     stats.total_files += 1
                     stats.total_size += file_info.size
-                    
+
                     if file_info.size <= small_file_threshold:
                         stats.small_files_count += 1
                         stats.small_files_size += file_info.size
                     else:
                         stats.large_files_count += 1
                         stats.large_files_size += file_info.size
-            
+
             # 计算平均文件大小
             if stats.total_files > 0:
                 stats.average_file_size = stats.total_size // stats.total_files
-            
-            logger.info(f"Directory {path} stats: {stats.total_files} files, "
-                       f"{stats.small_files_count} small files, {stats.directory_count} directories")
-            
+
+            logger.info(
+                f"Directory {path} stats: {stats.total_files} files, "
+                f"{stats.small_files_count} small files, {stats.directory_count} directories"
+            )
+
             return stats
-            
+
         except Exception as e:
             logger.error(f"Error scanning directory stats for {path}: {str(e)}")
             return stats
-    
-    def get_table_hdfs_stats(self, table_location: str, small_file_threshold: int = 128 * 1024 * 1024,
-                             estimate_on_summary: bool = True) -> Dict:
+
+    def get_table_hdfs_stats(
+        self,
+        table_location: str,
+        small_file_threshold: int = 128 * 1024 * 1024,
+        estimate_on_summary: bool = True,
+    ) -> Dict:
         """
         获取Hive表的HDFS统计信息
-        
+
         Args:
             table_location: 表的HDFS位置
             small_file_threshold: 小文件阈值
-            
+
         Returns:
             包含统计信息的字典
         """
         logger.info(f"Getting HDFS stats for table location: {table_location}")
-        
-        # 验证路径是否存在
+
+        # 验证路径是否存在（GETFILESTATUS 失败时回退 LISTSTATUS 检查）
         file_info = self.get_file_status(table_location)
         if not file_info:
-            logger.error(f"Table location not found: {table_location}")
-            return {
-                "success": False,
-                "error": f"表路径不存在: {table_location}",
-                "total_files": 0,
-                "small_files_count": 0,
-                "total_size": 0
-            }
-        
+            # fallback: try list directory. If succeeds or returns entries, treat as directory
+            files = self.list_directory(table_location)
+            if files is not None and isinstance(files, list):
+                # 目录存在（即便为空目录也允许）
+                file_info = HDFSFileInfo(
+                    path=table_location,
+                    size=0,
+                    modification_time=0,
+                    is_directory=True,
+                    block_size=0,
+                    replication=0,
+                    permission="755",
+                    owner="hdfs",
+                    group="supergroup",
+                )
+            else:
+                logger.error(f"Table location not found: {table_location}")
+                return {
+                    "success": False,
+                    "error": f"表路径不存在: {table_location}",
+                    "total_files": 0,
+                    "small_files_count": 0,
+                    "total_size": 0,
+                }
+
         if not file_info.is_directory:
             logger.error(f"Table location is not a directory: {table_location}")
             return {
@@ -433,16 +522,16 @@ class WebHDFSClient:
                 "error": f"表路径不是目录: {table_location}",
                 "total_files": 0,
                 "small_files_count": 0,
-                "total_size": 0
+                "total_size": 0,
             }
-        
+
         # 优先使用 GETCONTENTSUMMARY（更快）
         try:
             cs = self.get_content_summary(table_location)
-            if cs.get('success'):
-                summary = cs.get('content_summary', {})
-                total_files = summary.get('fileCount', 0)
-                total_size = summary.get('length', 0)
+            if cs.get("success"):
+                summary = cs.get("content_summary", {})
+                total_files = summary.get("fileCount", 0)
+                total_size = summary.get("length", 0)
                 avg = int(total_size // total_files) if total_files else 0
                 # 默认直接返回摘要，但为了避免小文件数长时间为0/1，
                 # 在文件数量不大或平均文件大小低于阈值时进行浅层采样估算小文件数量
@@ -478,7 +567,9 @@ class WebHDFSClient:
                                 ratio = small_sampled / sampled
                                 estimated_small = int(total_files * ratio)
                         except Exception as est_err:
-                            logger.warning(f"Small-file estimation skipped due to error: {est_err}")
+                            logger.warning(
+                                f"Small-file estimation skipped due to error: {est_err}"
+                            )
 
                 # 如果没有估算结果，则保持0（未知）；否则使用估算值
                 small_files_count = estimated_small if estimated_small > 0 else 0
@@ -493,15 +584,15 @@ class WebHDFSClient:
                     "large_files_count": max(total_files - small_files_count, 0),
                     "large_files_size": total_size,
                     "average_file_size": avg,
-                    "directory_count": summary.get('directoryCount', 0),
-                    "small_file_threshold": small_file_threshold
+                    "directory_count": summary.get("directoryCount", 0),
+                    "small_file_threshold": small_file_threshold,
                 }
         except Exception as e:
             logger.warning(f"GETCONTENTSUMMARY failed: {e}, fallback to LISTSTATUS")
 
         # 回退到递归扫描（可能较慢）
         stats = self.scan_directory_stats(table_location, small_file_threshold)
-        
+
         return {
             "success": True,
             "table_location": table_location,
@@ -513,32 +604,37 @@ class WebHDFSClient:
             "large_files_size": stats.large_files_size,
             "average_file_size": stats.average_file_size,
             "directory_count": stats.directory_count,
-            "small_file_threshold": small_file_threshold
+            "small_file_threshold": small_file_threshold,
         }
-    
+
     def get_content_summary(self, path: str) -> Dict:
         """使用 WebHDFS GETCONTENTSUMMARY 获取目录快速统计"""
         try:
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "GETCONTENTSUMMARY").replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "GETCONTENTSUMMARY").replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     resp = self.session.get(url, timeout=self.timeout)
                     if resp.status_code == 200:
                         data = resp.json()
-                        if 'ContentSummary' in data:
-                            return {"success": True, "content_summary": data['ContentSummary']}
+                        if "ContentSummary" in data:
+                            return {
+                                "success": True,
+                                "content_summary": data["ContentSummary"],
+                            }
                         else:
-                            last_err = 'Malformed response'
+                            last_err = "Malformed response"
                             continue
                     last_err = f"HTTP {resp.status_code}"
                 except Exception as e:
                     last_err = str(e)
                     continue
-            return {"success": False, "error": last_err or 'Unknown error'}
+            return {"success": False, "error": last_err or "Unknown error"}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     def create_directory(self, path: str, permission: str = "755") -> Tuple[bool, str]:
         """
         创建目录
@@ -554,12 +650,14 @@ class WebHDFSClient:
             logger.info(f"Creating directory: {path}")
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "MKDIRS", permission=permission).replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "MKDIRS", permission=permission).replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     response = self.session.put(url, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
-                        if data.get('boolean'):
+                        if data.get("boolean"):
                             logger.info(f"Directory created successfully: {path}")
                             return True, f"目录创建成功: {path}"
                         else:
@@ -575,7 +673,9 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
-    def copy_file(self, source_path: str, dest_path: str, overwrite: bool = False) -> Tuple[bool, str]:
+    def copy_file(
+        self, source_path: str, dest_path: str, overwrite: bool = False
+    ) -> Tuple[bool, str]:
         """
         复制文件（通过读取和写入实现）
 
@@ -637,13 +737,17 @@ class WebHDFSClient:
             logger.info(f"Moving file from {source_path} to {dest_path}")
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(source_path, "RENAME", destination=dest_path).replace(self.webhdfs_base, base, 1)
+                url = self._build_url(
+                    source_path, "RENAME", destination=dest_path
+                ).replace(self.webhdfs_base, base, 1)
                 try:
                     response = self.session.put(url, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
-                        if data.get('boolean'):
-                            logger.info(f"File moved successfully from {source_path} to {dest_path}")
+                        if data.get("boolean"):
+                            logger.info(
+                                f"File moved successfully from {source_path} to {dest_path}"
+                            )
                             return True, f"文件移动成功: {source_path} -> {dest_path}"
                         else:
                             return False, f"文件移动失败: {source_path} -> {dest_path}"
@@ -651,7 +755,9 @@ class WebHDFSClient:
                 except Exception as e:
                     last_err = str(e)
                     continue
-            logger.error(f"Failed to move file from {source_path} to {dest_path}: {last_err}")
+            logger.error(
+                f"Failed to move file from {source_path} to {dest_path}: {last_err}"
+            )
             return False, last_err or "未知错误"
         except Exception as e:
             error_msg = f"文件移动异常: {str(e)}"
@@ -673,12 +779,14 @@ class WebHDFSClient:
             logger.info(f"Deleting {'recursively' if recursive else ''}: {path}")
             last_err = None
             for base in self._alt_bases():
-                url = self._build_url(path, "DELETE", recursive="true" if recursive else "false").replace(self.webhdfs_base, base, 1)
+                url = self._build_url(
+                    path, "DELETE", recursive="true" if recursive else "false"
+                ).replace(self.webhdfs_base, base, 1)
                 try:
                     response = self.session.delete(url, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
-                        if data.get('boolean'):
+                        if data.get("boolean"):
                             logger.info(f"Deleted successfully: {path}")
                             return True, f"删除成功: {path}"
                         else:
@@ -694,7 +802,9 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
-    def read_file(self, path: str, offset: int = 0, length: Optional[int] = None) -> Tuple[bool, bytes]:
+    def read_file(
+        self, path: str, offset: int = 0, length: Optional[int] = None
+    ) -> Tuple[bool, bytes]:
         """
         读取文件内容
 
@@ -713,7 +823,9 @@ class WebHDFSClient:
                 params = {"offset": offset}
                 if length is not None:
                     params["length"] = length
-                url = self._build_url(path, "OPEN", **params).replace(self.webhdfs_base, base, 1)
+                url = self._build_url(path, "OPEN", **params).replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
                     response = self.session.get(url, timeout=self.timeout)
                     if response.status_code == 200:
@@ -730,9 +842,15 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
-    def write_file(self, path: str, content: bytes, overwrite: bool = False,
-                   blocksize: Optional[int] = None, replication: Optional[int] = None,
-                   permission: str = "644") -> Tuple[bool, str]:
+    def write_file(
+        self,
+        path: str,
+        content: bytes,
+        overwrite: bool = False,
+        blocksize: Optional[int] = None,
+        replication: Optional[int] = None,
+        permission: str = "644",
+    ) -> Tuple[bool, str]:
         """
         写入文件内容
 
@@ -753,7 +871,7 @@ class WebHDFSClient:
             for base in self._alt_bases():
                 params = {
                     "overwrite": "true" if overwrite else "false",
-                    "permission": permission
+                    "permission": permission,
                 }
                 if blocksize:
                     params["blocksize"] = blocksize
@@ -761,14 +879,20 @@ class WebHDFSClient:
                     params["replication"] = replication
 
                 # 第一步：创建文件
-                create_url = self._build_url(path, "CREATE", **params).replace(self.webhdfs_base, base, 1)
+                create_url = self._build_url(path, "CREATE", **params).replace(
+                    self.webhdfs_base, base, 1
+                )
                 try:
-                    create_response = self.session.put(create_url, timeout=self.timeout, allow_redirects=False)
+                    create_response = self.session.put(
+                        create_url, timeout=self.timeout, allow_redirects=False
+                    )
                     if create_response.status_code == 307:
                         # 第二步：写入数据到重定向的DataNode
-                        redirect_url = create_response.headers.get('Location')
+                        redirect_url = create_response.headers.get("Location")
                         if redirect_url:
-                            write_response = self.session.put(redirect_url, data=content, timeout=self.timeout)
+                            write_response = self.session.put(
+                                redirect_url, data=content, timeout=self.timeout
+                            )
                             if write_response.status_code == 201:
                                 logger.info(f"File written successfully: {path}")
                                 return True, f"文件写入成功: {path}"
@@ -788,8 +912,9 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
-    def archive_directory(self, source_path: str, archive_path: str,
-                         create_archive_dir: bool = True) -> Tuple[bool, str]:
+    def archive_directory(
+        self, source_path: str, archive_path: str, create_archive_dir: bool = True
+    ) -> Tuple[bool, str]:
         """
         归档目录（移动到归档位置）
 
@@ -815,8 +940,9 @@ class WebHDFSClient:
             # 创建归档目录的父目录
             if create_archive_dir:
                 import os
+
                 archive_parent = os.path.dirname(archive_path)
-                if archive_parent and archive_parent != '/':
+                if archive_parent and archive_parent != "/":
                     create_success, create_msg = self.create_directory(archive_parent)
                     if not create_success and "已存在" not in create_msg:
                         return False, f"创建归档父目录失败: {create_msg}"
@@ -833,7 +959,9 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
-    def restore_directory(self, archive_path: str, restore_path: str) -> Tuple[bool, str]:
+    def restore_directory(
+        self, archive_path: str, restore_path: str
+    ) -> Tuple[bool, str]:
         """
         恢复目录（从归档位置移动回原位置）
 
@@ -874,7 +1002,7 @@ class WebHDFSClient:
 
     def close(self):
         """关闭客户端连接"""
-        if hasattr(self, 'session'):
+        if hasattr(self, "session"):
             self.session.close()
             logger.info("WebHDFS client session closed")
 
@@ -883,26 +1011,26 @@ class WebHDFSClient:
 if __name__ == "__main__":
     # 测试WebHDFS客户端
     namenode_url = "http://192.168.0.100:50070"  # 替换为实际的NameNode URL
-    
+
     client = WebHDFSClient(namenode_url, user="hdfs")
-    
+
     print("Testing WebHDFS connection...")
     success, message = client.test_connection()
     print(f"Connection test: {success}, Message: {message}")
-    
+
     if success:
         # 测试获取根目录状态
         root_info = client.get_file_status("/")
         print(f"Root directory info: {root_info}")
-        
+
         # 测试列出目录
         files = client.list_directory("/")
         print(f"Root directory contains {len(files)} items")
-        
+
         # 测试扫描统计
         if files:
             test_path = files[0].path if files[0].is_directory else "/"
             stats = client.scan_directory_stats(test_path, max_depth=2)
             print(f"Directory stats for {test_path}: {stats}")
-    
+
     client.close()

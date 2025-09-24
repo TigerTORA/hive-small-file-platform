@@ -15,11 +15,11 @@ from app.models.cluster import Cluster
 from app.models.partition_metric import PartitionMetric
 from app.models.table_metric import TableMetric
 from app.monitor.hybrid_table_scanner import HybridTableScanner
+from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.schemas.scan_task import ScanTaskLog, ScanTaskProgress, ScanTaskResponse
 from app.schemas.table_metric import ScanRequest
 from app.services.scan_service import scan_task_manager
 from app.utils.webhdfs_client import WebHDFSClient
-from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 
 router = APIRouter()
 
@@ -72,9 +72,13 @@ async def scan_tables(
 async def scan_all_cluster_databases_with_progress(
     cluster_id: int,
     strict_real: bool = Query(True, description="严格实连模式"),
-    max_tables_per_db: Optional[int] = Query(None, description="每库最大扫描表数(为空表示不限制)"),
+    max_tables_per_db: Optional[int] = Query(
+        None, description="每库最大扫描表数(为空表示不限制)"
+    ),
     include_cold: bool = Query(False, description="扫描完成后是否追加冷数据扫描"),
-    cold_threshold_days: Optional[int] = Query(None, description="冷数据阈值天数(默认90)"),
+    cold_threshold_days: Optional[int] = Query(
+        None, description="冷数据阈值天数(默认90)"
+    ),
     db: Session = Depends(get_db),
 ):
     """集群级批量扫描（带进度追踪）
@@ -213,9 +217,14 @@ async def get_partition_metrics(
         .first()
     )
     if not table_metric:
-        raise HTTPException(status_code=404, detail=f"Table {database_name}.{table_name} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Table {database_name}.{table_name} not found"
+        )
     if not table_metric.is_partitioned:
-        raise HTTPException(status_code=400, detail=f"Table {database_name}.{table_name} is not a partitioned table")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Table {database_name}.{table_name} is not a partitioned table",
+        )
 
     try:
         # 从 MetaStore 获取分页分区列表
@@ -224,14 +233,18 @@ async def get_partition_metrics(
             if total <= 0:
                 return {"items": [], "total": 0, "page": page, "page_size": page_size}
             offset = (page - 1) * page_size
-            partitions = connector.get_table_partitions_paged(database_name, table_name, offset, page_size)
+            partitions = connector.get_table_partitions_paged(
+                database_name, table_name, offset, page_size
+            )
 
         # 并发扫描分区（每个线程各自创建 client，避免 Session 共享问题）
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         def scan_part(idx: int, name: str, path: str):
             try:
-                client = WebHDFSClient(cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs")
+                client = WebHDFSClient(
+                    cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
+                )
                 try:
                     stats = client.scan_directory_stats(
                         path,
@@ -241,9 +254,13 @@ async def get_partition_metrics(
                         "partition_spec": name,
                         "partition_path": path,
                         "file_count": int(getattr(stats, "total_files", 0) or 0),
-                        "small_file_count": int(getattr(stats, "small_files_count", 0) or 0),
+                        "small_file_count": int(
+                            getattr(stats, "small_files_count", 0) or 0
+                        ),
                         "total_size": int(getattr(stats, "total_size", 0) or 0),
-                        "avg_file_size": float(getattr(stats, "average_file_size", 0) or 0.0),
+                        "avg_file_size": float(
+                            getattr(stats, "average_file_size", 0) or 0.0
+                        ),
                     }
                 finally:
                     try:
@@ -283,7 +300,9 @@ async def get_partition_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get partition metrics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get partition metrics: {str(e)}"
+        )
 
 
 @router.post("/scan-table/{cluster_id}/{database_name}/{table_name}")
@@ -304,14 +323,9 @@ async def scan_single_table(
         result = scanner.scan_single_table(
             db, database_name, table_name, strict_real=strict_real
         )
-
-        return {
-            "message": f"Table {database_name}.{table_name} scanned successfully",
-            "table_name": f"{database_name}.{table_name}",
-            "strict_real": strict_real,
-            "result": result,
-        }
-
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Table scan failed: {str(e)}")
 

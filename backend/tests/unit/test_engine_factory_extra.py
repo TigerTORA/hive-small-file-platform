@@ -1,4 +1,5 @@
 import pytest
+
 from app.engines.engine_factory import MergeEngineFactory
 from app.models.cluster import Cluster
 
@@ -39,13 +40,18 @@ def test_validate_strategy_compatibility_concatenate_on_parquet_warns():
 def test_get_strategy_reason_texts_small_medium_large():
     # 小表 insert_overwrite 文案包含“小表”
     reason_small = MergeEngineFactory._get_strategy_reason(
-        "insert_overwrite", file_count=10, table_format="parquet", table_size=10 * 1024 * 1024
+        "insert_overwrite",
+        file_count=10,
+        table_format="parquet",
+        table_size=10 * 1024 * 1024,
     )
     assert "小表" in reason_small
 
     # 大量文件/大表 safe_merge 文案包含“大表/大量文件”
     reason_large = MergeEngineFactory._get_strategy_reason(
-        "safe_merge", file_count=5000, table_format="orc", table_size=5 * 1024 * 1024 * 1024
+        "safe_merge",
+        file_count=5000,
+        table_format="orc",
+        table_size=5 * 1024 * 1024 * 1024,
     )
     assert ("大量文件" in reason_large) or ("大表" in reason_large)
-

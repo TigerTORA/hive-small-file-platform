@@ -1,18 +1,22 @@
 """
 简单的测试服务器，用于验证基本功能
 """
-from fastapi import FastAPI
+
 import uvicorn
+from fastapi import FastAPI
 
 app = FastAPI(title="Hive Small File Platform - Test")
+
 
 @app.get("/")
 async def root():
     return {"message": "Hive 小文件治理平台测试服务正在运行！", "status": "ok"}
 
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "hive-small-file-platform"}
+
 
 if __name__ == "__main__":
     print("🚀 启动测试服务...")

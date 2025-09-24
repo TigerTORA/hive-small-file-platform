@@ -16,6 +16,7 @@ export interface TableMetric {
   table_owner?: string
   table_create_time?: string
   partition_columns?: string
+  current_compression?: string
 
   // File metrics
   total_files: number
@@ -186,8 +187,11 @@ export const tablesApi = {
     tableName: string,
     strictReal: boolean = true
   ): Promise<any> {
-    // 当前端点不接受 strict_real 参数；如需严格模式，建议使用统一入口 triggerScan
-    return api.post(`/tables/scan-table/${clusterId}/${databaseName}/${tableName}`)
+    return api.post(
+      `/tables/scan-table/${clusterId}/${databaseName}/${tableName}`,
+      null,
+      { params: { strict_real: strictReal } }
+    )
   },
 
   // 触发表扫描 (保持兼容性) - 支持 strict_real 参数

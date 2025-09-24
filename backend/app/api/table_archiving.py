@@ -10,13 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from app.config.database import get_db
+from app.config.database import SessionLocal, get_db
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.monitor.cold_data_scanner import SimpleColdDataScanner
 from app.monitor.simple_archive_engine import SimpleArchiveEngine
 from app.services.scan_service import scan_task_manager
-from app.config.database import SessionLocal
 
 router = APIRouter()
 
@@ -89,23 +88,38 @@ async def scan_cold_data(
 
         # 后台任务模式：集成任务视图 + 结构化日志
         task = scan_task_manager.create_scan_task(
-            db, cluster_id, 'cold-table-scan', f'扫描冷数据表(阈值{threshold}天)'
+            db, cluster_id, "cold-table-scan", f"扫描冷数据表(阈值{threshold}天)"
         )
 
         def run_cold_scan():
             db_thread = SessionLocal()
             try:
-                cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+                cluster_t = (
+                    db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+                )
                 cold_scanner = SimpleColdDataScanner(cluster_t)
-                scan_task_manager.info(task.task_id, 'T301', '开始冷数据表扫描', db=db_thread, phase='scan', ctx={'threshold_days': threshold, 'db': database_name})
-                scan_result = cold_scanner.scan_cold_data(threshold_days=threshold, database_filter=database_name)
-                cold_tables = scan_result.get('cold_tables', []) if isinstance(scan_result, dict) else []
+                scan_task_manager.info(
+                    task.task_id,
+                    "T301",
+                    "开始冷数据表扫描",
+                    db=db_thread,
+                    phase="scan",
+                    ctx={"threshold_days": threshold, "db": database_name},
+                )
+                scan_result = cold_scanner.scan_cold_data(
+                    threshold_days=threshold, database_filter=database_name
+                )
+                cold_tables = (
+                    scan_result.get("cold_tables", [])
+                    if isinstance(scan_result, dict)
+                    else []
+                )
                 updated_count = 0
                 for cold_table in cold_tables:
-                    db_name = cold_table.get('database_name')
-                    table_name = cold_table.get('table_name')
-                    last_access_time = cold_table.get('last_access_time')
-                    days_since_access = cold_table.get('days_since_last_access', 0)
+                    db_name = cold_table.get("database_name")
+                    table_name = cold_table.get("table_name")
+                    last_access_time = cold_table.get("last_access_time")
+                    days_since_access = cold_table.get("days_since_last_access", 0)
                     latest_metric = (
                         db_thread.query(TableMetric)
                         .filter(
@@ -122,11 +136,26 @@ async def scan_cold_data(
                         latest_metric.days_since_last_access = days_since_access
                         updated_count += 1
                 db_thread.commit()
-                scan_task_manager.info(task.task_id, 'T390', '冷数据表扫描完成', db=db_thread, phase='scan', ctx={'found': len(cold_tables), 'updated': updated_count})
+                scan_task_manager.info(
+                    task.task_id,
+                    "T390",
+                    "冷数据表扫描完成",
+                    db=db_thread,
+                    phase="scan",
+                    ctx={"found": len(cold_tables), "updated": updated_count},
+                )
                 scan_task_manager.complete_task(db_thread, task.task_id, success=True)
             except Exception as e:
-                scan_task_manager.error(task.task_id, 'ET390', f'冷数据表扫描失败: {e}', db=db_thread, phase='scan')
-                scan_task_manager.complete_task(db_thread, task.task_id, success=False, error_message=str(e))
+                scan_task_manager.error(
+                    task.task_id,
+                    "ET390",
+                    f"冷数据表扫描失败: {e}",
+                    db=db_thread,
+                    phase="scan",
+                )
+                scan_task_manager.complete_task(
+                    db_thread, task.task_id, success=False, error_message=str(e)
+                )
             finally:
                 try:
                     db_thread.close()
@@ -134,6 +163,7 @@ async def scan_cold_data(
                     pass
 
         import threading
+
         threading.Thread(target=run_cold_scan, daemon=True).start()
         return {"message": "Cold data scan started", "task_id": task.task_id}
 
@@ -250,7 +280,10 @@ async def archive_table(
     db: Session = Depends(get_db),
 ):
     # 目录迁移归档已移除
-    raise HTTPException(status_code=410, detail="Directory-move archive removed. Use /archive-with-progress?mode=storage-policy")
+    raise HTTPException(
+        status_code=410,
+        detail="Directory-move archive removed. Use /archive-with-progress?mode=storage-policy",
+    )
 
 
 @router.post("/archive-with-progress/{cluster_id}/{database_name}/{table_name}")
@@ -259,9 +292,13 @@ async def archive_table_with_progress(
     database_name: str,
     table_name: str,
     force: bool = Query(False, description="强制归档，跳过检查"),
-    mode: str = Query('storage-policy', description="归档模式：仅支持 storage-policy"),
-    policy: Optional[str] = Query('COLD', description="当 mode=storage-policy 时的策略名称"),
-    recursive: bool = Query(True, description="当 mode=storage-policy 时是否递归应用到子目录"),
+    mode: str = Query("storage-policy", description="归档模式：仅支持 storage-policy"),
+    policy: Optional[str] = Query(
+        "COLD", description="当 mode=storage-policy 时的策略名称"
+    ),
+    recursive: bool = Query(
+        True, description="当 mode=storage-policy 时是否递归应用到子目录"
+    ),
     db: Session = Depends(get_db),
 ):
     """以后台任务形式执行归档，提供阶段与日志。返回 task_id 以供追踪。"""
@@ -270,7 +307,7 @@ async def archive_table_with_progress(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     # 创建任务
-    task_type = 'archive-table-policy' if mode == 'storage-policy' else 'archive-table'
+    task_type = "archive-table-policy" if mode == "storage-policy" else "archive-table"
     task = scan_task_manager.create_scan_task(
         db,
         cluster_id=cluster_id,
@@ -287,30 +324,107 @@ async def archive_table_with_progress(
         db_thread = SessionLocal()
         try:
             # 线程内重新获取 Cluster，避免跨会话对象导致的 attribute refresh 异常
-            cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            cluster_t = (
+                db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            )
             if not cluster_t:
-                raise RuntimeError('Cluster not found in thread session')
+                raise RuntimeError("Cluster not found in thread session")
             archive_engine = SimpleArchiveEngine(cluster_t)
-            if mode == 'storage-policy':
+            if mode == "storage-policy":
                 # 策略归档：设置存储策略
-                scan_task_manager.safe_update_progress(db_thread, task_id, status='running', total_items=3, completed_items=0, current_item='init')
-                scan_task_manager.info(task_id, 'PL101', '开始策略归档', db=db_thread, phase='archive', ctx={'db': database_name, 'table': table_name, 'policy': policy, 'recursive': recursive}, database_name=database_name, table_name=table_name)
-                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=1, current_item='apply')
-                res = archive_engine.apply_storage_policy_table(db_thread, database_name, table_name, policy=policy or 'COLD', recursive=recursive)
-                scan_task_manager.info(task_id, 'PL120', '设置存储策略完成', db=db_thread, phase='archive', ctx={'paths_success': res.get('paths_success'), 'paths_failed': res.get('paths_failed'), 'effective': res.get('policy_effective')}, database_name=database_name, table_name=table_name)
-                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=2, current_item='finalize')
-                scan_task_manager.info(task_id, 'PL190', '策略归档完成', db=db_thread, phase='archive', ctx={'mover_hint': True}, database_name=database_name, table_name=table_name)
-                scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=3, current_item='done')
+                scan_task_manager.safe_update_progress(
+                    db_thread,
+                    task_id,
+                    status="running",
+                    total_items=3,
+                    completed_items=0,
+                    current_item="init",
+                )
+                scan_task_manager.info(
+                    task_id,
+                    "PL101",
+                    "开始策略归档",
+                    db=db_thread,
+                    phase="archive",
+                    ctx={
+                        "db": database_name,
+                        "table": table_name,
+                        "policy": policy,
+                        "recursive": recursive,
+                    },
+                    database_name=database_name,
+                    table_name=table_name,
+                )
+                scan_task_manager.safe_update_progress(
+                    db_thread, task_id, completed_items=1, current_item="apply"
+                )
+                res = archive_engine.apply_storage_policy_table(
+                    db_thread,
+                    database_name,
+                    table_name,
+                    policy=policy or "COLD",
+                    recursive=recursive,
+                )
+                scan_task_manager.info(
+                    task_id,
+                    "PL120",
+                    "设置存储策略完成",
+                    db=db_thread,
+                    phase="archive",
+                    ctx={
+                        "paths_success": res.get("paths_success"),
+                        "paths_failed": res.get("paths_failed"),
+                        "effective": res.get("policy_effective"),
+                    },
+                    database_name=database_name,
+                    table_name=table_name,
+                )
+                scan_task_manager.safe_update_progress(
+                    db_thread, task_id, completed_items=2, current_item="finalize"
+                )
+                scan_task_manager.info(
+                    task_id,
+                    "PL190",
+                    "策略归档完成",
+                    db=db_thread,
+                    phase="archive",
+                    ctx={"mover_hint": True},
+                    database_name=database_name,
+                    table_name=table_name,
+                )
+                scan_task_manager.safe_update_progress(
+                    db_thread, task_id, completed_items=3, current_item="done"
+                )
                 scan_task_manager.complete_task(db_thread, task_id, success=True)
             else:
-                raise RuntimeError('Directory-move archive is disabled; use storage-policy')
+                raise RuntimeError(
+                    "Directory-move archive is disabled; use storage-policy"
+                )
         except Exception as e:
             # 区分错误码
-            if mode == 'storage-policy':
-                scan_task_manager.error(task_id, 'EL190', f'策略归档失败: {e}', db=db_thread, phase='archive', database_name=database_name, table_name=table_name)
+            if mode == "storage-policy":
+                scan_task_manager.error(
+                    task_id,
+                    "EL190",
+                    f"策略归档失败: {e}",
+                    db=db_thread,
+                    phase="archive",
+                    database_name=database_name,
+                    table_name=table_name,
+                )
             else:
-                scan_task_manager.error(task_id, 'EA190', f'表归档失败: {e}', db=db_thread, phase='archive', database_name=database_name, table_name=table_name)
-            scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
+                scan_task_manager.error(
+                    task_id,
+                    "EA190",
+                    f"表归档失败: {e}",
+                    db=db_thread,
+                    phase="archive",
+                    database_name=database_name,
+                    table_name=table_name,
+                )
+            scan_task_manager.complete_task(
+                db_thread, task_id, success=False, error_message=str(e)
+            )
         finally:
             try:
                 db_thread.close()
@@ -318,6 +432,7 @@ async def archive_table_with_progress(
                 pass
 
     import threading
+
     threading.Thread(target=run_archive, daemon=True).start()
 
     return {
@@ -355,22 +470,85 @@ async def restore_table_with_progress(
         db_thread = SessionLocal()
         try:
             # 线程内重新获取 Cluster
-            cluster_t = db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            cluster_t = (
+                db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
+            )
             if not cluster_t:
-                raise RuntimeError('Cluster not found in thread session')
-            scan_task_manager.safe_update_progress(db_thread, task_id, status='running', total_items=3, completed_items=0, current_item='init')
-            scan_task_manager.info(task_id, 'PL101', '开始策略归档', db=db_thread, phase='restore', ctx={'db': database_name, 'table': table_name, 'policy': 'HOT', 'recursive': True}, database_name=database_name, table_name=table_name)
-            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=1, current_item='apply')
+                raise RuntimeError("Cluster not found in thread session")
+            scan_task_manager.safe_update_progress(
+                db_thread,
+                task_id,
+                status="running",
+                total_items=3,
+                completed_items=0,
+                current_item="init",
+            )
+            scan_task_manager.info(
+                task_id,
+                "PL101",
+                "开始策略归档",
+                db=db_thread,
+                phase="restore",
+                ctx={
+                    "db": database_name,
+                    "table": table_name,
+                    "policy": "HOT",
+                    "recursive": True,
+                },
+                database_name=database_name,
+                table_name=table_name,
+            )
+            scan_task_manager.safe_update_progress(
+                db_thread, task_id, completed_items=1, current_item="apply"
+            )
             engine = SimpleArchiveEngine(cluster_t)
-            res = engine.apply_storage_policy_table(db_thread, database_name, table_name, policy='HOT', recursive=True)
-            scan_task_manager.info(task_id, 'PL120', '设置存储策略完成', db=db_thread, phase='restore', ctx={'paths_success': res.get('paths_success'), 'paths_failed': res.get('paths_failed'), 'effective': res.get('policy_effective')}, database_name=database_name, table_name=table_name)
-            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=2, current_item='finalize')
-            scan_task_manager.info(task_id, 'PL190', '策略归档完成', db=db_thread, phase='restore', ctx={'mover_hint': False}, database_name=database_name, table_name=table_name)
-            scan_task_manager.safe_update_progress(db_thread, task_id, completed_items=3, current_item='done')
+            res = engine.apply_storage_policy_table(
+                db_thread, database_name, table_name, policy="HOT", recursive=True
+            )
+            scan_task_manager.info(
+                task_id,
+                "PL120",
+                "设置存储策略完成",
+                db=db_thread,
+                phase="restore",
+                ctx={
+                    "paths_success": res.get("paths_success"),
+                    "paths_failed": res.get("paths_failed"),
+                    "effective": res.get("policy_effective"),
+                },
+                database_name=database_name,
+                table_name=table_name,
+            )
+            scan_task_manager.safe_update_progress(
+                db_thread, task_id, completed_items=2, current_item="finalize"
+            )
+            scan_task_manager.info(
+                task_id,
+                "PL190",
+                "策略归档完成",
+                db=db_thread,
+                phase="restore",
+                ctx={"mover_hint": False},
+                database_name=database_name,
+                table_name=table_name,
+            )
+            scan_task_manager.safe_update_progress(
+                db_thread, task_id, completed_items=3, current_item="done"
+            )
             scan_task_manager.complete_task(db_thread, task_id, success=True)
         except Exception as e:
-            scan_task_manager.error(task_id, 'EL190', f'策略归档失败: {e}', db=db_thread, phase='restore', database_name=database_name, table_name=table_name)
-            scan_task_manager.complete_task(db_thread, task_id, success=False, error_message=str(e))
+            scan_task_manager.error(
+                task_id,
+                "EL190",
+                f"策略归档失败: {e}",
+                db=db_thread,
+                phase="restore",
+                database_name=database_name,
+                table_name=table_name,
+            )
+            scan_task_manager.complete_task(
+                db_thread, task_id, success=False, error_message=str(e)
+            )
         finally:
             try:
                 db_thread.close()
@@ -378,8 +556,14 @@ async def restore_table_with_progress(
                 pass
 
     import threading
+
     threading.Thread(target=run_restore, daemon=True).start()
-    return {"message": "Restore started", "task_id": task_id, "cluster_id": cluster_id, "status": "started"}
+    return {
+        "message": "Restore started",
+        "task_id": task_id,
+        "cluster_id": cluster_id,
+        "status": "started",
+    }
 
 
 @router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")
@@ -387,7 +571,10 @@ async def restore_table(
     cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
 ):
     # 目录迁移恢复已移除
-    raise HTTPException(status_code=410, detail="Directory-move restore removed. Use /restore-with-progress for storage-policy=HOT")
+    raise HTTPException(
+        status_code=410,
+        detail="Directory-move restore removed. Use /restore-with-progress for storage-policy=HOT",
+    )
 
 
 @router.get("/archive-status/{cluster_id}/{database_name}/{table_name}")

@@ -72,7 +72,6 @@
                 <el-checkbox v-model="columnsAll.archived">归档状态</el-checkbox>
                 <el-checkbox v-model="columnsAll.archive_location">归档位置</el-checkbox>
                 <el-checkbox v-model="columnsAll.archived_at">归档时间</el-checkbox>
-                <el-checkbox v-model="columnsAll.actions">操作列</el-checkbox>
               </div>
             </el-popover>
             <span class="last-updated">更新于 {{ lastUpdated || '-' }}</span>
@@ -137,13 +136,6 @@
             <el-table-column prop="archive_location" label="归档位置" min-width="240" show-overflow-tooltip v-if="columnsAll.archive_location" sortable />
             <el-table-column label="归档时间" width="160" v-if="columnsAll.archived_at" sortable :sort-by="row => timeValue(row.archived_at)">
               <template #default="{ row }">{{ formatTime(row.archived_at) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="240" v-if="columnsAll.actions" sortable :sort-by="() => 0">
-              <template #default="{ row }">
-                <el-button type="primary" size="small" @click="createMergeTask(row)" style="margin-right:6px">创建合并任务</el-button>
-                <el-button v-if="row.archive_status !== 'archived'" type="warning" size="small" @click="archiveTable(row)" :loading="row.archiving" style="margin-right:6px">归档</el-button>
-                <el-button v-else type="success" size="small" @click="restoreTable(row)" :loading="row.restoring">恢复</el-button>
-              </template>
             </el-table-column>
           </el-table>
           <!-- 分页（两个页签共用，同步 URL） -->
@@ -253,7 +245,6 @@
     partitioned: true,
     partition_count: true,
     scan_time: true,
-    actions: true,
   })
   const columnsArchive = ref<Record<string, boolean>>({
     db: true,
@@ -263,7 +254,6 @@
     archived: true,
     archive_location: false,
     archived_at: true,
-    actions: true,
   })
   // 统一列表列偏好（合并 + 归档组合）
   const columnsAll = ref<Record<string, boolean>>({
@@ -281,7 +271,6 @@
     archived: true,
     archive_location: false,
     archived_at: false,
-    actions: true,
   })
   const loadColumnPrefs = () => {
     try {
@@ -313,7 +302,6 @@
       partitioned: v.partitioned,
       partition_count: v.partition_count,
       scan_time: v.scan_time,
-      actions: v.actions,
     })
     Object.assign(columnsArchive.value, {
       db: v.db,
@@ -323,7 +311,6 @@
       archived: v.archived,
       archive_location: v.archive_location,
       archived_at: v.archived_at,
-      actions: v.actions,
     })
   }, { deep: true, immediate: true })
 

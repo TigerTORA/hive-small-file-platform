@@ -32,18 +32,20 @@ class TestHiveConnectionManager:
     @pytest.fixture
     def connection_manager(self, mock_cluster):
         """创建连接管理器实例"""
-        with patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"), patch(
-            "app.engines.connection_manager.WebHDFSClient"
+        with (
+            patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"),
+            patch("app.engines.connection_manager.WebHDFSClient"),
         ):
             return HiveConnectionManager(mock_cluster)
 
     def test_init_creates_clients(self, mock_cluster):
         """测试初始化时创建客户端"""
-        with patch(
-            "app.engines.connection_manager.MySQLHiveMetastoreConnector"
-        ) as mock_metastore, patch(
-            "app.engines.connection_manager.WebHDFSClient"
-        ) as mock_webhdfs:
+        with (
+            patch(
+                "app.engines.connection_manager.MySQLHiveMetastoreConnector"
+            ) as mock_metastore,
+            patch("app.engines.connection_manager.WebHDFSClient") as mock_webhdfs,
+        ):
 
             manager = HiveConnectionManager(mock_cluster)
 
@@ -170,8 +172,9 @@ class TestHiveConnectionManager:
 
     def test_context_manager(self, mock_cluster):
         """测试上下文管理器功能"""
-        with patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"), patch(
-            "app.engines.connection_manager.WebHDFSClient"
+        with (
+            patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"),
+            patch("app.engines.connection_manager.WebHDFSClient"),
         ):
 
             manager = HiveConnectionManager(mock_cluster)

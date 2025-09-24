@@ -34,6 +34,35 @@ export interface NormalizedTaskRun {
   logs: TaskLogItem[]
 }
 
+const MERGE_PHASE_LABELS: Record<string, string> = {
+  initialization: '初始化',
+  connection_test: '连接测试',
+  pre_validation: '执行前校验',
+  file_analysis: '文件分析',
+  temp_table_creation: '临时表创建',
+  data_validation: '数据校验',
+  atomic_swap: '原子表切换',
+  post_validation: '执行后校验',
+  cleanup: '清理',
+  rollback: '回滚',
+  completion: '完成',
+  execution: '执行',
+  monitor: '监控',
+  maintenance: '维护'
+}
+
+const friendlyPhaseName = (rawName: string): string => {
+  const key = (rawName || '').trim().toLowerCase()
+  if (!key) return '运行日志'
+  const mapped = MERGE_PHASE_LABELS[key]
+  if (mapped) return mapped
+  return key
+    .split('_')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 // Utilities
 const levelMap = (s: string | undefined): TaskLogItem['level'] => {
   const up = (s || '').toUpperCase()
@@ -93,37 +122,84 @@ export async function loadMergeRun(taskId: number): Promise<NormalizedTaskRun> {
   let logs: any[] = []
   try { logs = await tasksApi.getLogs(taskId) } catch {}
 
-  // Group logs by phase as steps
+  // Group logs by phase and infer per-phase status from start/end messages
   const phaseOrder: string[] = []
-  const phaseMap: Record<string, TaskStep> = {}
+  const phaseData: Record<string, { step: TaskStep; started?: boolean; finished?: boolean }> = {}
+  const up = (s: string | undefined) => String(s || '').toUpperCase()
+  const contains = (msg: string, kw: string) => msg.indexOf(kw) >= 0
+  const addPhase = (name: string) => {
+    if (!phaseData[name]) {
+      phaseData[name] = {
+        step: {
+          id: name,
+          name: friendlyPhaseName(name),
+          status: 'pending'
+        }
+      }
+      phaseOrder.push(name)
+    }
+  }
   for (const l of logs || []) {
     const phase = l.phase || '执行'
-    if (!phaseMap[phase]) {
-      phaseMap[phase] = { id: phase, name: phase, status: 'running' }
-      phaseOrder.push(phase)
+    const msg: string = String(l.message || '')
+    addPhase(phase)
+    const data = phaseData[phase]
+    // Start marker
+    if (contains(msg, '开始阶段') || contains(msg, '开始')) {
+      data.started = true
+      if (data.step.status !== 'failed') data.step.status = 'running'
     }
-    if (String(l.log_level || '').toUpperCase() === 'ERROR') {
-      phaseMap[phase].status = 'failed'
+    // End markers
+    if (contains(msg, '阶段完成') || contains(msg, '完成')) {
+      data.finished = true
+      if (data.step.status !== 'failed') data.step.status = 'success'
+    }
+    // 仅当明确出现“阶段失败”时标记失败；普通 ERROR 日志不直接判定失败
+    if (contains(msg, '阶段失败')) {
+      data.finished = true
+      data.step.status = 'failed'
+    }
+    // 记录是否出现过 ERROR（用于最终失败推断，但不立刻置失败）
+    if ((logs && up(l.log_level) === 'ERROR')) (data as any).sawError = true
+  }
+  // If a later phase has started, mark earlier, not failed ones as success
+  let seenRunning = false
+  for (let i = phaseOrder.length - 1; i >= 0; i--) {
+    const key = phaseOrder[i]
+    const d = phaseData[key]
+    if (!d.started && !d.finished) continue
+    if (!seenRunning && d.step.status === 'running') {
+      seenRunning = true
+    } else if (seenRunning && d.step.status === 'running') {
+      d.step.status = 'success'
     }
   }
-  // Finalize status
-  const finalStatus = task.status || 'running'
-  for (const p of phaseOrder) {
-    if (finalStatus === 'success' && phaseMap[p].status !== 'failed') {
-      phaseMap[p].status = 'success'
-    } else if (finalStatus === 'failed' && phaseMap[p].status !== 'failed') {
-      phaseMap[p].status = 'failed'
+  // 若任务整体失败，最后一个已开始的阶段标记失败；否则保持运行/成功
+  const finalStatus = (task.status || '').toLowerCase()
+  if (finalStatus === 'failed') {
+    for (let i = phaseOrder.length - 1; i >= 0; i--) {
+      const key = phaseOrder[i]
+      const d = phaseData[key]
+      if (d.started) { d.step.status = 'failed'; break }
     }
   }
-  const steps = phaseOrder.map(p => phaseMap[p])
+  const steps = phaseOrder.map(p => phaseData[p].step)
 
-  const normLogs: TaskLogItem[] = (logs || []).map(l => ({
-    ts: String(l.timestamp || ''),
-    level: levelMap(l.log_level),
-    source: 'merge',
-    message: l.message || '',
-    step_id: l.phase || undefined
-  }))
+  const startedAtTs = task.started_time ? new Date(task.started_time).getTime() : undefined
+  const normLogs: TaskLogItem[] = (logs || [])
+    .map(l => ({
+      ts: String(l.timestamp || ''),
+      level: levelMap(l.log_level),
+      source: 'merge',
+      message: l.message || '',
+      step_id: l.phase || undefined
+    }))
+    .filter(item => {
+      if (!startedAtTs) return true
+      const ts = new Date(item.ts).getTime()
+      if (Number.isNaN(ts)) return true
+      return ts >= startedAtTs - 1000 // allow minor clock skew
+    })
 
   return {
     title: task.task_name || `${task.database_name}.${task.table_name}`,

@@ -1,5 +1,6 @@
-import pytest
 from datetime import datetime
+
+import pytest
 
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
@@ -14,11 +15,15 @@ def _mk_cluster(db, name="c-task") -> Cluster:
         hive_metastore_url="mysql://user:pass@localhost:3306/hive",
         hdfs_namenode_url="hdfs://localhost:9000",
     )
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
     return c
 
 
-def _mk_task(db, cluster_id: int, name="t1", status="pending", fb=None, fa=None, ss=None) -> MergeTask:
+def _mk_task(
+    db, cluster_id: int, name="t1", status="pending", fb=None, fa=None, ss=None
+) -> MergeTask:
     t = MergeTask(
         cluster_id=cluster_id,
         task_name=name,
@@ -29,8 +34,11 @@ def _mk_task(db, cluster_id: int, name="t1", status="pending", fb=None, fa=None,
         files_before=fb,
         files_after=fa,
         size_saved=ss,
+        use_ec=False,
     )
-    db.add(t); db.commit(); db.refresh(t)
+    db.add(t)
+    db.commit()
+    db.refresh(t)
     return t
 
 
@@ -105,8 +113,14 @@ def test_execute_task_and_cancel(client, db_session, monkeypatch):
             return {"preview": True}
 
     import app.engines.engine_factory as eng_factory_mod
-    monkeypatch.setattr(eng_factory_mod.MergeEngineFactory, "get_engine", lambda cluster, engine_type=None: _FakeEngine())
+
+    monkeypatch.setattr(
+        eng_factory_mod.MergeEngineFactory,
+        "get_engine",
+        lambda cluster, engine_type=None: _FakeEngine(),
+    )
     from app.api import tasks as tasks_mod
+
     monkeypatch.setattr(tasks_mod.settings, "DEMO_MODE", False)
 
     r = client.post(f"/api/v1/tasks/{t.id}/execute")
@@ -122,7 +136,8 @@ def test_execute_task_and_cancel(client, db_session, monkeypatch):
     assert r2.status_code in (200, 400)
 
     # set running then cancel
-    t.status = "running"; db_session.commit()
+    t.status = "running"
+    db_session.commit()
     r3 = client.post(f"/api/v1/tasks/{t.id}/cancel")
     assert r3.status_code == 200
 
@@ -138,7 +153,12 @@ def test_task_preview(client, db_session, monkeypatch):
             return {"files_before": 10, "files_after": 2}
 
     import app.engines.engine_factory as eng_factory_mod
-    monkeypatch.setattr(eng_factory_mod.MergeEngineFactory, "get_engine", lambda cluster, engine_type=None: _FakeEngine2())
+
+    monkeypatch.setattr(
+        eng_factory_mod.MergeEngineFactory,
+        "get_engine",
+        lambda cluster, engine_type=None: _FakeEngine2(),
+    )
 
     r = client.get(f"/api/v1/tasks/{t.id}/preview")
     assert r.status_code == 200
@@ -187,8 +207,14 @@ def test_execute_task_error_path(client, db_session, monkeypatch):
             raise RuntimeError("boom")
 
     import app.engines.engine_factory as eng_factory_mod
-    monkeypatch.setattr(eng_factory_mod.MergeEngineFactory, "get_engine", lambda cluster, engine_type=None: _ErrEngine())
+
+    monkeypatch.setattr(
+        eng_factory_mod.MergeEngineFactory,
+        "get_engine",
+        lambda cluster, engine_type=None: _ErrEngine(),
+    )
     from app.api import tasks as tasks_mod
+
     monkeypatch.setattr(tasks_mod.settings, "DEMO_MODE", False)
 
     r = client.post(f"/api/v1/tasks/{t.id}/execute")

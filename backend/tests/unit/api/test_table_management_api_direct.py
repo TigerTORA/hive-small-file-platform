@@ -1,5 +1,6 @@
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
@@ -14,11 +15,15 @@ def _mk_cluster(db) -> Cluster:
         hive_metastore_url="mysql://user:pass@localhost:3306/hive",
         hdfs_namenode_url="hdfs://localhost:9000",
     )
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
     return c
 
 
-def _mk_metric(db, cluster_id: int, dbn: str, tbl: str, when: datetime, files=10, small=5):
+def _mk_metric(
+    db, cluster_id: int, dbn: str, tbl: str, when: datetime, files=10, small=5
+):
     m = TableMetric(
         cluster_id=cluster_id,
         database_name=dbn,
@@ -30,7 +35,9 @@ def _mk_metric(db, cluster_id: int, dbn: str, tbl: str, when: datetime, files=10
         scan_time=when,
         is_cold_data=0,
     )
-    db.add(m); db.commit(); db.refresh(m)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
     return m
 
 
@@ -42,7 +49,9 @@ async def test_table_management_endpoints_direct(db_session):
     c = _mk_cluster(db_session)
     now = datetime.now()
     _mk_metric(db_session, c.id, "dbx", "t1", now - timedelta(hours=2))
-    _mk_metric(db_session, c.id, "dbx", "t1", now - timedelta(hours=1), files=12, small=6)
+    _mk_metric(
+        db_session, c.id, "dbx", "t1", now - timedelta(hours=1), files=12, small=6
+    )
     _mk_metric(db_session, c.id, "dbx", "t2", now)
 
     # metrics
@@ -50,7 +59,9 @@ async def test_table_management_endpoints_direct(db_session):
     assert len(ms) >= 2
 
     # small files summary
-    sm = await tm.get_small_file_summary(cluster_id=c.id, database_name="dbx", db=db_session)
+    sm = await tm.get_small_file_summary(
+        cluster_id=c.id, database_name="dbx", db=db_session
+    )
     assert sm["total_tables"] >= 1
 
     # databases
@@ -68,4 +79,3 @@ async def test_table_management_endpoints_direct(db_session):
     # history
     hist = await tm.get_table_scan_history(c.id, "dbx", "t1", 10, db_session)
     assert hist["scan_count"] >= 2
-

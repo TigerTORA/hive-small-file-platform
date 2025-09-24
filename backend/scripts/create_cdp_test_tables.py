@@ -29,12 +29,14 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.config.database import SessionLocal
-from app.models.cluster import Cluster
 from app.engines.connection_manager import HiveConnectionManager
+from app.models.cluster import Cluster
 from app.utils.webhdfs_client import WebHDFSClient
 
 
-def _find_cluster(db: Session, cluster_id: Optional[int], cluster_name: Optional[str]) -> Cluster:
+def _find_cluster(
+    db: Session, cluster_id: Optional[int], cluster_name: Optional[str]
+) -> Cluster:
     q = db.query(Cluster)
     if cluster_id is not None:
         c = q.filter(Cluster.id == cluster_id).first()
@@ -81,7 +83,10 @@ def _create_table(cursor, db_name: str, table_name: str):
 
 
 def _add_partition(cursor, db_name: str, table_name: str, dt: str):
-    _exec(cursor, f"ALTER TABLE `{db_name}`.`{table_name}` ADD IF NOT EXISTS PARTITION (dt='{dt}')")
+    _exec(
+        cursor,
+        f"ALTER TABLE `{db_name}`.`{table_name}` ADD IF NOT EXISTS PARTITION (dt='{dt}')",
+    )
 
 
 def _describe_location(cursor, db_name: str, table_name: str) -> Optional[str]:
@@ -152,15 +157,23 @@ def create_test_tables(
 
         # Materialize tiny files if requested
         if files_per_compress_table > 0 or files_per_archive_table > 0:
-            hdfs = WebHDFSClient(cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs")
+            hdfs = WebHDFSClient(
+                cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
+            )
             try:
                 for t, kind in created:
                     loc = _describe_location(cursor, db, t)
                     if not loc:
-                        print(f"[WARN] Cannot resolve location for {db}.{t}, skip files")
+                        print(
+                            f"[WARN] Cannot resolve location for {db}.{t}, skip files"
+                        )
                         continue
                     part_path = f"{loc.rstrip('/')}/dt={dt}"
-                    n = files_per_compress_table if kind == "compress" else files_per_archive_table
+                    n = (
+                        files_per_compress_table
+                        if kind == "compress"
+                        else files_per_archive_table
+                    )
                     if n > 0:
                         print(f"Materializing {n} tiny files under {part_path} ...")
                         _write_tiny_files(hdfs, part_path, n)
@@ -183,16 +196,44 @@ def create_test_tables(
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Create CDP test tables using cluster model")
-    parser.add_argument("--cluster-id", type=int, default=None, help="Cluster id (optional)")
-    parser.add_argument("--cluster-name", type=str, default=None, help="Cluster name, e.g., CDP-14")
-    parser.add_argument("--db", type=str, default=None, help="Target database (default: cluster.hive_database)")
-    parser.add_argument("--prefix", type=str, default=None, help="Table name prefix (default: normalized cluster name)")
+    parser = argparse.ArgumentParser(
+        description="Create CDP test tables using cluster model"
+    )
+    parser.add_argument(
+        "--cluster-id", type=int, default=None, help="Cluster id (optional)"
+    )
+    parser.add_argument(
+        "--cluster-name", type=str, default=None, help="Cluster name, e.g., CDP-14"
+    )
+    parser.add_argument(
+        "--db",
+        type=str,
+        default=None,
+        help="Target database (default: cluster.hive_database)",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default=None,
+        help="Table name prefix (default: normalized cluster name)",
+    )
     parser.add_argument("--compress-count", type=int, default=10)
     parser.add_argument("--archive-count", type=int, default=10)
-    parser.add_argument("--dt", type=str, default="2025-09-18", help="Partition value for dt")
-    parser.add_argument("--files-compress", type=int, default=0, help="Create N tiny files per compress table")
-    parser.add_argument("--files-archive", type=int, default=0, help="Create N tiny files per archive table")
+    parser.add_argument(
+        "--dt", type=str, default="2025-09-18", help="Partition value for dt"
+    )
+    parser.add_argument(
+        "--files-compress",
+        type=int,
+        default=0,
+        help="Create N tiny files per compress table",
+    )
+    parser.add_argument(
+        "--files-archive",
+        type=int,
+        default=0,
+        help="Create N tiny files per archive table",
+    )
 
     args = parser.parse_args(argv)
 
@@ -200,7 +241,9 @@ def main(argv=None):
     try:
         cluster = _find_cluster(db, args.cluster_id, args.cluster_name)
         print(f"Using cluster: {cluster.id} - {cluster.name}")
-        print(f"HiveServer2: {cluster.hive_host}:{cluster.hive_port}, DB: {args.db or cluster.hive_database or 'default'}")
+        print(
+            f"HiveServer2: {cluster.hive_host}:{cluster.hive_port}, DB: {args.db or cluster.hive_database or 'default'}"
+        )
         print(f"MetaStore: {cluster.hive_metastore_url}")
         print(f"WebHDFS: {cluster.hdfs_namenode_url} (user={cluster.hdfs_user})")
 
@@ -223,7 +266,12 @@ def main(argv=None):
         for t in result["tables_created"]:
             print(" -", t)
         print("Partition dt:", result["partition_dt"])
-        print("Tiny files per table (compress/archive):", result["files_per_compress_table"], "/", result["files_per_archive_table"])
+        print(
+            "Tiny files per table (compress/archive):",
+            result["files_per_compress_table"],
+            "/",
+            result["files_per_archive_table"],
+        )
 
     finally:
         db.close()
@@ -231,4 +279,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-

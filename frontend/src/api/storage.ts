@@ -29,6 +29,15 @@ export const storageApi = {
     dry_run?: boolean
   }): Promise<{ task_id: string }> {
     return api.post(`/storage/mover/${clusterId}`, payload)
+  },
+
+  // 设置副本数 (SSH)
+  setReplication(clusterId: number, payload: {
+    path: string
+    replication: number
+    recursive?: boolean
+    dry_run?: boolean
+  }): Promise<{ task_id: string }> {
+    return api.post(`/storage/set-replication/${clusterId}`, payload)
   }
 }
-

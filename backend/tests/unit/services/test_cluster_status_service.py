@@ -54,7 +54,11 @@ async def test_test_cluster_connections_success_path(db_session, monkeypatch):
         "overall_status": "partial",
         "tests": {
             "metastore": {"status": "success", "response_time_ms": 10},
-            "hdfs": {"status": "failed", "response_time_ms": 20, "failure_type": "network_timeout"},
+            "hdfs": {
+                "status": "failed",
+                "response_time_ms": 20,
+                "failure_type": "network_timeout",
+            },
         },
         "logs": [],
         "suggestions": [],
@@ -86,7 +90,11 @@ async def test_test_cluster_connections_success_path(db_session, monkeypatch):
     assert c.last_health_check is not None
 
     # 产生一条状态变更历史（unknown -> degraded）
-    histories = db_session.query(ClusterStatusHistory).filter(ClusterStatusHistory.cluster_id == c.id).all()
+    histories = (
+        db_session.query(ClusterStatusHistory)
+        .filter(ClusterStatusHistory.cluster_id == c.id)
+        .all()
+    )
     assert len(histories) >= 1
     assert "degraded" in (histories[-1].message or "")
 

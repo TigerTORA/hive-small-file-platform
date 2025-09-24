@@ -1,7 +1,7 @@
 import pytest
 
-from app.utils.encryption import PasswordEncryptor
 from app.config.settings import settings
+from app.utils.encryption import PasswordEncryptor
 
 
 @pytest.mark.unit
@@ -31,4 +31,3 @@ def test_is_encrypted_false_for_invalid_token(monkeypatch):
     monkeypatch.delenv("HIVE_PASSWORD_ENCRYPTION_KEY", raising=False)
 
     assert PasswordEncryptor.is_encrypted("not-a-valid-token") is False
-

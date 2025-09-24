@@ -25,6 +25,7 @@ def test_safe_engine_pass_through(monkeypatch, db_session):
         database_name="db",
         table_name="tbl",
         merge_strategy="safe_merge",
+        use_ec=False,
     )
 
     eng = SafeHiveMergeEngine(c)
@@ -36,14 +37,17 @@ def test_safe_engine_pass_through(monkeypatch, db_session):
     class _Exec:
         def __init__(self):
             self._cb = None
+
         def set_progress_callback(self, cb):
             self._cb = cb
+
         def execute_merge(self, task, db):
             return {"done": True}
 
     class _Prog:
         def get_merge_preview(self, task):
             return {"preview": True}
+
         def estimate_duration(self, task):
             return 42
 
@@ -67,4 +71,3 @@ def test_safe_engine_pass_through(monkeypatch, db_session):
     with eng:
         pass
     assert called_cleanup["ok"] is True
-

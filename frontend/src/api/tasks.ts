@@ -9,6 +9,9 @@ export interface MergeTask {
   partition_filter?: string
   merge_strategy: 'concatenate' | 'insert_overwrite' | 'safe_merge'
   target_file_size?: number
+  target_storage_format?: string | null
+  target_compression?: string | null
+  use_ec?: boolean
   status: string
   celery_task_id?: string
   error_message?: string
@@ -37,6 +40,9 @@ export interface MergeTaskCreate {
   partition_filter?: string
   merge_strategy?: 'concatenate' | 'insert_overwrite' | 'safe_merge'
   target_file_size?: number
+  target_storage_format?: string | null
+  target_compression?: string | null
+  use_ec?: boolean
 }
 
 export const tasksApi = {
@@ -72,9 +78,18 @@ export const tasksApi = {
     return api.post('/tasks/smart-create', params)
   },
 
-  // 重试任务
-  retry(id: number): Promise<any> {
-    return api.post(`/tasks/${id}/retry`)
+  // 重试任务：优先调用 /retry；如后端未提供则回退到 /execute
+  async retry(id: number): Promise<any> {
+    try {
+      return await api.post(`/tasks/${id}/retry`)
+    } catch (e: any) {
+      const status = e?.response?.status
+      if (status === 404) {
+        // 后端无 /retry 端点，回退到 /execute
+        return await api.post(`/tasks/${id}/execute`)
+      }
+      throw e
+    }
   },
 
   // 获取任务详情

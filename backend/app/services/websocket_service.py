@@ -2,19 +2,23 @@
 WebSocket 实时推送服务
 负责向前端推送集群状态变更、连接测试结果等实时数据
 """
+
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Dict, List, Set, Optional, Any
-from fastapi import WebSocket, WebSocketDisconnect
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+
+from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class WebSocketMessage:
     """WebSocket消息结构"""
+
     type: str  # connection_status, cluster_stats, health_update, scan_progress, task_update
     data: Dict[str, Any]
     timestamp: str = None
@@ -24,11 +28,7 @@ class WebSocketMessage:
             self.timestamp = datetime.now().isoformat()
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": self.type,
-            "data": self.data,
-            "timestamp": self.timestamp
-        }
+        return {"type": self.type, "data": self.data, "timestamp": self.timestamp}
 
 
 class WebSocketManager:
@@ -55,26 +55,31 @@ class WebSocketManager:
             self.connection_metadata[websocket] = {
                 "user_id": user_id,
                 "connected_at": datetime.now().isoformat(),
-                "last_ping": datetime.now().isoformat()
+                "last_ping": datetime.now().isoformat(),
             }
 
-            logger.info(f"WebSocket connected: user={user_id}, total_connections={self._get_total_connections()}")
+            logger.info(
+                f"WebSocket connected: user={user_id}, total_connections={self._get_total_connections()}"
+            )
 
             # 发送连接确认消息
-            await self._send_to_websocket(websocket, WebSocketMessage(
-                type="connection_established",
-                data={
-                    "user_id": user_id,
-                    "server_time": datetime.now().isoformat(),
-                    "available_topics": [
-                        "cluster_status",
-                        "connection_test",
-                        "scan_progress",
-                        "task_updates",
-                        "health_check"
-                    ]
-                }
-            ))
+            await self._send_to_websocket(
+                websocket,
+                WebSocketMessage(
+                    type="connection_established",
+                    data={
+                        "user_id": user_id,
+                        "server_time": datetime.now().isoformat(),
+                        "available_topics": [
+                            "cluster_status",
+                            "connection_test",
+                            "scan_progress",
+                            "task_updates",
+                            "health_check",
+                        ],
+                    },
+                ),
+            )
             return True
 
         except Exception as e:
@@ -96,7 +101,9 @@ class WebSocketManager:
 
             self.connection_metadata.pop(websocket, None)
 
-            logger.info(f"WebSocket disconnected: user={user_id}, total_connections={self._get_total_connections()}")
+            logger.info(
+                f"WebSocket disconnected: user={user_id}, total_connections={self._get_total_connections()}"
+            )
 
         except Exception as e:
             logger.error(f"Error during WebSocket disconnect: {e}")
@@ -130,7 +137,9 @@ class WebSocketManager:
                         await self.disconnect(websocket)
                         failed_count += 1
 
-        logger.debug(f"Broadcast to topic '{topic}': sent={sent_count}, failed={failed_count}")
+        logger.debug(
+            f"Broadcast to topic '{topic}': sent={sent_count}, failed={failed_count}"
+        )
 
     async def send_to_user(self, user_id: str, message: WebSocketMessage):
         """向指定用户发送消息"""
@@ -175,7 +184,7 @@ class WebSocketManager:
             "total_connections": total_connections,
             "total_users": total_users,
             "topic_subscriptions": topic_stats,
-            "avg_connections_per_user": total_connections / max(total_users, 1)
+            "avg_connections_per_user": total_connections / max(total_users, 1),
         }
 
 
@@ -185,8 +194,9 @@ class RealTimeNotificationService:
     def __init__(self, websocket_manager: WebSocketManager):
         self.ws_manager = websocket_manager
 
-    async def notify_connection_status_changed(self, cluster_id: int, cluster_name: str,
-                                             connection_results: Dict[str, Any]):
+    async def notify_connection_status_changed(
+        self, cluster_id: int, cluster_name: str, connection_results: Dict[str, Any]
+    ):
         """通知连接状态变更"""
         message = WebSocketMessage(
             type="connection_status",
@@ -195,13 +205,14 @@ class RealTimeNotificationService:
                 "cluster_name": cluster_name,
                 "status": connection_results.get("overall_status"),
                 "tests": connection_results.get("tests", {}),
-                "suggestions": connection_results.get("suggestions", [])
-            }
+                "suggestions": connection_results.get("suggestions", []),
+            },
         )
         await self.ws_manager.broadcast_to_topic("cluster_status", message)
 
-    async def notify_health_check_completed(self, cluster_id: int, health_status: str,
-                                          details: Optional[Dict] = None):
+    async def notify_health_check_completed(
+        self, cluster_id: int, health_status: str, details: Optional[Dict] = None
+    ):
         """通知健康检查完成"""
         message = WebSocketMessage(
             type="health_update",
@@ -209,13 +220,18 @@ class RealTimeNotificationService:
                 "cluster_id": cluster_id,
                 "health_status": health_status,
                 "details": details or {},
-                "check_time": datetime.now().isoformat()
-            }
+                "check_time": datetime.now().isoformat(),
+            },
         )
         await self.ws_manager.broadcast_to_topic("health_check", message)
 
-    async def notify_scan_progress(self, cluster_id: int, scan_task_id: int,
-                                 progress: float, current_table: str = None):
+    async def notify_scan_progress(
+        self,
+        cluster_id: int,
+        scan_task_id: int,
+        progress: float,
+        current_table: str = None,
+    ):
         """通知扫描进度更新"""
         message = WebSocketMessage(
             type="scan_progress",
@@ -223,13 +239,14 @@ class RealTimeNotificationService:
                 "cluster_id": cluster_id,
                 "scan_task_id": scan_task_id,
                 "progress": progress,
-                "current_table": current_table
-            }
+                "current_table": current_table,
+            },
         )
         await self.ws_manager.broadcast_to_topic("scan_progress", message)
 
-    async def notify_task_status_changed(self, task_id: int, task_type: str,
-                                       new_status: str, progress: float = None):
+    async def notify_task_status_changed(
+        self, task_id: int, task_type: str, new_status: str, progress: float = None
+    ):
         """通知任务状态变更"""
         message = WebSocketMessage(
             type="task_update",
@@ -237,20 +254,22 @@ class RealTimeNotificationService:
                 "task_id": task_id,
                 "task_type": task_type,
                 "status": new_status,
-                "progress": progress
-            }
+                "progress": progress,
+            },
         )
         await self.ws_manager.broadcast_to_topic("task_updates", message)
 
-    async def notify_cluster_stats_updated(self, cluster_id: int, stats: Dict[str, Any]):
+    async def notify_cluster_stats_updated(
+        self, cluster_id: int, stats: Dict[str, Any]
+    ):
         """通知集群统计数据更新"""
         message = WebSocketMessage(
             type="cluster_stats",
             data={
                 "cluster_id": cluster_id,
                 "stats": stats,
-                "updated_at": datetime.now().isoformat()
-            }
+                "updated_at": datetime.now().isoformat(),
+            },
         )
         await self.ws_manager.broadcast_to_topic("cluster_status", message)
 

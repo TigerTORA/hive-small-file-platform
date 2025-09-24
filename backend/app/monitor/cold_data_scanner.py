@@ -1,6 +1,7 @@
 import logging
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
@@ -8,6 +9,7 @@ from app.models.table_metric import TableMetric
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 
 logger = logging.getLogger(__name__)
+
 
 class SimpleColdDataScanner:
     """
@@ -24,7 +26,9 @@ class SimpleColdDataScanner:
         self.cluster = cluster
         self.cold_days_threshold = cold_days_threshold
 
-    def scan_cold_tables(self, db_session: Session, database_name: Optional[str] = None) -> Dict:
+    def scan_cold_tables(
+        self, db_session: Session, database_name: Optional[str] = None
+    ) -> Dict:
         """
         扫描并标记冷数据表
         Args:
@@ -33,7 +37,9 @@ class SimpleColdDataScanner:
         Returns:
             扫描结果字典
         """
-        logger.info(f"开始扫描集群 {self.cluster.name} 的冷数据，阈值: {self.cold_days_threshold}天")
+        logger.info(
+            f"开始扫描集群 {self.cluster.name} 的冷数据，阈值: {self.cold_days_threshold}天"
+        )
 
         try:
             # 1. 从MetaStore获取访问时间信息
@@ -43,11 +49,11 @@ class SimpleColdDataScanner:
             if not access_info:
                 logger.warning(f"未获取到数据库 {database_name or 'ALL'} 的表访问信息")
                 return {
-                    'total_tables_scanned': 0,
-                    'cold_tables_found': 0,
-                    'cold_tables': [],
-                    'threshold_days': self.cold_days_threshold,
-                    'scan_timestamp': datetime.now().isoformat()
+                    "total_tables_scanned": 0,
+                    "cold_tables_found": 0,
+                    "cold_tables": [],
+                    "threshold_days": self.cold_days_threshold,
+                    "scan_timestamp": datetime.now().isoformat(),
                 }
 
             cold_tables = []
@@ -57,18 +63,18 @@ class SimpleColdDataScanner:
             # 2. 计算每个表的冷热程度并更新数据库
             for info in access_info:
                 try:
-                    days_since_access = self._calculate_days_since_access(info, current_time)
+                    days_since_access = self._calculate_days_since_access(
+                        info, current_time
+                    )
                     is_cold = days_since_access > self.cold_days_threshold
 
                     # 3. 获取或创建表指标记录
                     table_metric = self._get_or_create_table_metric(
-                        db_session,
-                        info['database_name'],
-                        info['table_name']
+                        db_session, info["database_name"], info["table_name"]
                     )
 
                     # 4. 更新冷数据相关字段
-                    table_metric.last_access_time = info['last_access_time']
+                    table_metric.last_access_time = info["last_access_time"]
                     table_metric.days_since_last_access = days_since_access
                     table_metric.is_cold_data = 1 if is_cold else 0
 
@@ -76,37 +82,51 @@ class SimpleColdDataScanner:
 
                     if is_cold:
                         cold_table_info = {
-                            'database_name': info['database_name'],
-                            'table_name': info['table_name'],
-                            'days_since_access': days_since_access,
-                            'last_access_time': info['last_access_time'].isoformat() if info['last_access_time'] else None,
-                            'create_time': info['create_time'].isoformat() if info['create_time'] else None,
-                            'table_metric_id': table_metric.id
+                            "database_name": info["database_name"],
+                            "table_name": info["table_name"],
+                            "days_since_access": days_since_access,
+                            "last_access_time": (
+                                info["last_access_time"].isoformat()
+                                if info["last_access_time"]
+                                else None
+                            ),
+                            "create_time": (
+                                info["create_time"].isoformat()
+                                if info["create_time"]
+                                else None
+                            ),
+                            "table_metric_id": table_metric.id,
                         }
                         cold_tables.append(cold_table_info)
 
-                        logger.debug(f"标记冷数据表: {info['database_name']}.{info['table_name']} "
-                                   f"(距离上次访问: {days_since_access}天)")
+                        logger.debug(
+                            f"标记冷数据表: {info['database_name']}.{info['table_name']} "
+                            f"(距离上次访问: {days_since_access}天)"
+                        )
 
                 except Exception as e:
-                    logger.error(f"处理表 {info.get('database_name')}.{info.get('table_name')} 时出错: {e}")
+                    logger.error(
+                        f"处理表 {info.get('database_name')}.{info.get('table_name')} 时出错: {e}"
+                    )
                     continue
 
             # 提交数据库更改
             db_session.commit()
 
             result = {
-                'total_tables_scanned': len(access_info),
-                'cold_tables_found': len(cold_tables),
-                'tables_updated': tables_updated,
-                'cold_tables': cold_tables,
-                'threshold_days': self.cold_days_threshold,
-                'scan_timestamp': datetime.now().isoformat(),
-                'cluster_id': self.cluster.id,
-                'cluster_name': self.cluster.name
+                "total_tables_scanned": len(access_info),
+                "cold_tables_found": len(cold_tables),
+                "tables_updated": tables_updated,
+                "cold_tables": cold_tables,
+                "threshold_days": self.cold_days_threshold,
+                "scan_timestamp": datetime.now().isoformat(),
+                "cluster_id": self.cluster.id,
+                "cluster_name": self.cluster.name,
             }
 
-            logger.info(f"冷数据扫描完成: 扫描{len(access_info)}个表，发现{len(cold_tables)}个冷数据表")
+            logger.info(
+                f"冷数据扫描完成: 扫描{len(access_info)}个表，发现{len(cold_tables)}个冷数据表"
+            )
 
             return result
 
@@ -124,20 +144,24 @@ class SimpleColdDataScanner:
         Returns:
             距离最后访问的天数
         """
-        last_access = info['last_access_time']
+        last_access = info["last_access_time"]
 
         if not last_access:
             # 如果没有访问时间，用创建时间作为fallback
-            create_time = info['create_time']
+            create_time = info["create_time"]
             if create_time:
                 return (current_time - create_time).days
             else:
-                logger.warning(f"表 {info['database_name']}.{info['table_name']} 缺少访问时间和创建时间")
+                logger.warning(
+                    f"表 {info['database_name']}.{info['table_name']} 缺少访问时间和创建时间"
+                )
                 return 999  # 无任何时间信息，标记为很久
 
         return (current_time - last_access).days
 
-    def _get_or_create_table_metric(self, db_session: Session, database_name: str, table_name: str) -> TableMetric:
+    def _get_or_create_table_metric(
+        self, db_session: Session, database_name: str, table_name: str
+    ) -> TableMetric:
         """
         获取或创建表指标记录
         Args:
@@ -148,11 +172,15 @@ class SimpleColdDataScanner:
             表指标对象
         """
         # 查找现有记录
-        metric = db_session.query(TableMetric).filter(
-            TableMetric.cluster_id == self.cluster.id,
-            TableMetric.database_name == database_name,
-            TableMetric.table_name == table_name
-        ).first()
+        metric = (
+            db_session.query(TableMetric)
+            .filter(
+                TableMetric.cluster_id == self.cluster.id,
+                TableMetric.database_name == database_name,
+                TableMetric.table_name == table_name,
+            )
+            .first()
+        )
 
         if not metric:
             # 创建新记录
@@ -163,7 +191,7 @@ class SimpleColdDataScanner:
                 total_files=0,  # 这些值会在后续的表扫描中更新
                 small_files=0,
                 total_size=0,
-                avg_file_size=0.0
+                avg_file_size=0.0,
             )
             db_session.add(metric)
             db_session.flush()  # 获取ID
@@ -180,67 +208,87 @@ class SimpleColdDataScanner:
         """
         try:
             # 统计冷数据表
-            cold_count = db_session.query(TableMetric).filter(
-                TableMetric.cluster_id == self.cluster.id,
-                TableMetric.is_cold_data == 1
-            ).count()
+            cold_count = (
+                db_session.query(TableMetric)
+                .filter(
+                    TableMetric.cluster_id == self.cluster.id,
+                    TableMetric.is_cold_data == 1,
+                )
+                .count()
+            )
 
-            total_count = db_session.query(TableMetric).filter(
-                TableMetric.cluster_id == self.cluster.id
-            ).count()
+            total_count = (
+                db_session.query(TableMetric)
+                .filter(TableMetric.cluster_id == self.cluster.id)
+                .count()
+            )
 
             # 统计不同冷度区间的表数量
-            very_cold = db_session.query(TableMetric).filter(
-                TableMetric.cluster_id == self.cluster.id,
-                TableMetric.days_since_last_access > 180  # 6个月以上
-            ).count()
+            very_cold = (
+                db_session.query(TableMetric)
+                .filter(
+                    TableMetric.cluster_id == self.cluster.id,
+                    TableMetric.days_since_last_access > 180,  # 6个月以上
+                )
+                .count()
+            )
 
-            cold = db_session.query(TableMetric).filter(
-                TableMetric.cluster_id == self.cluster.id,
-                TableMetric.days_since_last_access.between(90, 180)  # 3-6个月
-            ).count()
+            cold = (
+                db_session.query(TableMetric)
+                .filter(
+                    TableMetric.cluster_id == self.cluster.id,
+                    TableMetric.days_since_last_access.between(90, 180),  # 3-6个月
+                )
+                .count()
+            )
 
             # 获取冷数据表列表（前20个）
-            cold_tables = db_session.query(TableMetric).filter(
-                TableMetric.cluster_id == self.cluster.id,
-                TableMetric.is_cold_data == 1
-            ).order_by(
-                TableMetric.days_since_last_access.desc()
-            ).limit(20).all()
+            cold_tables = (
+                db_session.query(TableMetric)
+                .filter(
+                    TableMetric.cluster_id == self.cluster.id,
+                    TableMetric.is_cold_data == 1,
+                )
+                .order_by(TableMetric.days_since_last_access.desc())
+                .limit(20)
+                .all()
+            )
 
             cold_table_list = [
                 {
-                    'database_name': t.database_name,
-                    'table_name': t.table_name,
-                    'days_since_access': t.days_since_last_access,
-                    'last_access_time': t.last_access_time.isoformat() if t.last_access_time else None,
-                    'total_size': t.total_size,
-                    'total_files': t.total_files
+                    "database_name": t.database_name,
+                    "table_name": t.table_name,
+                    "days_since_access": t.days_since_last_access,
+                    "last_access_time": (
+                        t.last_access_time.isoformat() if t.last_access_time else None
+                    ),
+                    "total_size": t.total_size,
+                    "total_files": t.total_files,
                 }
                 for t in cold_tables
             ]
 
             return {
-                'cluster_id': self.cluster.id,
-                'cluster_name': self.cluster.name,
-                'total_tables': total_count,
-                'cold_tables': cold_count,
-                'cold_ratio': round(cold_count / max(total_count, 1) * 100, 2),
-                'threshold_days': self.cold_days_threshold,
-                'distribution': {
-                    'very_cold_6m_plus': very_cold,
-                    'cold_3_6m': cold,
-                    'warm_under_3m': total_count - cold_count
+                "cluster_id": self.cluster.id,
+                "cluster_name": self.cluster.name,
+                "total_tables": total_count,
+                "cold_tables": cold_count,
+                "cold_ratio": round(cold_count / max(total_count, 1) * 100, 2),
+                "threshold_days": self.cold_days_threshold,
+                "distribution": {
+                    "very_cold_6m_plus": very_cold,
+                    "cold_3_6m": cold,
+                    "warm_under_3m": total_count - cold_count,
                 },
-                'sample_cold_tables': cold_table_list,
-                'summary_timestamp': datetime.now().isoformat()
+                "sample_cold_tables": cold_table_list,
+                "summary_timestamp": datetime.now().isoformat(),
             }
 
         except Exception as e:
             logger.error(f"获取冷数据摘要失败: {e}")
             return {
-                'cluster_id': self.cluster.id,
-                'cluster_name': self.cluster.name,
-                'error': str(e),
-                'summary_timestamp': datetime.now().isoformat()
+                "cluster_id": self.cluster.id,
+                "cluster_name": self.cluster.name,
+                "error": str(e),
+                "summary_timestamp": datetime.now().isoformat(),
             }

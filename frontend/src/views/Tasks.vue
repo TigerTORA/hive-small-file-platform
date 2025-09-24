@@ -119,9 +119,10 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120">
+            <el-table-column label="状态" min-width="200">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+                <!-- 移除行级“无新日志”提示 -->
               </template>
             </el-table-column>
             <el-table-column label="进度" width="200">
@@ -135,9 +136,16 @@
             <el-table-column label="最近更新" width="160">
               <template #default="{ row }">{{ formatTime(row.last_update || row.start_time) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="260" fixed="right">
+            <el-table-column label="操作" width="320" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" class="cloudera-btn secondary" @click="openRunRow(row)">查看日志</el-button>
+                <el-button
+                  v-if="row.type === 'merge' && (row.status === 'failed' || row.status === 'cancelled')"
+                  size="small"
+                  class="cloudera-btn primary"
+                  style="margin-left:6px"
+                  @click="retryMergeRow(row)"
+                >重试</el-button>
                 <el-button
                   v-if="row.type === 'archive'"
                   size="small"
@@ -292,6 +300,45 @@
           </el-radio-group>
           <div style="margin-top: 4px; font-size: 12px; color: #909399">
             安全合并使用临时表+重命名策略，确保零停机时间
+          </div>
+        </el-form-item>
+        <el-form-item label="输出文件格式">
+          <el-select
+            v-model="taskForm.target_storage_format"
+            placeholder="保持与原表一致"
+            :disabled="disableFormatSelection"
+            style="width: 220px"
+            clearable
+          >
+            <el-option
+              v-for="opt in storageFormatOptions"
+              :key="opt.label"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+          <div style="margin-left: 12px; color: #909399; font-size: 12px">
+            当前格式：{{ tableFormatLabel }}
+            <span v-if="disableFormatSelection" style="margin-left: 8px">仅在安全合并且整表模式下支持修改</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="压缩算法">
+          <el-select
+            v-model="taskForm.target_compression"
+            placeholder="保持与原表一致"
+            :disabled="disableCompressionSelection"
+            style="width: 220px"
+          >
+            <el-option
+              v-for="opt in compressionOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+          <div style="margin-left: 12px; color: #909399; font-size: 12px">
+            当前压缩：{{ tableCompressionLabel }}
+            <span v-if="disableCompressionSelection" style="margin-left: 8px">仅在安全合并且整表模式下支持修改</span>
           </div>
         </el-form-item>
         <el-form-item label="目标文件大小">
@@ -521,7 +568,9 @@
     table_name: '',
     database_name: '',
     partition_filter: '',
-    merge_strategy: 'safe_merge'
+    merge_strategy: 'safe_merge',
+    target_storage_format: null,
+    target_compression: 'KEEP'
   })
 
   const taskRules = {
@@ -532,6 +581,68 @@
   }
 
   const taskFormRef = ref()
+
+  const storageFormatOptions = [
+    { label: '保持原格式', value: null },
+    { label: 'Parquet', value: 'PARQUET' },
+    { label: 'ORC', value: 'ORC' },
+    { label: 'TextFile', value: 'TEXTFILE' },
+    { label: 'RCFile', value: 'RCFILE' },
+    { label: 'Avro', value: 'AVRO' }
+  ]
+
+  const compressionOptions = [
+    { label: '保持原压缩', value: 'KEEP' },
+    { label: 'Snappy', value: 'SNAPPY' },
+    { label: 'Gzip', value: 'GZIP' },
+    { label: 'LZ4', value: 'LZ4' },
+    { label: '不压缩', value: 'NONE' }
+  ]
+
+  const disableFormatSelection = computed(() => {
+    const hasPartitionFilter = !!taskForm.value.partition_filter || selectedPartitions.value.length > 0
+    return taskForm.value.merge_strategy !== 'safe_merge' || hasPartitionFilter
+  })
+  const disableCompressionSelection = computed(() => disableFormatSelection.value)
+
+  const tableFormatLabel = computed(() => {
+    if (!tableInfo.value) return '未知'
+    return tableInfo.value.storage_format || '未知'
+  })
+
+  const tableCompressionLabel = computed(() => {
+    if (!tableInfo.value) return '默认'
+    const raw = (tableInfo.value.current_compression || '').toUpperCase()
+    if (!raw || raw === 'DEFAULT') return '默认'
+    return raw
+  })
+
+  watch(
+    () => monitoringStore.settings.selectedCluster,
+    clusterId => {
+      taskForm.value.cluster_id = clusterId || 0
+    }
+  )
+
+  watch(
+    () => taskForm.value.merge_strategy,
+    strategy => {
+      if (strategy !== 'safe_merge') {
+        taskForm.value.target_storage_format = null
+        taskForm.value.target_compression = 'KEEP'
+      }
+    }
+  )
+
+  watch(
+    () => [taskForm.value.partition_filter, selectedPartitions.value.length],
+    () => {
+      if (disableFormatSelection.value) {
+        taskForm.value.target_storage_format = null
+        taskForm.value.target_compression = 'KEEP'
+      }
+    }
+  )
 
   // 计算属性
   // 统计卡片已移除，这些总计已不再使用
@@ -751,6 +862,15 @@
       // 准备任务数据
       const taskData = { ...taskForm.value }
 
+      if (!taskData.target_storage_format) {
+        delete taskData.target_storage_format
+      } else {
+        taskData.target_storage_format = taskData.target_storage_format.toUpperCase() as MergeTaskCreate['target_storage_format']
+      }
+      if (taskData.target_compression) {
+        taskData.target_compression = taskData.target_compression.toUpperCase() as MergeTaskCreate['target_compression']
+      }
+
       // 处理分区选择
       if (tableInfo.value?.is_partitioned && selectedPartitions.value.length > 0) {
         // 构建分区过滤器：多个分区用OR连接
@@ -777,6 +897,24 @@
       loadTasks()
     } catch (error) {
       console.error('Failed to execute task:', error)
+    }
+  }
+
+  const retryMergeRow = async (row: any) => {
+    try {
+      const id = row.raw?.id || row.id
+      if (!id) return
+      await tasksApi.retry(id)
+      ElMessage.success('已触发重试')
+      // 打开执行详情并开始轮询
+      runDialogType.value = 'merge'
+      runMergeTaskId.value = id
+      runScanTaskId.value = null
+      showRunDialog.value = true
+      await loadTasks()
+    } catch (e: any) {
+      console.error('Retry failed', e)
+      ElMessage.error(e?.message || '重试失败')
     }
   }
 
@@ -847,12 +985,14 @@
 
   const resetTaskForm = () => {
     taskForm.value = {
-      cluster_id: 0,
+      cluster_id: selectedClusterId.value || 0,
       task_name: '',
       table_name: '',
       database_name: '',
       partition_filter: '',
-      merge_strategy: 'safe_merge'
+      merge_strategy: 'safe_merge',
+      target_storage_format: null,
+      target_compression: 'KEEP'
     }
     // 清空分区相关数据
     tableInfo.value = null
@@ -879,6 +1019,23 @@
       cancelled: '已取消'
     }
     return statusMap[status] || status
+  }
+
+  // 行停滞检测：根据 last_update 或 start_time 估算“无新日志”时长
+  const nowTs = ref(Date.now())
+  setInterval(() => { nowTs.value = Date.now() }, 60_000)
+  const staleSeconds = (row: any): number => {
+    const base = row.last_update || row.start_time
+    if (!base) return 0
+    const t = new Date(base).getTime() || 0
+    if (!t) return 0
+    return Math.max(0, Math.floor((nowTs.value - t) / 1000))
+  }
+  const humanizeDuration = (sec: number): string => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    if (m <= 0) return `${s}s`
+    return `${m}m${s.toString().padStart(2, '0')}s`
   }
 
   // 归档/恢复任务：行高亮与概要

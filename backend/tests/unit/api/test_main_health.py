@@ -12,4 +12,3 @@ def test_root_and_health(client):
     body = h.json()
     assert body.get("status") == "healthy"
     assert "server_config" in body
-

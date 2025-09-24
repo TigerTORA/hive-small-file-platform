@@ -1,8 +1,8 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 from app.engines.base_engine import BaseMergeEngine
-from app.models.merge_task import MergeTask
 from app.models.cluster import Cluster
+from app.models.merge_task import MergeTask
 
 
 class _FakeEngine(BaseMergeEngine):
@@ -44,6 +44,7 @@ def test_log_task_event_with_db_session(db_session):
         table_name="tbl",
         database_name="db",
         merge_strategy="safe_merge",
+        use_ec=False,
     )
     db_session.add(task)
     db_session.commit()
@@ -55,4 +56,3 @@ def test_log_task_event_with_db_session(db_session):
 
     cnt = db_session.query(TaskLog).filter(TaskLog.task_id == task.id).count()
     assert cnt >= 1
-

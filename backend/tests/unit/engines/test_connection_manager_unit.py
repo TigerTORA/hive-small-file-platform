@@ -32,13 +32,18 @@ def test_get_hive_connection_and_cleanup(monkeypatch):
             class _Cur:
                 def execute(self, sql):
                     return None
+
                 def fetchone(self):
                     return (1,)
+
             return _Cur()
+
         def close(self):
             pass
+
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc, tb):
             return False
 
@@ -51,15 +56,19 @@ def test_get_hive_connection_and_cleanup(monkeypatch):
             class _C:
                 def test_connection(self):
                     return True
+
             return _C()
+
         def __exit__(self, exc_type, exc, tb):
             return False
 
     class _Web:
         def __init__(self, *a, **k):
             pass
+
         def test_connection(self):
             return True
+
         def close(self):
             pass
 
@@ -76,4 +85,3 @@ def test_get_hive_connection_and_cleanup(monkeypatch):
     assert conn is not None
     mgr.cleanup_connections()
     assert mgr._hive_connection is None
-

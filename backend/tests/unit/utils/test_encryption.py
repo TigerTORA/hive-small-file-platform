@@ -1,4 +1,5 @@
 import os
+
 from app.utils.encryption import PasswordEncryptor
 
 
@@ -13,4 +14,3 @@ def test_encrypt_decrypt_roundtrip(monkeypatch):
 
     dec = PasswordEncryptor.decrypt_password(enc)
     assert dec == secret
-

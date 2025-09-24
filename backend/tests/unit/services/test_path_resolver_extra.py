@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.services.path_resolver import PathResolver
 
@@ -13,8 +13,14 @@ class DummyCluster:
 
 def test_get_table_location_via_hs2_fallback():
     cluster = DummyCluster()
-    with patch("app.services.path_resolver.PathResolver._resolve_via_metastore", return_value=None):
-        with patch("app.services.path_resolver.PathResolver._resolve_via_hs2", return_value="hdfs://nn:9000/wh/db/tbl"):
+    with patch(
+        "app.services.path_resolver.PathResolver._resolve_via_metastore",
+        return_value=None,
+    ):
+        with patch(
+            "app.services.path_resolver.PathResolver._resolve_via_hs2",
+            return_value="hdfs://nn:9000/wh/db/tbl",
+        ):
             loc = PathResolver.get_table_location(cluster, "db", "tbl")
             assert loc.endswith("/db/tbl") or loc.endswith("/wh/db/tbl")
 
@@ -41,4 +47,3 @@ def test_get_partition_locations_via_metastore():
         paths = PathResolver.get_partition_locations(cluster, "db", "tbl")
         assert "/warehouse/db/tbl/p1" in paths and "/warehouse/db/tbl/p2" in paths
         assert all(isinstance(p, str) for p in paths)
-

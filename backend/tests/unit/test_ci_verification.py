@@ -3,9 +3,10 @@ CI流水线验证测试
 验证新的企业级测试标准是否正确执行
 """
 
-import pytest
 import json
 from datetime import datetime
+
+import pytest
 
 
 class TestCIPipelineVerification:
@@ -47,7 +48,7 @@ class TestCIPipelineVerification:
             "database_name": "test_db",
             "table_name": "test_table",
             "small_files": 100,
-            "total_files": 150
+            "total_files": 150,
         }
 
         assert test_dict["cluster_id"] == 1
@@ -67,7 +68,7 @@ class TestCIPipelineVerification:
             "test_suite": "ci_verification",
             "status": "running",
             "coverage_target": 75,
-            "tests_count": 41
+            "tests_count": 41,
         }
 
         # 序列化和反序列化
@@ -101,7 +102,9 @@ class TestCIPipelineVerification:
         # 验证测试文件数量
         min_test_files = 40
         actual_test_files = 41  # 从前面的检查结果
-        assert actual_test_files >= min_test_files, f"测试文件数量不足，当前{actual_test_files}个，需要至少{min_test_files}个"
+        assert (
+            actual_test_files >= min_test_files
+        ), f"测试文件数量不足，当前{actual_test_files}个，需要至少{min_test_files}个"
 
         # 验证CI配置
         ci_config_valid = True  # 代表CI配置已更新
@@ -118,7 +121,7 @@ class TestCIPipelineVerification:
             "status": "completed",
             "files_scanned": 1000,
             "small_files_found": 750,
-            "coverage_achieved": 0.85  # 85%覆盖率
+            "coverage_achieved": 0.85,  # 85%覆盖率
         }
 
         # 验证扫描结果
@@ -142,7 +145,7 @@ class TestCIPipelineVerification:
             "build_date": "2023-01-01",
             "test_framework": "pytest",
             "coverage_tool": "pytest-cov",
-            "enterprise_ready": True
+            "enterprise_ready": True,
         }
 
         assert version_info["enterprise_ready"] is True
