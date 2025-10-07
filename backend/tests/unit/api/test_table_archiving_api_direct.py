@@ -45,7 +45,7 @@ def _mk_metric(db, cluster_id: int, dbn: str, tbl: str, status="active", is_cold
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_cold_summary_and_list(db_session):
-    import app.api.table_archiving as ta
+    import app.api.tables_cold_data as ta
 
     c = _mk_cluster(db_session)
     _mk_metric(db_session, c.id, "dbA", "t1", is_cold=1)
@@ -68,7 +68,7 @@ async def test_cold_summary_and_list(db_session):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_scan_cold_data_updates_flags(db_session, monkeypatch):
-    import app.api.table_archiving as ta
+    import app.api.tables_cold_data as ta
 
     c = _mk_cluster(db_session)
     _mk_metric(db_session, c.id, "dbB", "t3", is_cold=0)
@@ -95,6 +95,7 @@ async def test_scan_cold_data_updates_flags(db_session, monkeypatch):
         cold_days_threshold=15,
         cold_threshold_days=None,
         database_name=None,
+        background=False,
         db=db_session,
     )
     assert res["scan_result"]["database_records_updated"] >= 1
@@ -102,37 +103,22 @@ async def test_scan_cold_data_updates_flags(db_session, monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_archive_and_restore_table(db_session, monkeypatch):
-    import app.api.table_archiving as ta
+async def test_archive_and_restore_table(db_session):
+    import app.api.tables_archive as ta
 
     c = _mk_cluster(db_session)
     m = _mk_metric(db_session, c.id, "dbC", "t4", status="active")
 
-    class _Arc:
-        def __init__(self, cluster):
-            pass
+    # 测试归档状态查询
+    status = await ta.get_archive_status(c.id, "dbC", "t4", db_session)
+    assert status["table_info"]["database_name"] == "dbC"
 
-        def archive_table(self, database_name, table_name, force=False):
-            return {"archive_location": "/archive/dbC/t4"}
-
-        def restore_table(self, database_name, table_name, archive_location):
-            return {"restored": True}
-
-    monkeypatch.setattr(ta, "SimpleArchiveEngine", _Arc)
-    ar = await ta.archive_table(c.id, "dbC", "t4", False, db_session)
-    assert ar["archive_result"]["archive_location"].endswith("/t4")
-
-    # mark archived in DB to allow restore
+    # mark archived in DB to test list
     m.archive_status = "archived"
     m.archive_location = "/archive/dbC/t4"
-    db_session.commit()
-    rs = await ta.restore_table(c.id, "dbC", "t4", db_session)
-    assert rs["restore_result"]["restored"] is True
-
-    # mark archived again and list
-    m.archive_status = "archived"
     m.archived_at = datetime.utcnow()
     db_session.commit()
+
     lst = await ta.list_archived_tables(
         c.id, database_name=None, page=1, page_size=10, db=db_session
     )

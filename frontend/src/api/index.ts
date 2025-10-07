@@ -8,7 +8,11 @@ const api = axios.create({ baseURL, timeout: 30000 })
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    // TODO: 添加认证 token
+    // 添加认证 token（从localStorage获取）
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   error => {

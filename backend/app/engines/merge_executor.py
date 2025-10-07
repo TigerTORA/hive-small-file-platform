@@ -74,17 +74,8 @@ class MergeTaskExecutor:
                 task, db_session, execution_phase="preparation", progress_percentage=20
             )
 
-            # 根据策略执行合并
-            if task.merge_strategy == "SAFE_MERGE":
-                result = self._execute_safe_merge_impl(task, db_session, merge_logger)
-            elif task.merge_strategy == "CONCATENATE":
-                result = self._execute_concatenate_impl(task, db_session, merge_logger)
-            elif task.merge_strategy == "INSERT_OVERWRITE":
-                result = self._execute_insert_overwrite_impl(
-                    task, db_session, merge_logger
-                )
-            else:
-                raise ValueError(f"Unsupported merge strategy: {task.merge_strategy}")
+            # 执行统一的影子目录合并策略
+            result = self._execute_unified_merge_impl(task, db_session, merge_logger)
 
             # 更新任务完成状态
             execution_time = time.time() - start_time
@@ -135,301 +126,162 @@ class MergeTaskExecutor:
                 "duration": task.execution_time,
             }
 
-    def _execute_safe_merge_impl(
+    def _execute_unified_merge_impl(
         self, task: MergeTask, db_session: Session, merge_logger: MergeTaskLogger
     ) -> Dict[str, Any]:
-        """执行安全合并（使用临时表）"""
-        temp_table_name = self._generate_temp_table_name(task.table_name)
-        backup_table_name = self._generate_backup_table_name(task.table_name)
-
+        """执行统一的影子目录合并策略"""
         try:
-            self._report_progress("safe_merge", "Creating temporary table...")
+            self._report_progress("unified_merge", "Analyzing table structure...")
             self._update_task_progress(
                 task,
                 db_session,
-                execution_phase="creating_temp_table",
-                progress_percentage=30,
+                execution_phase="analyzing_table",
+                progress_percentage=20,
             )
 
-            # 创建临时表
-            temp_table_commands = self._create_temp_table_with_logging(
-                task, temp_table_name, merge_logger
-            )
+            # 获取表路径和格式信息
+            table_path = self._get_table_path(task)
+            if not table_path:
+                raise RuntimeError(f"Unable to determine table path for {task.database_name}.{task.table_name}")
 
-            self._report_progress("safe_merge", "Validating temporary table data...")
+            storage_format = self._get_table_format(task)
+            
+            self._report_progress("unified_merge", "Creating shadow directory...")
             self._update_task_progress(
                 task,
                 db_session,
-                execution_phase="validating_data",
+                execution_phase="creating_shadow",
+                progress_percentage=40,
+            )
+
+            # 生成影子目录和备份目录路径
+            ts = int(time.time())
+            if task.partition_filter:
+                # 分区表：为特定分区创建影子目录
+                partition_path = self._resolve_partition_path(task, table_path)
+                parent = "/".join(p for p in partition_path.rstrip("/").split("/")[:-1]) or "/"
+                partition_name = partition_path.split("/")[-1]
+                shadow_path = f"{parent}/.shadow_{partition_name}_{ts}"
+                backup_path = f"{parent}/.backup_{partition_name}_{ts}"
+                target_path = partition_path
+            else:
+                # 非分区表：为整个表创建影子目录
+                parent = "/".join(p for p in table_path.rstrip("/").split("/")[:-1]) or "/"
+                shadow_path = f"{parent}/.shadow_merge_{ts}"
+                backup_path = f"{parent}/.backup_merge_{ts}"
+                target_path = table_path
+
+            merge_logger.log(
+                MergePhase.EXECUTION,
+                MergeLogLevel.INFO,
+                f"Shadow directory: {shadow_path}, Target: {target_path}",
+            )
+
+            # 执行影子目录写入
+            self._report_progress("unified_merge", "Writing to shadow directory...")
+            self._update_task_progress(
+                task,
+                db_session,
+                execution_phase="shadow_write",
                 progress_percentage=60,
             )
 
-            # 验证临时表数据
-            validation_result = self._validate_temp_table_data(task, temp_table_name)
-            if not validation_result["valid"]:
-                merge_logger.log(
-                    MergePhase.VALIDATION,
-                    MergeLogLevel.ERROR,
-                    f"Temp table validation failed: {validation_result['message']}",
-                )
-                return {"success": False, "message": validation_result["message"]}
-
-            self._report_progress("safe_merge", "Performing atomic table swap...")
-            self._update_task_progress(
-                task, db_session, execution_phase="atomic_swap", progress_percentage=80
-            )
-
-            # 原子性表交换
-            swap_commands = self._atomic_table_swap_with_logging(
-                task, temp_table_name, backup_table_name, merge_logger
-            )
-
-            self._report_progress("safe_merge", "Merge completed successfully")
-            self._update_task_progress(
-                task, db_session, execution_phase="cleanup", progress_percentage=95
-            )
-
-            return {
-                "success": True,
-                "message": "Safe merge completed successfully",
-                "temp_table_name": temp_table_name,
-                "backup_table_name": backup_table_name,
-                "commands_executed": temp_table_commands + swap_commands,
-            }
-
-        except Exception as e:
-            logger.error(f"Safe merge failed: {e}")
-            merge_logger.log(
-                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"Safe merge failed: {e}"
-            )
-
-            # 尝试回滚
-            try:
-                self._rollback_merge(task, temp_table_name, backup_table_name)
-                merge_logger.log(
-                    MergePhase.ROLLBACK, MergeLogLevel.INFO, "Rollback completed"
-                )
-            except Exception as rollback_error:
-                merge_logger.log(
-                    MergePhase.ROLLBACK,
-                    MergeLogLevel.ERROR,
-                    f"Rollback failed: {rollback_error}",
-                )
-
-            return {"success": False, "message": f"Safe merge failed: {str(e)}"}
-
-    def _execute_concatenate_impl(
-        self, task: MergeTask, db_session: Session, merge_logger: MergeTaskLogger
-    ) -> Dict[str, Any]:
-        """执行CONCATENATE合并"""
-        try:
-            self._update_task_progress(
-                task, db_session, execution_phase="concatenate", progress_percentage=50
-            )
-
             table_identifier = f"{task.database_name}.{task.table_name}"
+            sql_shadow = f"INSERT OVERWRITE DIRECTORY '{shadow_path}'"
+            if storage_format in ("PARQUET", "ORC"):
+                sql_shadow += f" STORED AS {storage_format}"
+            
+            # 根据是否有分区过滤器构建查询
             if task.partition_filter:
-                # 对分区表执行分区级别的CONCATENATE
-                partition_spec = self._partition_filter_to_spec(task.partition_filter)
-                if partition_spec:
-                    sql = f"ALTER TABLE {table_identifier} PARTITION({partition_spec}) CONCATENATE"
-                else:
-                    sql = f"ALTER TABLE {table_identifier} CONCATENATE"
+                sql_shadow += f" SELECT * FROM {table_identifier} WHERE {task.partition_filter}"
             else:
-                sql = f"ALTER TABLE {table_identifier} CONCATENATE"
+                sql_shadow += f" SELECT * FROM {table_identifier}"
 
-            merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.INFO,
-                f"Executing CONCATENATE: {sql}",
-            )
-
-            with self.connection_manager.get_hive_connection(
-                task.database_name
-            ) as conn:
+            with self.connection_manager.get_hive_connection(task.database_name) as conn:
                 cursor = conn.cursor()
-                # 压缩与reducer控制（尽量通用，具体格式由Hive决定）
+                # 设置压缩和优化参数
                 try:
                     cursor.execute("SET hive.exec.compress.output=true")
-                    cursor.execute(
-                        "SET mapreduce.output.fileoutputformat.compress=true"
-                    )
-                    cursor.execute(
-                        "SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec"
-                    )
-                    # 单文件提示：将 reducer 限制为 1（若表过大，Hive/Tez可能调整；作为尽力控制）
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
+                    cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
                     if task.target_file_size is not None and task.target_file_size < 0:
                         cursor.execute("SET hive.exec.reducers.max=1")
                         cursor.execute("SET mapreduce.job.reduces=1")
                 except Exception:
                     pass
-                cursor.execute(sql)
+                cursor.execute(sql_shadow)
 
-            merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.INFO,
-                "CONCATENATE completed successfully",
-            )
-
-            return {
-                "success": True,
-                "message": "CONCATENATE merge completed successfully",
-                "sql_executed": sql,
-            }
-
-        except Exception as e:
-            logger.error(f"CONCATENATE merge failed: {e}")
-            merge_logger.log(
-                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"CONCATENATE failed: {e}"
-            )
-            return {"success": False, "message": f"CONCATENATE failed: {str(e)}"}
-
-    def _execute_insert_overwrite_impl(
-        self, task: MergeTask, db_session: Session, merge_logger: MergeTaskLogger
-    ) -> Dict[str, Any]:
-        """执行INSERT OVERWRITE合并"""
-        try:
+            # 验证影子目录数据
+            self._report_progress("unified_merge", "Validating shadow directory...")
             self._update_task_progress(
                 task,
                 db_session,
-                execution_phase="insert_overwrite",
-                progress_percentage=50,
+                execution_phase="validating_shadow",
+                progress_percentage=80,
             )
 
-            table_identifier = f"{task.database_name}.{task.table_name}"
+            if not self._validate_shadow_directory(shadow_path):
+                raise RuntimeError("Shadow directory validation failed")
 
-            # 非分区：优先尝试影子目录写出 + 原子目录切换（零停机），失败则回退为直接 INSERT OVERWRITE TABLE
-            if not task.partition_filter:
-                try:
-                    table_path = self._get_table_path(task)
-                    if table_path:
-                        storage_format = self._get_table_format(task)
-                        parent = (
-                            "/".join(p for p in table_path.rstrip("/").split("/")[:-1])
-                            or "/"
-                        )
-                        ts = int(time.time())
-                        shadow = f"{parent}/.merge_shadow_{ts}"
-                        backup = f"{parent}/.merge_backup_{ts}"
+            # 执行原子目录切换
+            self._report_progress("unified_merge", "Performing atomic directory swap...")
+            self._update_task_progress(
+                task,
+                db_session,
+                execution_phase="atomic_swap",
+                progress_percentage=90,
+            )
 
-                        merge_logger.log(
-                            MergePhase.EXECUTION,
-                            MergeLogLevel.INFO,
-                            f"Shadow write to {shadow} (format={storage_format})",
-                        )
-                        sql_shadow = f"INSERT OVERWRITE DIRECTORY '{shadow}'"
-                        if storage_format in ("PARQUET", "ORC"):
-                            sql_shadow += f" STORED AS {storage_format}"
-                        sql_shadow += f" SELECT * FROM {table_identifier}"
-
-                        with self.connection_manager.get_hive_connection(
-                            task.database_name
-                        ) as conn:
-                            cursor = conn.cursor()
-                            try:
-                                cursor.execute("SET hive.exec.compress.output=true")
-                                cursor.execute(
-                                    "SET mapreduce.output.fileoutputformat.compress=true"
-                                )
-                                cursor.execute(
-                                    "SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec"
-                                )
-                                if (
-                                    task.target_file_size is not None
-                                    and task.target_file_size < 0
-                                ):
-                                    cursor.execute("SET hive.exec.reducers.max=1")
-                                    cursor.execute("SET mapreduce.job.reduces=1")
-                            except Exception:
-                                pass
-                            cursor.execute(sql_shadow)
-
-                        # 目录切换
-                        hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
-                        ok1, msg1 = hdfs.move_file(table_path, backup)
-                        if not ok1:
-                            raise RuntimeError(f"备份原目录失败: {msg1}")
-                        ok2, msg2 = hdfs.move_file(shadow, table_path)
-                        if not ok2:
-                            # 回滚
-                            hdfs.move_file(backup, table_path)
-                            raise RuntimeError(f"切换影子目录失败: {msg2}")
-
-                        merge_logger.log(
-                            MergePhase.EXECUTION,
-                            MergeLogLevel.INFO,
-                            "Shadow swap completed",
-                        )
-                        return {
-                            "success": True,
-                            "message": "Shadow swap completed",
-                            "backup_path": backup,
-                            "shadow_path": shadow,
-                        }
-                except Exception as shadow_error:
-                    logger.warning(
-                        f"Shadow swap failed, fallback to in-place overwrite: {shadow_error}"
-                    )
-
-            if task.partition_filter:
-                # 对分区表执行分区级别的INSERT OVERWRITE
-                partition_spec = self._partition_filter_to_spec(task.partition_filter)
-                if partition_spec:
-                    sql = f"""
-                    INSERT OVERWRITE TABLE {table_identifier} PARTITION({partition_spec})
-                    SELECT * FROM {table_identifier} WHERE {task.partition_filter}
-                    """
-                else:
-                    sql = f"INSERT OVERWRITE TABLE {table_identifier} SELECT * FROM {table_identifier}"
-            else:
-                sql = f"INSERT OVERWRITE TABLE {table_identifier} SELECT * FROM {table_identifier}"
+            hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
+            
+            # 原子切换：目标→备份，影子→目标
+            ok1, msg1 = hdfs.move_file(target_path, backup_path)
+            if not ok1:
+                raise RuntimeError(f"Failed to backup target directory: {msg1}")
+            
+            ok2, msg2 = hdfs.move_file(shadow_path, target_path)
+            if not ok2:
+                # 回滚
+                hdfs.move_file(backup_path, target_path)
+                raise RuntimeError(f"Failed to move shadow to target: {msg2}")
 
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"Executing INSERT OVERWRITE: {sql}",
-            )
-
-            with self.connection_manager.get_hive_connection(
-                task.database_name
-            ) as conn:
-                cursor = conn.cursor()
-                # 基础压缩/单文件控制
-                try:
-                    cursor.execute("SET hive.exec.compress.output=true")
-                    cursor.execute(
-                        "SET mapreduce.output.fileoutputformat.compress=true"
-                    )
-                    cursor.execute(
-                        "SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec"
-                    )
-                    if task.target_file_size is not None and task.target_file_size < 0:
-                        cursor.execute("SET hive.exec.reducers.max=1")
-                        cursor.execute("SET mapreduce.job.reduces=1")
-                except Exception:
-                    pass
-                cursor.execute(sql)
-
-            merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.INFO,
-                "INSERT OVERWRITE completed successfully",
+                "Unified merge completed successfully",
             )
 
             return {
                 "success": True,
-                "message": "INSERT OVERWRITE merge completed successfully",
-                "sql_executed": sql,
+                "message": "Unified merge completed successfully",
+                "shadow_path": shadow_path,
+                "backup_path": backup_path,
+                "target_path": target_path,
+                "sql_executed": sql_shadow,
             }
 
         except Exception as e:
-            logger.error(f"INSERT OVERWRITE merge failed: {e}")
+            logger.error(f"Unified merge failed: {e}")
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.ERROR,
-                f"INSERT OVERWRITE failed: {e}",
+                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"Unified merge failed: {e}"
             )
-            return {"success": False, "message": f"INSERT OVERWRITE failed: {str(e)}"}
+
+            # 尝试清理影子目录
+            try:
+                if 'shadow_path' in locals():
+                    hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
+                    hdfs.delete_file(shadow_path, recursive=True)
+                    merge_logger.log(
+                        MergePhase.ROLLBACK, MergeLogLevel.INFO, "Shadow directory cleaned up"
+                    )
+            except Exception as cleanup_error:
+                merge_logger.log(
+                    MergePhase.ROLLBACK,
+                    MergeLogLevel.ERROR,
+                    f"Failed to cleanup shadow directory: {cleanup_error}",
+                )
+
+            return {"success": False, "message": f"Unified merge failed: {str(e)}"}
 
     def _get_table_path(self, task: MergeTask) -> Optional[str]:
         """尝试从 MetaStore/Hive 获取表 LOCATION"""
@@ -532,15 +384,6 @@ class MergeTaskExecutor:
             logger.error(f"Failed to update task progress: {e}")
             db_session.rollback()
 
-    def _generate_temp_table_name(self, table_name: str) -> str:
-        """生成临时表名"""
-        timestamp = int(time.time())
-        return f"{table_name}_temp_{timestamp}"
-
-    def _generate_backup_table_name(self, table_name: str) -> str:
-        """生成备份表名"""
-        timestamp = int(time.time())
-        return f"{table_name}_backup_{timestamp}"
 
     def _partition_filter_to_spec(self, partition_filter: str) -> Optional[str]:
         """将分区过滤器转换为分区规格"""
@@ -556,34 +399,33 @@ class MergeTaskExecutor:
         except Exception:
             return None
 
-    # 以下方法的具体实现需要从原文件中提取
-    def _create_temp_table_with_logging(
-        self, task: MergeTask, temp_table_name: str, merge_logger: MergeTaskLogger
-    ) -> List[str]:
-        """创建临时表（带日志）"""
-        # 这里是原来的实现，简化版本
-        return []
+    def _resolve_partition_path(self, task: MergeTask, table_path: str) -> str:
+        """解析分区路径"""
+        try:
+            # 简单实现：从partition_filter中提取分区信息
+            # 例如："dt='2023-12-01'" -> "dt=2023-12-01"
+            import re
+            matches = re.findall(r"(\w+)='([^']+)'", task.partition_filter)
+            if matches:
+                partition_spec = "/".join([f"{key}={value}" for key, value in matches])
+                return f"{table_path.rstrip('/')}/{partition_spec}"
+            else:
+                # 如果解析失败，回退到表路径
+                return table_path
+        except Exception:
+            return table_path
 
-    def _validate_temp_table_data(
-        self, task: MergeTask, temp_table_name: str
-    ) -> Dict[str, Any]:
-        """验证临时表数据"""
-        return {"valid": True, "message": "Validation passed"}
-
-    def _atomic_table_swap_with_logging(
-        self,
-        task: MergeTask,
-        temp_table_name: str,
-        backup_table_name: str,
-        merge_logger: MergeTaskLogger,
-    ) -> List[str]:
-        """原子性表交换（带日志）"""
-        # 这里是原来的实现，简化版本
-        return []
-
-    def _rollback_merge(
-        self, task: MergeTask, temp_table_name: str, backup_table_name: str
-    ) -> List[str]:
-        """回滚合并操作"""
-        # 这里是原来的实现，简化版本
-        return []
+    def _validate_shadow_directory(self, shadow_path: str) -> bool:
+        """验证影子目录数据"""
+        try:
+            hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
+            # 检查目录是否存在且包含文件
+            status = hdfs.get_file_status(shadow_path)
+            if status and status.get('type') == 'DIRECTORY':
+                # 检查目录是否包含数据文件
+                files = hdfs.list_directory(shadow_path)
+                return len(files) > 0
+            return False
+        except Exception as e:
+            logger.warning(f"Shadow directory validation failed: {e}")
+            return False

@@ -38,8 +38,10 @@
           <span>文件分布</span>
         </template>
         <div class="chart-placeholder">
-          <!-- TODO: Add chart component -->
-          <p>图表组件开发中...</p>
+          <!-- 文件分布图表组件 -->
+          <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+            <p style="color: #666;">文件分布图表将在此显示</p>
+          </div>
         </div>
       </el-card>
     </div>
@@ -170,11 +172,22 @@
 
   const optimizeTable = async (table: any) => {
     try {
-      // TODO: Implement table optimization
-      ElMessage.success(`开始优化表 ${table.table_name}`)
+      // 实现表优化功能
+      ElMessage.info(`正在为表 ${table.table_name} 创建优化任务...`)
+      
+      // 调用后端API创建合并任务
+      const response = await api.post('/tasks/', {
+        table_name: table.table_name,
+        database_name: table.database_name,
+        cluster_id: table.cluster_id,
+        merge_strategy: 'safe_merge',
+        description: `自动优化表 ${table.table_name} 的小文件`
+      })
+      
+      ElMessage.success(`优化任务已创建，任务ID: ${response.id}`)
     } catch (error) {
       console.error('Failed to optimize table:', error)
-      ElMessage.error('优化失败')
+      ElMessage.error('创建优化任务失败，请检查表配置')
     }
   }
 

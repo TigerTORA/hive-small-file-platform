@@ -66,6 +66,19 @@
                   <span class="nav-text">治理流程</span>
                 </router-link>
               </div>
+              <!-- 测试表生成器 -->
+              <div class="nav-item">
+                <router-link
+                  to="/test-table-generator"
+                  class="nav-link"
+                  :class="{ active: $route.path === '/test-table-generator' }"
+                >
+                  <div class="nav-icon">
+                    <el-icon><Tools /></el-icon>
+                  </div>
+                  <span class="nav-text">测试表生成器</span>
+                </router-link>
+              </div>
               <!-- 任务管理（统一：扫描/合并/归档） → 全局可见 -->
               <div class="nav-item">
                 <router-link
@@ -227,7 +240,8 @@
     Refresh,
     Expand,
     Fold,
-    Guide
+    Guide,
+    Tools
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
@@ -254,6 +268,7 @@
       '/tables': '表管理',
       '/tasks': '任务管理',
       '/governance-flow': '治理流程',
+      '/test-table-generator': '测试表生成器',
       '/settings': '系统设置'
     }
 

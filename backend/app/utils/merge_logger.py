@@ -33,6 +33,7 @@ class MergePhase(Enum):
     CONNECTION_TEST = "connection_test"
     PRE_VALIDATION = "pre_validation"
     FILE_ANALYSIS = "file_analysis"
+    EXECUTION = "execution"
     TEMP_TABLE_CREATION = "temp_table_creation"
     DATA_VALIDATION = "data_validation"
     ATOMIC_SWAP = "atomic_swap"
@@ -40,6 +41,7 @@ class MergePhase(Enum):
     CLEANUP = "cleanup"
     ROLLBACK = "rollback"
     COMPLETION = "completion"
+    ERROR = "error"
 
 
 @dataclass
@@ -110,7 +112,7 @@ class MergeTaskLogger:
                 "database_name": self.task.database_name,
                 "table_name": self.task.table_name,
                 "partition_filter": self.task.partition_filter,
-                "merge_strategy": self.task.merge_strategy,
+                "merge_strategy": "unified_safe_merge",
                 "created_by": getattr(self.task, "created_by", "system"),
                 "priority": getattr(self.task, "priority", "normal"),
             },
@@ -225,6 +227,7 @@ class MergeTaskLogger:
             MergePhase.CONNECTION_TEST: "M101",
             MergePhase.PRE_VALIDATION: "M150",
             MergePhase.FILE_ANALYSIS: "M201",
+            MergePhase.EXECUTION: "M250",
             MergePhase.TEMP_TABLE_CREATION: "M301",
             MergePhase.DATA_VALIDATION: "M401",
             MergePhase.ATOMIC_SWAP: "M501",
@@ -232,6 +235,7 @@ class MergeTaskLogger:
             MergePhase.CLEANUP: "M701",
             MergePhase.ROLLBACK: "M801",
             MergePhase.COMPLETION: "M900",
+            MergePhase.ERROR: "E999",
         }.get(phase, "M000")
         # 错误场景在基码上追加后缀，突出严重性
         if level in (MergeLogLevel.ERROR, MergeLogLevel.CRITICAL):

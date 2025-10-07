@@ -314,7 +314,7 @@ class TableLockManager:
                         "lock_holder": task.lock_holder,
                         "task_status": task.status,
                         "locked_since": task.started_time or task.created_time,
-                        "strategy": task.merge_strategy,
+                        "strategy": "unified_safe_merge",
                     }
                 )
 

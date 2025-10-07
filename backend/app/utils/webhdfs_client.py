@@ -764,6 +764,22 @@ class WebHDFSClient:
             logger.error(error_msg)
             return False, error_msg
 
+    def exists(self, path: str) -> bool:
+        """
+        检查路径是否存在
+
+        Args:
+            path: HDFS路径
+
+        Returns:
+            路径是否存在
+        """
+        try:
+            file_status = self.get_file_status(path)
+            return file_status is not None
+        except Exception:
+            return False
+
     def delete_file(self, path: str, recursive: bool = False) -> Tuple[bool, str]:
         """
         删除文件或目录

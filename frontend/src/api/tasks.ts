@@ -107,8 +107,8 @@ export const tasksApi = {
     return api.post(`/tasks/${id}/cancel`)
   },
 
-  // 获取任务日志
-  getLogs(id: number): Promise<any[]> {
+  // 获取任务日志 (支持合并任务number ID 和测试表任务string UUID)
+  getLogs(id: number | string): Promise<any[]> {
     return api.get(`/tasks/${id}/logs`)
   },
 

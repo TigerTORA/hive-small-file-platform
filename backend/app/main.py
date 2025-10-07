@@ -6,7 +6,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.api import clusters, dashboard, errors, partition_archiving
 from app.api import scan_tasks as scan_tasks_api
-from app.api import storage_admin, table_archiving, tables_refactored, tasks, websocket
+from app.api import storage_admin, tables_archive, tables_cold_data, tables_refactored, tasks, test_tables, websocket
 from app.config.database import Base, engine
 from app.config.settings import settings
 from app.models import (
@@ -72,7 +72,10 @@ app.include_router(
     scan_tasks_api.router, prefix="/api/v1/scan-tasks", tags=["scan-tasks"]
 )
 app.include_router(
-    table_archiving.router, prefix="/api/v1/table-archiving", tags=["table-archiving"]
+    tables_cold_data.router, prefix="/api/v1/table-archiving", tags=["cold-data"]
+)
+app.include_router(
+    tables_archive.router, prefix="/api/v1/table-archiving", tags=["table-archiving"]
 )
 app.include_router(
     partition_archiving.router,
@@ -80,6 +83,7 @@ app.include_router(
     tags=["partition-archiving"],
 )
 app.include_router(storage_admin.router, prefix="/api/v1", tags=["storage-admin"])
+app.include_router(test_tables.router, prefix="/api/v1/test-tables", tags=["test-tables"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 
 

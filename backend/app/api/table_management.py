@@ -3,7 +3,7 @@
 负责基础的表查询、数据库列表、表指标等功能
 """
 
-from typing import List
+from typing import Dict, List, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -222,3 +222,108 @@ async def get_table_scan_history(
             for record in history
         ],
     }
+
+
+@router.get("/{cluster_id}/{database_name}/{table_name}/partitions")
+async def get_table_partitions(
+    cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """获取表的分区列表"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    try:
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Getting partitions for {database_name}.{table_name} on cluster {cluster_id}")
+
+        engine = SafeHiveMergeEngine(cluster)
+
+        # 检查实际表结构，确定是否为真正的分区表
+        logger.info(f"Checking real partition status for {database_name}.{table_name}")
+        
+        try:
+            # 尝试检查表是否真的是分区表
+            table_exists = engine._table_exists(database_name, table_name)
+            if table_exists:
+                is_partitioned = engine._is_partitioned_table(database_name, table_name)
+                if is_partitioned:
+                    # 如果是真的分区表，获取实际分区
+                    real_partitions = engine._get_table_partitions(database_name, table_name)
+                    return {
+                        "table_name": table_name,
+                        "is_partitioned": True,
+                        "partitions": real_partitions or [],
+                        "partition_count": len(real_partitions or []),
+                        "message": f"共{len(real_partitions or [])}个分区",
+                        "real_mode": True,
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to check real partition status: {str(e)}")
+        
+        # 如果表不存在或不是分区表，返回明确的非分区状态
+        return {
+            "table_name": table_name,
+            "is_partitioned": False,
+            "partitions": [],
+            "partition_count": 0,
+            "message": "该表不是分区表或不存在",
+            "error_detail": "表结构检查：非分区表"
+        }
+
+        # 获取分区列表
+        try:
+            partitions = engine._get_table_partitions(database_name, table_name)
+            if partitions is None:
+                partitions = []
+        except Exception as e:
+            logger.error(f"Error getting table partitions: {str(e)}")
+            return {
+                "table_name": table_name,
+                "is_partitioned": True,
+                "partitions": [],
+                "error": f"Failed to get partitions: {str(e)}",
+                "message": "Error retrieving partition information",
+            }
+
+        # 解析分区信息，提取分区键和值
+        partition_info = []
+        for partition in partitions:
+            try:
+                # partition格式通常是: dt=2023-12-01/hour=00
+                partition_parts = {}
+                for part in partition.split("/"):
+                    if "=" in part:
+                        key, value = part.split("=", 1)
+                        partition_parts[key] = value
+
+                partition_info.append(
+                    {"partition_spec": partition, "partition_keys": partition_parts}
+                )
+            except Exception as e:
+                logger.warning(f"Error parsing partition {partition}: {str(e)}")
+                # 保留原始分区字符串
+                partition_info.append(
+                    {"partition_spec": partition, "partition_keys": {}}
+                )
+
+        return {
+            "table_name": table_name,
+            "is_partitioned": True,
+            "partition_count": len(partitions),
+            "partitions": partition_info[:100],  # 最多返回100个分区
+            "total_partitions": len(partitions),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Unexpected error in get_table_partitions: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get partitions: {str(e)}"
+        )

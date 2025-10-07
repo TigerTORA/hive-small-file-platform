@@ -6,6 +6,7 @@ from .scan_task import ScanTask
 from .scan_task_log import ScanTaskLogDB
 from .table_metric import TableMetric
 from .task_log import TaskLog
+from .test_table_task_log import TestTableTaskLog
 
 __all__ = [
     "Cluster",
@@ -16,4 +17,5 @@ __all__ = [
     "ScanTask",
     "ScanTaskLogDB",
     "ClusterStatusHistory",
+    "TestTableTaskLog",
 ]

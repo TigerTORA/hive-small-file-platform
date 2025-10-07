@@ -1,0 +1,263 @@
+/**
+ * Dashboard 数据管理 Composable
+ * 提取自 Dashboard.vue L544-724
+ */
+
+import { ref, computed, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useMonitoringStore } from '@/stores/monitoring'
+import {
+  dashboardApi,
+  type FileClassificationItem,
+  type EnhancedColdnessDistribution,
+  type TopTable,
+  type ColdDataItem,
+  type DashboardSummary,
+  type RecentTask,
+  type FileDistributionItem,
+  type TrendPoint,
+  type FormatCompressionItem
+} from '@/api/dashboard'
+
+export function useDashboardData() {
+  const monitoringStore = useMonitoringStore()
+  const selectedClusterId = ref<number | null>(monitoringStore.settings.selectedCluster)
+  const isLoadingCharts = ref(false)
+
+  // 原始数据状态
+  const fileClassificationItems = ref<FileClassificationItem[]>([])
+  const coldnessDistribution = ref<EnhancedColdnessDistribution | null>(null)
+  const formatCompressionItems = ref<FormatCompressionItem[]>([])
+  const topTables = ref<TopTable[]>([])
+  const coldestData = ref<ColdDataItem[]>([])
+  const dashboardSummary = ref<DashboardSummary | null>(null)
+  const recentTasks = ref<RecentTask[]>([])
+  const fileDistribution = ref<FileDistributionItem[]>([])
+  const trendData = ref<TrendPoint[]>([])
+
+  // 文件分类数据转换为饼状图数据
+  const fileClassificationData = computed(() => {
+    return fileClassificationItems.value.map(item => ({
+      name: item.category,
+      value: item.count,
+      description: item.description,
+      details: {
+        count: item.count,
+        size_gb: item.size_gb
+      }
+    }))
+  })
+
+  // 文件分类总数
+  const fileClassificationTotal = computed(() => {
+    return fileClassificationItems.value.reduce((sum, item) => sum + item.count, 0)
+  })
+
+  // 冷数据分布数据转换为饼状图数据(5档)
+  const coldnessDistributionData = computed(() => {
+    if (!coldnessDistribution.value) return []
+
+    const dist = coldnessDistribution.value.distribution
+
+    // 合并为5个时间段
+    const merged = {
+      recent: {
+        name: '1-7天',
+        total_size_gb: (dist.within_1_day?.total_size_gb || 0) + (dist.day_1_to_7?.total_size_gb || 0),
+        partitions: {
+          count: (dist.within_1_day?.partitions?.count || 0) + (dist.day_1_to_7?.partitions?.count || 0),
+          size_gb: (dist.within_1_day?.partitions?.size_gb || 0) + (dist.day_1_to_7?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.within_1_day?.tables?.count || 0) + (dist.day_1_to_7?.tables?.count || 0),
+          size_gb: (dist.within_1_day?.tables?.size_gb || 0) + (dist.day_1_to_7?.tables?.size_gb || 0)
+        }
+      },
+      month: {
+        name: '1周-1月',
+        total_size_gb: dist.week_1_to_month?.total_size_gb || 0,
+        partitions: dist.week_1_to_month?.partitions || { count: 0, size_gb: 0 },
+        tables: dist.week_1_to_month?.tables || { count: 0, size_gb: 0 }
+      },
+      quarter: {
+        name: '1-6月',
+        total_size_gb: (dist.month_1_to_3?.total_size_gb || 0) + (dist.month_3_to_6?.total_size_gb || 0),
+        partitions: {
+          count: (dist.month_1_to_3?.partitions?.count || 0) + (dist.month_3_to_6?.partitions?.count || 0),
+          size_gb: (dist.month_1_to_3?.partitions?.size_gb || 0) + (dist.month_3_to_6?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.month_1_to_3?.tables?.count || 0) + (dist.month_3_to_6?.tables?.count || 0),
+          size_gb: (dist.month_1_to_3?.tables?.size_gb || 0) + (dist.month_3_to_6?.tables?.size_gb || 0)
+        }
+      },
+      year: {
+        name: '6-12月',
+        total_size_gb: dist.month_6_to_12?.total_size_gb || 0,
+        partitions: dist.month_6_to_12?.partitions || { count: 0, size_gb: 0 },
+        tables: dist.month_6_to_12?.tables || { count: 0, size_gb: 0 }
+      },
+      old: {
+        name: '1年以上',
+        total_size_gb: (dist.year_1_to_3?.total_size_gb || 0) + (dist.over_3_years?.total_size_gb || 0),
+        partitions: {
+          count: (dist.year_1_to_3?.partitions?.count || 0) + (dist.over_3_years?.partitions?.count || 0),
+          size_gb: (dist.year_1_to_3?.partitions?.size_gb || 0) + (dist.over_3_years?.partitions?.size_gb || 0)
+        },
+        tables: {
+          count: (dist.year_1_to_3?.tables?.count || 0) + (dist.over_3_years?.tables?.count || 0),
+          size_gb: (dist.year_1_to_3?.tables?.size_gb || 0) + (dist.over_3_years?.tables?.size_gb || 0)
+        }
+      }
+    }
+
+    return Object.values(merged).map(item => ({
+      name: item.name,
+      value: item.total_size_gb,
+      details: {
+        partitions: item.partitions,
+        tables: item.tables
+      }
+    }))
+  })
+
+  // 冷数据总大小
+  const coldDataTotal = computed(() => {
+    return coldnessDistributionData.value.reduce((sum, item) => sum + item.value, 0)
+  })
+
+  // 组合格式数据转换为饼状图数据
+  const formatCompressionData = computed(() => {
+    return formatCompressionItems.value.map(item => {
+      // 简化图例显示文字
+      let shortName = item.format_combination
+        .replace('(无压缩)', '·无压缩')
+        .replace('(ZLIB压缩)', '·ZLIB')
+        .replace('(SNAPPY压缩)', '·SNAPPY')
+        .replace('(GZIP压缩)', '·GZIP')
+        .replace('(LZ4压缩)', '·LZ4')
+
+      return {
+        name: shortName,
+        value: item.table_count,
+        description: `${item.format_combination}`,
+        details: {
+          table_count: item.table_count,
+          total_size_gb: item.total_size_gb,
+          small_files: item.small_files,
+          total_files: item.total_files,
+          percentage: item.percentage,
+          original_name: item.format_combination
+        }
+      }
+    })
+  })
+
+  // 组合格式总表数
+  const formatCompressionTotal = computed(() => {
+    return formatCompressionItems.value.reduce((sum, item) => sum + item.table_count, 0)
+  })
+
+  // 加载图表数据
+  const loadChartData = async () => {
+    isLoadingCharts.value = true
+    try {
+      const clusterId = selectedClusterId.value
+
+      // 并行加载所有API的数据
+      const [
+        fileClassificationResult,
+        coldnessResult,
+        formatCompressionResult,
+        topTablesResult,
+        coldestDataResult,
+        summaryResult,
+        recentTasksResult,
+        fileDistributionResult,
+        trendsResult
+      ] = await Promise.all([
+        dashboardApi.getFileClassification(clusterId || undefined),
+        dashboardApi.getEnhancedColdnessDistribution(clusterId || undefined),
+        dashboardApi.getFormatCompressionDistribution(clusterId || undefined),
+        dashboardApi.getTopTables(clusterId || undefined, 10),
+        dashboardApi.getColdestData(10),
+        dashboardApi.getSummary(clusterId || undefined),
+        dashboardApi.getRecentTasks(5),
+        dashboardApi.getFileDistribution(clusterId || undefined),
+        dashboardApi.getTrends(clusterId || undefined, 30)
+      ])
+
+      fileClassificationItems.value = fileClassificationResult
+      coldnessDistribution.value = coldnessResult
+      formatCompressionItems.value = formatCompressionResult
+      topTables.value = topTablesResult
+      coldestData.value = coldestDataResult
+      dashboardSummary.value = summaryResult
+      recentTasks.value = recentTasksResult
+      fileDistribution.value = fileDistributionResult
+      trendData.value = trendsResult
+
+      console.log('图表数据加载完成:', {
+        fileClassification: fileClassificationResult,
+        coldness: coldnessResult,
+        formatCompression: formatCompressionResult
+      })
+    } catch (error) {
+      console.error('加载图表数据失败:', error)
+      ElMessage.error('加载图表数据失败')
+      throw error
+    } finally {
+      isLoadingCharts.value = false
+    }
+  }
+
+  // 刷新图表数据
+  const refreshChartData = async () => {
+    await loadChartData()
+    ElMessage.success('图表数据已刷新')
+  }
+
+  // 监听集群变化
+  watch(selectedClusterId, async (newClusterId) => {
+    console.log('集群选择变化:', newClusterId)
+    await loadChartData()
+  })
+
+  watch(
+    () => monitoringStore.settings.selectedCluster,
+    async (cid) => {
+      selectedClusterId.value = cid
+      await loadChartData()
+    }
+  )
+
+  return {
+    // 状态
+    selectedClusterId,
+    isLoadingCharts,
+    renderError: ref<string | null>(null),
+
+    // 原始数据
+    fileClassificationItems,
+    coldnessDistribution,
+    formatCompressionItems,
+    topTables,
+    coldestData,
+    dashboardSummary,
+    recentTasks,
+    fileDistribution,
+    trendData,
+
+    // 计算数据
+    fileClassificationData,
+    fileClassificationTotal,
+    coldnessDistributionData,
+    coldDataTotal,
+    formatCompressionData,
+    formatCompressionTotal,
+
+    // 方法
+    loadChartData,
+    refreshChartData
+  }
+}

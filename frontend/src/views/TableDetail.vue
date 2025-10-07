@@ -370,21 +370,172 @@
                     </el-radio>
                   </el-radio-group>
                 </el-form-item>
-                <el-form-item label="选择分区" v-if="mergeScope === 'partition'">
-                  <el-select
-                    v-model="selectedPartition"
-                    placeholder="选择一个分区"
-                    filterable
-                    style="width: 100%"
-                    :prefix-icon="FolderOpened"
-                  >
-                    <el-option
-                      v-for="p in partitionOptions"
-                      :key="p"
-                      :label="p"
-                      :value="p"
-                    />
-                  </el-select>
+                <el-form-item label="分区选择策略" v-if="mergeScope === 'partition'">
+                  <div class="partition-selector">
+                    <!-- 选择策略选项卡 -->
+                    <el-tabs v-model="partitionSelectMode" @tab-change="onPartitionModeChange">
+                      <el-tab-pane label="智能选择" name="smart">
+                        <div class="smart-selector">
+                          <!-- 时间范围选择 -->
+                          <div class="range-selector" style="margin-bottom: 16px;">
+                            <el-radio-group v-model="timeRangeMode" @change="onTimeRangeModeChange">
+                              <el-radio label="recent">最近</el-radio>
+                              <el-radio label="range">指定范围</el-radio>
+                              <el-radio label="pattern">模式匹配</el-radio>
+                            </el-radio-group>
+                          </div>
+                          
+                          <!-- 最近N天 -->
+                          <div v-if="timeRangeMode === 'recent'" class="recent-selector">
+                            <el-row :gutter="12" style="align-items: center;">
+                              <el-col :span="8">
+                                <el-input-number 
+                                  v-model="recentDays" 
+                                  :min="1" 
+                                  :max="365"
+                                  @change="onRecentDaysChange"
+                                  style="width: 100%"
+                                />
+                              </el-col>
+                              <el-col :span="4">
+                                <span>天内的分区</span>
+                              </el-col>
+                              <el-col :span="12">
+                                <el-button size="small" @click="selectRecentPartitions">
+                                  选择 (预计{{ predictedRecentCount }}个)
+                                </el-button>
+                              </el-col>
+                            </el-row>
+                          </div>
+                          
+                          <!-- 日期范围 -->
+                          <div v-if="timeRangeMode === 'range'" class="date-range-selector">
+                            <el-row :gutter="12">
+                              <el-col :span="10">
+                                <el-date-picker
+                                  v-model="dateRange"
+                                  type="daterange"
+                                  range-separator="至"
+                                  start-placeholder="开始日期"
+                                  end-placeholder="结束日期"
+                                  format="YYYY-MM-DD"
+                                  value-format="YYYY-MM-DD"
+                                  style="width: 100%"
+                                  @change="onDateRangeChange"
+                                />
+                              </el-col>
+                              <el-col :span="6">
+                                <el-button size="small" @click="selectDateRangePartitions">
+                                  选择 (预计{{ predictedRangeCount }}个)
+                                </el-button>
+                              </el-col>
+                              <el-col :span="8">
+                                <el-checkbox v-model="excludeWeekends">排除周末</el-checkbox>
+                              </el-col>
+                            </el-row>
+                          </div>
+                          
+                          <!-- 模式匹配 -->
+                          <div v-if="timeRangeMode === 'pattern'" class="pattern-selector">
+                            <el-row :gutter="12">
+                              <el-col :span="12">
+                                <el-input
+                                  v-model="partitionPattern"
+                                  placeholder="例如: dt=2025-09-*, dt=2025-09-2?, dt>=2025-09-01"
+                                  @input="onPatternChange"
+                                >
+                                  <template #prepend>匹配模式</template>
+                                </el-input>
+                              </el-col>
+                              <el-col :span="6">
+                                <el-button size="small" @click="selectPatternPartitions">
+                                  选择 (预计{{ predictedPatternCount }}个)
+                                </el-button>
+                              </el-col>
+                              <el-col :span="6">
+                                <el-button size="small" @click="previewPattern" type="info">预览</el-button>
+                              </el-col>
+                            </el-row>
+                            <div style="margin-top: 8px; font-size: 12px; color: #909399;">
+                              支持通配符: * (任意字符), ? (单个字符), >= <= (比较操作)
+                            </div>
+                          </div>
+                        </div>
+                      </el-tab-pane>
+                      
+                      <el-tab-pane label="手动选择" name="manual">
+                        <div class="manual-selector">
+                          <!-- 搜索和过滤 -->
+                          <div class="search-bar" style="margin-bottom: 12px;">
+                            <el-row :gutter="12">
+                              <el-col :span="12">
+                                <el-input
+                                  v-model="partitionSearchText"
+                                  placeholder="搜索分区..."
+                                  clearable
+                                  @input="onPartitionSearch"
+                                >
+                                  <template #prefix>
+                                    <el-icon><Search /></el-icon>
+                                  </template>
+                                </el-input>
+                              </el-col>
+                              <el-col :span="6">
+                                <el-button size="small" @click="selectAllFiltered">
+                                  全选筛选结果 ({{ filteredPartitions.length }})
+                                </el-button>
+                              </el-col>
+                              <el-col :span="6">
+                                <el-button size="small" @click="clearSelectedPartitions">
+                                  清空选择
+                                </el-button>
+                              </el-col>
+                            </el-row>
+                          </div>
+                          
+                          <!-- 分区列表 (虚拟滚动) -->
+                          <div class="partition-list" style="height: 200px; border: 1px solid #e4e7ed; border-radius: 4px;">
+                            <el-checkbox-group v-model="selectedPartitions" style="width: 100%;">
+                              <el-scrollbar height="200px">
+                                <div style="padding: 8px;">
+                                  <el-checkbox
+                                    v-for="partition in paginatedPartitions"
+                                    :key="partition"
+                                    :label="partition"
+                                    :value="partition"
+                                    style="display: block; margin-bottom: 8px;"
+                                  >
+                                    {{ partition }}
+                                  </el-checkbox>
+                                  <div v-if="hasMorePartitions" style="text-align: center; padding: 8px;">
+                                    <el-button size="small" @click="loadMorePartitions">
+                                      加载更多... (剩余{{ remainingPartitions }}个)
+                                    </el-button>
+                                  </div>
+                                </div>
+                              </el-scrollbar>
+                            </el-checkbox-group>
+                          </div>
+                        </div>
+                      </el-tab-pane>
+                    </el-tabs>
+                    
+                    <!-- 选择结果摘要 -->
+                    <div class="selection-summary" style="margin-top: 12px; padding: 8px; background-color: #f5f7fa; border-radius: 4px;">
+                      <el-row :gutter="12" style="align-items: center;">
+                        <el-col :span="12">
+                          <span style="color: #606266; font-size: 14px;">
+                            已选择: <strong>{{ selectedPartitions.length }}</strong> / {{ partitionOptions.length }} 个分区
+                          </span>
+                        </el-col>
+                        <el-col :span="12" style="text-align: right;">
+                          <el-button v-if="selectedPartitions.length > 0" size="small" @click="showSelectedDetails">
+                            查看选择详情
+                          </el-button>
+                        </el-col>
+                      </el-row>
+                    </div>
+                  </div>
                 </el-form-item>
               </template>
               <el-form-item label="目标文件大小">
@@ -656,7 +807,7 @@
               type="primary"
               @click="createMergeTask"
               :loading="creating"
-              :disabled="mergeScope === 'partition' && !selectedPartition"
+              :disabled="mergeScope === 'partition' && selectedPartitions.length === 0"
               size="large"
             >
               <el-icon v-if="!creating"><Check /></el-icon>
@@ -679,13 +830,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Operation, RefreshRight, Collection, Tickets, User, Timer, FolderChecked, Clock, Histogram,
   FolderOpened, CollectionTag, DataAnalysis, ArrowDownBold, ArrowUpBold, MagicStick, Grid,
   Refresh, DocumentCopy, CircleCheckFilled, Lightning, WarningFilled, Warning, InfoFilled,
   SetUp, PieChart, DocumentDelete, Lock, Connection, Edit, Setting, Files, Folder, Promotion,
-  CopyDocument, Close, Check
+  CopyDocument, Close, Check, Search
 } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -759,8 +910,32 @@ const mergeForm = ref<MergeTaskCreate & {
 })
 
 const mergeScope = ref<'table' | 'partition'>('table')
-const selectedPartition = ref('')
+const selectedPartition = ref('')  // 保留兼容性
+const selectedPartitions = ref<string[]>([])  // 新的多选数组
 const partitionOptions = ref<string[]>([])
+
+// 智能分区选择相关变量
+const partitionSelectMode = ref<'smart' | 'manual'>('smart')
+const timeRangeMode = ref<'recent' | 'range' | 'pattern'>('recent')
+
+// 最近N天选择
+const recentDays = ref(7)
+const predictedRecentCount = ref(0)
+
+// 日期范围选择
+const dateRange = ref<[string, string] | null>(null)
+const excludeWeekends = ref(false)
+const predictedRangeCount = ref(0)
+
+// 模式匹配
+const partitionPattern = ref('')
+const predictedPatternCount = ref(0)
+
+// 手动选择相关
+const partitionSearchText = ref('')
+const filteredPartitions = ref<string[]>([])
+const paginatedPartitions = ref<string[]>([])
+const currentPartitionPage = ref(1)
 
 const mergeRules = {
   task_name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
@@ -1116,12 +1291,19 @@ const createMergeTask = async () => {
     await mergeFormRef.value?.validate()
     creating.value = true
     if (tableMetric.value?.is_partitioned && mergeScope.value === 'partition') {
-      if (!selectedPartition.value) {
-        ElMessage.warning('请选择分区')
+      if (selectedPartitions.value.length === 0) {
+        ElMessage.warning('请选择至少一个分区')
         creating.value = false
         return
       }
-      mergeForm.value.partition_filter = specToFilter(selectedPartition.value)
+      // 处理多个分区：如果只选了一个，使用原逻辑；多个则需要特殊处理
+      if (selectedPartitions.value.length === 1) {
+        mergeForm.value.partition_filter = specToFilter(selectedPartitions.value[0])
+      } else {
+        // 多个分区的情况，构造OR条件
+        const filters = selectedPartitions.value.map(spec => specToFilter(spec))
+        mergeForm.value.partition_filter = `(${filters.join(' OR ')})`
+      }
     } else {
       mergeForm.value.partition_filter = ''
     }
@@ -1245,6 +1427,24 @@ const openMergeDialog = async () => {
   }
   mergeScope.value = tableMetric.value?.is_partitioned ? 'partition' : 'table'
   selectedPartition.value = ''
+  selectedPartitions.value = []  // 清空多选分区
+  
+  // 初始化智能选择功能
+  partitionSelectMode.value = 'smart'
+  timeRangeMode.value = 'recent'
+  recentDays.value = 7
+  dateRange.value = null
+  excludeWeekends.value = false
+  partitionPattern.value = ''
+  partitionSearchText.value = ''
+  currentPartitionPage.value = 1
+  
+  // 更新预测和分页
+  if (tableMetric.value?.is_partitioned) {
+    updatePredictions()
+    updateFilteredPartitions()
+    updatePaginatedPartitions()
+  }
   mergeForm.value.target_storage_format = null
   mergeForm.value.target_compression = 'KEEP'
   mergeForm.value.cluster_id = clusterId.value
@@ -1261,6 +1461,269 @@ const openMergeDialog = async () => {
   mergeForm.value.replicationFactor = 3
   mergeForm.value.replicationRecursive = false
   showMergeDialog.value = true
+}
+
+// 全选分区
+const selectAllPartitions = () => {
+  selectedPartitions.value = [...partitionOptions.value]
+}
+
+// 清空选择的分区
+const clearSelectedPartitions = () => {
+  selectedPartitions.value = []
+}
+
+// 移除单个分区
+const removePartition = (partition: string) => {
+  const index = selectedPartitions.value.indexOf(partition)
+  if (index > -1) {
+    selectedPartitions.value.splice(index, 1)
+  }
+}
+
+// === 智能分区选择方法 ===
+
+// 分区选择模式切换
+const onPartitionModeChange = (mode: 'smart' | 'manual') => {
+  if (mode === 'manual') {
+    updateFilteredPartitions()
+    updatePaginatedPartitions()
+  }
+}
+
+// 时间范围模式切换
+const onTimeRangeModeChange = () => {
+  updatePredictions()
+}
+
+// 最近N天选择
+const onRecentDaysChange = () => {
+  updatePredictions()
+}
+
+const selectRecentPartitions = () => {
+  const today = new Date()
+  const cutoffDate = new Date(today.getTime() - recentDays.value * 24 * 60 * 60 * 1000)
+  
+  const recentPartitions = partitionOptions.value.filter(partition => {
+    const match = partition.match(/dt=(\d{4}-\d{2}-\d{2})/)
+    if (match) {
+      const partitionDate = new Date(match[1])
+      return partitionDate >= cutoffDate
+    }
+    return false
+  })
+  
+  selectedPartitions.value = recentPartitions
+  ElMessage.success(`已选择最近${recentDays.value}天的${recentPartitions.length}个分区`)
+}
+
+// 日期范围选择
+const onDateRangeChange = () => {
+  updatePredictions()
+}
+
+const selectDateRangePartitions = () => {
+  if (!dateRange.value || dateRange.value.length !== 2) {
+    ElMessage.warning('请选择日期范围')
+    return
+  }
+  
+  const [startDate, endDate] = dateRange.value
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  
+  const rangePartitions = partitionOptions.value.filter(partition => {
+    const match = partition.match(/dt=(\d{4}-\d{2}-\d{2})/)
+    if (match) {
+      const partitionDate = new Date(match[1])
+      const isInRange = partitionDate >= start && partitionDate <= end
+      
+      if (excludeWeekends.value && isInRange) {
+        const dayOfWeek = partitionDate.getDay()
+        return dayOfWeek !== 0 && dayOfWeek !== 6 // 排除周日(0)和周六(6)
+      }
+      
+      return isInRange
+    }
+    return false
+  })
+  
+  selectedPartitions.value = rangePartitions
+  ElMessage.success(`已选择${startDate}至${endDate}的${rangePartitions.length}个分区`)
+}
+
+// 模式匹配
+const onPatternChange = () => {
+  updatePredictions()
+}
+
+const selectPatternPartitions = () => {
+  if (!partitionPattern.value.trim()) {
+    ElMessage.warning('请输入匹配模式')
+    return
+  }
+  
+  const matchedPartitions = matchPartitionsByPattern(partitionPattern.value)
+  selectedPartitions.value = matchedPartitions
+  ElMessage.success(`模式匹配到${matchedPartitions.length}个分区`)
+}
+
+const previewPattern = () => {
+  if (!partitionPattern.value.trim()) {
+    ElMessage.warning('请输入匹配模式')
+    return
+  }
+  
+  const matchedPartitions = matchPartitionsByPattern(partitionPattern.value)
+  const previewText = matchedPartitions.slice(0, 10).join(', ') + 
+    (matchedPartitions.length > 10 ? ` ... (共${matchedPartitions.length}个)` : '')
+  
+  ElMessageBox.alert(previewText || '无匹配分区', '模式匹配预览')
+}
+
+// 模式匹配核心逻辑
+const matchPartitionsByPattern = (pattern: string): string[] => {
+  const trimmedPattern = pattern.trim().toLowerCase()
+  
+  return partitionOptions.value.filter(partition => {
+    const lowerPartition = partition.toLowerCase()
+    
+    // 支持通配符
+    if (trimmedPattern.includes('*') || trimmedPattern.includes('?')) {
+      const regexPattern = trimmedPattern
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.')
+      const regex = new RegExp('^' + regexPattern + '$')
+      return regex.test(lowerPartition)
+    }
+    
+    // 支持比较操作
+    if (trimmedPattern.includes('>=') || trimmedPattern.includes('<=') || 
+        trimmedPattern.includes('>') || trimmedPattern.includes('<')) {
+      const match = partition.match(/dt=(\d{4}-\d{2}-\d{2})/)
+      if (match) {
+        const partitionDate = match[1]
+        
+        if (trimmedPattern.includes('>=')) {
+          const compareDate = trimmedPattern.split('>=')[1].trim().replace(/['"]/g, '')
+          return partitionDate >= compareDate
+        }
+        if (trimmedPattern.includes('<=')) {
+          const compareDate = trimmedPattern.split('<=')[1].trim().replace(/['"]/g, '')
+          return partitionDate <= compareDate
+        }
+        if (trimmedPattern.includes('>')) {
+          const compareDate = trimmedPattern.split('>')[1].trim().replace(/['"]/g, '')
+          return partitionDate > compareDate
+        }
+        if (trimmedPattern.includes('<')) {
+          const compareDate = trimmedPattern.split('<')[1].trim().replace(/['"]/g, '')
+          return partitionDate < compareDate
+        }
+      }
+    }
+    
+    // 简单包含匹配
+    return lowerPartition.includes(trimmedPattern)
+  })
+}
+
+// === 手动选择方法 ===
+
+// 分区搜索
+const onPartitionSearch = () => {
+  updateFilteredPartitions()
+  updatePaginatedPartitions()
+}
+
+const updateFilteredPartitions = () => {
+  if (!partitionSearchText.value.trim()) {
+    filteredPartitions.value = [...partitionOptions.value]
+  } else {
+    const searchText = partitionSearchText.value.toLowerCase()
+    filteredPartitions.value = partitionOptions.value.filter(partition =>
+      partition.toLowerCase().includes(searchText)
+    )
+  }
+}
+
+const updatePaginatedPartitions = () => {
+  const startIndex = 0
+  const endIndex = currentPartitionPage.value * partitionPageSize.value
+  paginatedPartitions.value = filteredPartitions.value.slice(startIndex, endIndex)
+}
+
+const selectAllFiltered = () => {
+  const newSelections = filteredPartitions.value.filter(p => !selectedPartitions.value.includes(p))
+  selectedPartitions.value.push(...newSelections)
+  ElMessage.success(`已选择${newSelections.length}个筛选结果`)
+}
+
+const loadMorePartitions = () => {
+  currentPartitionPage.value++
+  updatePaginatedPartitions()
+}
+
+// 计算属性
+const hasMorePartitions = computed(() => {
+  return paginatedPartitions.value.length < filteredPartitions.value.length
+})
+
+const remainingPartitions = computed(() => {
+  return filteredPartitions.value.length - paginatedPartitions.value.length
+})
+
+// 更新预测数量
+const updatePredictions = () => {
+  // 最近N天预测
+  const today = new Date()
+  const cutoffDate = new Date(today.getTime() - recentDays.value * 24 * 60 * 60 * 1000)
+  predictedRecentCount.value = partitionOptions.value.filter(partition => {
+    const match = partition.match(/dt=(\d{4}-\d{2}-\d{2})/)
+    return match && new Date(match[1]) >= cutoffDate
+  }).length
+  
+  // 日期范围预测
+  if (dateRange.value && dateRange.value.length === 2) {
+    const [startDate, endDate] = dateRange.value
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    predictedRangeCount.value = partitionOptions.value.filter(partition => {
+      const match = partition.match(/dt=(\d{4}-\d{2}-\d{2})/)
+      if (match) {
+        const partitionDate = new Date(match[1])
+        const isInRange = partitionDate >= start && partitionDate <= end
+        
+        if (excludeWeekends.value && isInRange) {
+          const dayOfWeek = partitionDate.getDay()
+          return dayOfWeek !== 0 && dayOfWeek !== 6
+        }
+        
+        return isInRange
+      }
+      return false
+    }).length
+  }
+  
+  // 模式匹配预测
+  if (partitionPattern.value.trim()) {
+    predictedPatternCount.value = matchPartitionsByPattern(partitionPattern.value).length
+  } else {
+    predictedPatternCount.value = 0
+  }
+}
+
+// 显示选择详情
+const showSelectedDetails = () => {
+  const details = selectedPartitions.value.slice(0, 50).join(', ') + 
+    (selectedPartitions.value.length > 50 ? ` ... (共${selectedPartitions.value.length}个)` : '')
+  
+  ElMessageBox.alert(details, '已选择的分区详情', {
+    confirmButtonText: '确定',
+    type: 'info'
+  })
 }
 
 const scanCurrentTable = async (strictReal: boolean) => {
@@ -2201,6 +2664,53 @@ onMounted(() => {
     position: static;
     background: transparent;
     width: 100%;
+  }
+}
+
+/* 分区选择器样式 */
+.partition-selector {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 12px;
+  background-color: #fafafa;
+}
+
+.partition-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-count {
+  color: #606266;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.selected-preview {
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  padding: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.partition-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .partition-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .selected-count {
+    align-self: stretch;
+    text-align: center;
   }
 }
 </style>

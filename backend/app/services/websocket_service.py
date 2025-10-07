@@ -141,6 +141,16 @@ class WebSocketManager:
             f"Broadcast to topic '{topic}': sent={sent_count}, failed={failed_count}"
         )
 
+    async def broadcast_to_group(self, group_name: str, message: dict):
+        """向指定组广播消息（用于测试表任务进度）"""
+        ws_message = WebSocketMessage(
+            type=message.get("type", "group_message"),
+            data=message.get("data", message)
+        )
+
+        # 使用组名作为主题进行广播
+        await self.broadcast_to_topic(group_name, ws_message)
+
     async def send_to_user(self, user_id: str, message: WebSocketMessage):
         """向指定用户发送消息"""
         if user_id not in self.active_connections:

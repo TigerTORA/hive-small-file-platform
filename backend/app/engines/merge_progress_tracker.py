@@ -73,19 +73,9 @@ class MergeProgressTracker:
             if file_count is None:
                 return 300  # 默认5分钟
 
-            # 基于文件数量的简单估算
-            if task.merge_strategy == "CONCATENATE":
-                # CONCATENATE相对较快
-                base_time = 30  # 基础时间30秒
-                per_file_time = 0.1  # 每个文件0.1秒
-            elif task.merge_strategy == "INSERT_OVERWRITE":
-                # INSERT OVERWRITE需要重写数据，相对较慢
-                base_time = 60  # 基础时间60秒
-                per_file_time = 0.5  # 每个文件0.5秒
-            else:  # SAFE_MERGE
-                # 安全合并需要额外的验证步骤
-                base_time = 120  # 基础时间120秒
-                per_file_time = 0.8  # 每个文件0.8秒
+            # 统一合并策略的时间估算
+            base_time = 120  # 基础时间120秒
+            per_file_time = 0.8  # 每个文件0.8秒
 
             estimated_time = base_time + (file_count * per_file_time)
 
@@ -155,16 +145,8 @@ class MergeProgressTracker:
                 "estimated_performance_improvement": 0,
             }
 
-            # 简单的文件数量估算
-            if task.merge_strategy == "CONCATENATE":
-                # CONCATENATE会将小文件合并，假设合并后文件数减少70%
-                reduction_factor = 0.7
-            elif task.merge_strategy == "INSERT_OVERWRITE":
-                # INSERT OVERWRITE会重新组织数据，假设减少80%
-                reduction_factor = 0.8
-            else:  # SAFE_MERGE
-                # 安全合并效果类似INSERT OVERWRITE
-                reduction_factor = 0.75
+            # 统一合并策略的文件数量估算
+            reduction_factor = 0.75  # 统一减少75%
 
             estimated_files = int(current_files * (1 - reduction_factor))
             estimated_result["estimated_files_after_merge"] = max(1, estimated_files)
@@ -233,15 +215,14 @@ class MergeProgressTracker:
                     }
                 )
 
-            # 检查策略风险
-            if task.merge_strategy == "SAFE_MERGE":
-                risks.append(
-                    {
-                        "level": "low",
-                        "message": "Safe merge requires additional storage for temporary tables.",
-                        "recommendation": "Ensure sufficient disk space is available",
-                    }
-                )
+            # 统一安全合并策略的风险评估
+            risks.append(
+                {
+                    "level": "low",
+                    "message": "Unified safe merge requires additional storage for shadow directories.",
+                    "recommendation": "Ensure sufficient disk space is available",
+                }
+            )
 
         except Exception as e:
             logger.error(f"Failed to assess merge risks: {e}")

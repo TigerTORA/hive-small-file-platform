@@ -26,10 +26,7 @@ class MergeTask(Base):
     database_name = Column(String(100), nullable=False, index=True)
     partition_filter = Column(String(500), nullable=True)  # e.g., "dt='2023-01-01'"
 
-    # Task configuration
-    merge_strategy = Column(
-        String(50), default="safe_merge"
-    )  # concatenate, insert_overwrite, safe_merge
+    # Task configuration - unified strategy
     target_file_size = Column(Integer, nullable=True)  # target file size in bytes
     target_storage_format = Column(String(50), nullable=True)
     target_compression = Column(String(50), nullable=True)
@@ -63,9 +60,9 @@ class MergeTask(Base):
         String(100), nullable=True
     )  # task ID or process ID that holds the lock
 
-    # Strategy selection metadata
-    strategy_reason = Column(Text, nullable=True)  # Explanation for strategy selection
-    auto_selected = Column(Boolean, default=True)  # Whether strategy was auto-selected
+    # Legacy fields - kept for compatibility
+    strategy_reason = Column(Text, nullable=True)  # Legacy field
+    auto_selected = Column(Boolean, default=True)  # Legacy field
 
     # Performance metrics
     estimated_duration = Column(Integer, nullable=True)  # Estimated duration in seconds

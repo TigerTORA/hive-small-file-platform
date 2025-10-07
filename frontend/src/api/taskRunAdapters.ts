@@ -2,7 +2,7 @@ import api from './index'
 import { scanTasksApi } from './scanTasks'
 import { tasksApi } from './tasks'
 
-export type TaskType = 'scan' | 'merge' | 'archive'
+export type TaskType = 'scan' | 'merge' | 'archive' | 'test-table'
 
 export interface TaskStep {
   id: string
@@ -120,7 +120,9 @@ export async function loadScanRun(taskId: string): Promise<NormalizedTaskRun> {
 export async function loadMergeRun(taskId: number): Promise<NormalizedTaskRun> {
   const task = await tasksApi.get(taskId)
   let logs: any[] = []
-  try { logs = await tasksApi.getLogs(taskId) } catch {}
+  try {
+    logs = await tasksApi.getLogs(taskId, 1000)  // 获取更多日志,避免遗漏ERROR
+  } catch {}
 
   // Group logs by phase and infer per-phase status from start/end messages
   const phaseOrder: string[] = []
@@ -250,6 +252,108 @@ export async function loadArchiveRun(payload: { taskId: string }): Promise<Norma
     currentOperation: task.current_item || '',
     startedAt: task.start_time,
     finishedAt: task.end_time,
+    steps,
+    logs: normLogs
+  }
+}
+
+export async function loadTestTableRun(taskId: string): Promise<NormalizedTaskRun> {
+  // 获取测试表任务日志
+  let logs: any[] = []
+  let taskInfo: any = null
+
+  try {
+    logs = await tasksApi.getLogs(taskId)
+    console.log('Test table logs loaded:', logs)
+  } catch (e) {
+    console.warn('Failed to load test table logs:', e)
+    logs = []
+  }
+
+  // 尝试获取任务详情
+  try {
+    const response = await api.get(`/test-tables/tasks/${taskId}`)
+    taskInfo = response
+    console.log('Test table task info:', taskInfo)
+  } catch (e) {
+    console.warn('Failed to load test table task info:', e)
+  }
+
+  // 测试表生成的阶段 (顺序与Backend执行流程一致)
+  const steps: TaskStep[] = [
+    { id: 'initialization', name: '初始化', status: 'pending' as const },
+    { id: 'hdfs_setup', name: '创建HDFS目录', status: 'pending' as const },
+    { id: 'hive_table_creation', name: '创建Hive表', status: 'pending' as const },
+    { id: 'partition_creation', name: '添加分区', status: 'pending' as const },
+    { id: 'data_generation', name: '生成数据文件', status: 'pending' as const },
+    { id: 'verification', name: '验证结果', status: 'pending' as const },
+    { id: 'completed', name: '完成', status: 'pending' as const }
+  ]
+
+  const hasError = (logs || []).some(l => (l.log_level || '').toUpperCase() === 'ERROR')
+  const normalizedStatus = String(taskInfo?.status || 'running').toLowerCase()
+  const inferredStatus = hasError && normalizedStatus !== 'success' ? 'failed' : normalizedStatus
+
+  const phaseIds = steps.map(step => step.id)
+  const currentPhaseRaw = String(taskInfo?.current_phase || '').toLowerCase()
+  const lastLogPhase = [...(logs || [])]
+    .reverse()
+    .map(l => String(l.phase || '').toLowerCase())
+    .find(phase => !!phase)
+  const activePhase = phaseIds.includes(currentPhaseRaw)
+    ? currentPhaseRaw
+    : phaseIds.includes(lastLogPhase || '')
+      ? (lastLogPhase as string)
+      : ''
+  const activeIndex = activePhase ? phaseIds.indexOf(activePhase) : -1
+
+  if (inferredStatus === 'success') {
+    steps.forEach(step => { step.status = 'success' })
+  } else if (inferredStatus === 'failed') {
+    steps.forEach((step, index) => {
+      if (index < activeIndex) step.status = 'success'
+      else if (index === activeIndex) step.status = 'failed'
+      else step.status = 'pending'
+    })
+    if (activeIndex < 0) steps[0].status = 'failed'
+  } else {
+    steps.forEach((step, index) => {
+      if (index < activeIndex) step.status = 'success'
+      else if (index === activeIndex) step.status = 'running'
+      else step.status = 'pending'
+    })
+    if (activeIndex < 0) {
+      steps[0].status = 'running'
+    }
+  }
+
+  const normLogs: TaskLogItem[] = (logs || []).map(l => {
+    let detailText = ''
+    if (l.details) {
+      try {
+        detailText = ` | ${typeof l.details === 'string' ? l.details : JSON.stringify(l.details)}`
+      } catch (err) {
+        detailText = ` | ${String(l.details)}`
+      }
+    }
+    const baseMessage = l.message || ''
+    const combinedMessage = detailText ? `${baseMessage}${detailText}` : baseMessage
+    return {
+      ts: String(l.timestamp || ''),
+      level: levelMap(l.log_level),
+      source: 'test-table',
+      message: combinedMessage,
+      step_id: l.phase || 'initialization'
+    }
+  })
+
+  return {
+    title: taskInfo?.task_name || '测试表生成任务',
+    status: taskInfo?.status || inferredStatus,
+    progress: taskInfo?.progress_percentage || 0,
+    currentOperation: taskInfo?.current_operation || (hasError ? '执行失败' : '正在执行'),
+    startedAt: taskInfo?.started_time,
+    finishedAt: taskInfo?.completed_time,
     steps,
     logs: normLogs
   }

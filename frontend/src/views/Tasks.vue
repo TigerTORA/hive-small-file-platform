@@ -85,7 +85,14 @@
                   </el-tag>
                 </template>
                 <template v-else>
-                  <el-tag size="small" type="info">{{ row.type === 'merge' ? '合并' : '扫描' }}</el-tag>
+                  <el-tag size="small" type="info">
+                    {{
+                      row.type === 'merge' ? '合并' :
+                      row.type === 'scan' ? '扫描' :
+                      row.type === 'test-table-generation' ? '测试表生成' :
+                      row.type
+                    }}
+                  </el-tag>
                 </template>
               </template>
             </el-table-column>
@@ -293,13 +300,9 @@
         </el-form-item>
 
         <el-form-item label="合并策略">
-          <el-radio-group v-model="taskForm.merge_strategy">
-            <el-radio label="safe_merge">安全合并 (推荐)</el-radio>
-            <el-radio label="concatenate">文件合并 (CONCATENATE)</el-radio>
-            <el-radio label="insert_overwrite">重写插入 (INSERT OVERWRITE)</el-radio>
-          </el-radio-group>
+          <el-tag type="success" size="large">统一安全合并 (UNIFIED_SAFE_MERGE)</el-tag>
           <div style="margin-top: 4px; font-size: 12px; color: #909399">
-            安全合并使用临时表+重命名策略，确保零停机时间
+            系统统一使用安全合并策略，确保零停机时间
           </div>
         </el-form-item>
         <el-form-item label="输出文件格式">
@@ -420,9 +423,7 @@
             }}</el-descriptions-item>
             <el-descriptions-item label="目标表">{{ previewData.table }}</el-descriptions-item>
             <el-descriptions-item label="合并策略">
-              <el-tag :type="previewData.merge_strategy === 'safe_merge' ? 'success' : 'warning'">
-                {{ getStrategyName(previewData.merge_strategy) }}
-              </el-tag>
+              <el-tag type="success">安全合并</el-tag>
             </el-descriptions-item>
           </el-descriptions>
         </div>
@@ -531,6 +532,7 @@
   const archiveTasks = ref<any[]>([])
 
   const tasks = ref<MergeTask[]>([])
+  const testTableTasks = ref<any[]>([])
   const scanTasks = ref<ScanTask[]>([])
   const clusters = ref<Cluster[]>([])
   const loading = ref(false)
@@ -545,9 +547,9 @@
   const previewData = ref<any>(null)
   const previewLoading = ref(false)
   const previewingTask = ref<MergeTask | null>(null)
-  const runDialogType = ref<'scan' | 'merge' | 'archive'>('scan')
+  const runDialogType = ref<'scan' | 'merge' | 'archive' | 'test-table'>('scan')
   const runScanTaskId = ref<string | null>(null)
-  const runMergeTaskId = ref<number | null>(null)
+  const runMergeTaskId = ref<number | string | null>(null)
   // 归档任务数据（已移除界面，保留为将来扩展占位）
   // 扫描任务筛选与刷新
   const scanClusterFilter = ref<number | null>(null)
@@ -658,7 +660,8 @@
   const typeOptions = [
     { label: '合并任务', value: 'merge' },
     { label: '扫描任务', value: 'scan' },
-    { label: '归档任务', value: 'archive' }
+    { label: '归档任务', value: 'archive' },
+    { label: '测试表生成', value: 'test-table-generation' }
   ]
   const selectedStatuses = ref<Set<string>>(new Set())
   const selectedTypes = ref<Set<string>>(new Set())
@@ -682,12 +685,14 @@
     for (const r of tasks.value) { const s = normalizeStatus(r.status); map[s] = (map[s] || 0) + 1 }
     for (const r of scanTasks.value) { const s = normalizeStatus(r.status); map[s] = (map[s] || 0) + 1 }
     for (const r of archiveTasks.value) { const s = 'success'; map[s] = (map[s] || 0) + 1 }
+    for (const r of testTableTasks.value) { const s = normalizeStatus(r.status); map[s] = (map[s] || 0) + 1 }
     return map
   })
   const typeCounts = computed<Record<string, number>>(() => ({
     merge: tasks.value.length,
     scan: scanTasks.value.length,
-    archive: archiveTasks.value.length
+    archive: archiveTasks.value.length,
+    'test-table-generation': testTableTasks.value.length
   }))
 
   const archiveSubtypeCounts = computed<Record<string, number>>(() => {
@@ -711,6 +716,16 @@
       const s = normalizeStatus(task.status)
       if (selectedStatuses.value.size && !selectedStatuses.value.has(s)) return false
       const text = `${task.task_name} ${task.database_name}.${task.table_name}`
+      return matchSearch(text)
+    })
+  })
+
+  const filteredTestTableTasks = computed(() => {
+    if (selectedTypes.value.size && !selectedTypes.value.has('test-table-generation')) return []
+    return testTableTasks.value.filter(task => {
+      const s = normalizeStatus(task.status)
+      if (selectedStatuses.value.size && !selectedStatuses.value.has(s)) return false
+      const text = `${task.task_name || ''} ${task.database_name || ''}.${task.table_name || ''}`
       return matchSearch(text)
     })
   })
@@ -749,6 +764,18 @@
       start_time: row.created_time,
       last_update: (row as any).updated_time || row.created_time
     }))
+    const testTableRows = filteredTestTableTasks.value.map(row => ({
+      type: 'test-table-generation',
+      raw: row,
+      id: row.id,
+      task_name: row.task_name,
+      database_name: row.database_name,
+      table_name: row.table_name,
+      status: normalizeStatus(row.status),
+      progress: row.progress_percentage ?? row.progress ?? 0,
+      start_time: row.created_time,
+      last_update: row.completed_time || row.started_time || row.created_time
+    }))
     const scanRows = filteredScanTasks.value.map(r => ({
       type: (r as any).task_type && (String((r as any).task_type).startsWith('archive') || String((r as any).task_type).startsWith('restore')) ? 'archive' : 'scan',
       raw: r,
@@ -775,7 +802,8 @@
           start_time: r.archived_at,
           last_update: r.archived_at
         }))
-    return [...mergeRows, ...scanRows, ...archiveRows].sort((a,b) => new Date(b.last_update || b.start_time).getTime() - new Date(a.last_update || a.start_time).getTime())
+    return [...mergeRows, ...testTableRows, ...scanRows, ...archiveRows]
+      .sort((a,b) => new Date(b.last_update || b.start_time).getTime() - new Date(a.last_update || a.start_time).getTime())
   })
 
   const openRunRow = (row: any) => {
@@ -794,6 +822,11 @@
       runScanTaskId.value = row.task_id || row.raw?.task_id || null
       runMergeTaskId.value = null
       showRunDialog.value = true
+    } else if (row.type === 'test-table-generation') {
+      runDialogType.value = 'test-table'
+      runScanTaskId.value = null
+      runMergeTaskId.value = row.id  // 测试表任务使用row.id作为任务ID
+      showRunDialog.value = true
     }
   }
 
@@ -801,7 +834,9 @@
   const loadTasks = async () => {
     loading.value = true
     try {
-      tasks.value = await tasksApi.list()
+      const allTasks = await tasksApi.list()
+      tasks.value = allTasks.filter((item: any) => !item.type || item.type === 'merge')
+      testTableTasks.value = allTasks.filter((item: any) => item.type === 'test-table-generation')
     } catch (error) {
       console.error('Failed to load tasks:', error)
     } finally {
@@ -1631,6 +1666,9 @@
 
   .log-message {
     color: #2c3e50;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    max-width: 100%;
   }
 
   .preview-container {

@@ -44,10 +44,18 @@ class HiveConnectionManager:
         if not self.cluster.hive_password:
             return None
 
-        # 解密失败时回退到明文，以兼容直接存放明文密码的环境
+        # 首先尝试解密，如果解密失败或返回None，则认为是明文密码
         try:
-            return decrypt_cluster_password(self.cluster)
-        except Exception:
+            decrypted = decrypt_cluster_password(self.cluster)
+            if decrypted is not None:
+                return decrypted
+            else:
+                # 解密返回None，可能是明文密码
+                logger.warning(f"Password decryption returned None for cluster {self.cluster.id}, using as plain text")
+                return self.cluster.hive_password
+        except Exception as e:
+            # 解密异常，可能是明文密码
+            logger.warning(f"Password decryption failed for cluster {self.cluster.id}: {e}, using as plain text")
             return self.cluster.hive_password
 
     def test_connections(self) -> bool:

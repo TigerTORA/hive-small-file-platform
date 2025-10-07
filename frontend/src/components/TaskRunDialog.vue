@@ -54,6 +54,16 @@
           <div class="overview">
             <el-progress :percentage="run?.progress || 0" :stroke-width="12" :status="progressStatus"></el-progress>
             <div v-if="run?.currentOperation" class="op">当前：{{ run?.currentOperation }}</div>
+            <!-- 失败时显示完整错误信息 -->
+            <el-alert
+              v-if="run?.status === 'failed' && errorMessage"
+              type="error"
+              title="错误详情"
+              :closable="false"
+              style="margin-top: 12px"
+            >
+              <pre class="error-detail">{{ errorMessage }}</pre>
+            </el-alert>
           </div>
 
           <!-- Logs toolbar -->
@@ -99,14 +109,14 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
-import { loadScanRun, loadMergeRun, loadArchiveRun, type NormalizedTaskRun } from '@/api/taskRunAdapters'
+import { loadScanRun, loadMergeRun, loadArchiveRun, loadTestTableRun, type NormalizedTaskRun } from '@/api/taskRunAdapters'
 import { tasksApi } from '@/api/tasks'
 
 const props = defineProps<{
   modelValue: boolean
-  type: 'scan' | 'merge' | 'archive'
+  type: 'scan' | 'merge' | 'archive' | 'test-table'
   scanTaskId?: string
-  mergeTaskId?: number
+  mergeTaskId?: number | string  // 支持测试表的字符串ID
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [boolean] }>()
@@ -117,6 +127,7 @@ const visible = computed({
 })
 
 const run = ref<NormalizedTaskRun | null>(null)
+const taskData = ref<any>(null)  // 保存原始任务数据用于获取error_message
 const activeStepId = ref<string>('')
 const levelFilter = ref<'ALL' | 'INFO' | 'WARN' | 'ERROR'>('ALL')
 const keyword = ref('')
@@ -124,7 +135,10 @@ const logsRef = ref<HTMLElement>()
 let poll: any = null
 
 const dialogTitle = computed(() => {
-  const base = props.type === 'scan' ? '扫描任务' : props.type === 'merge' ? '合并任务' : '归档任务'
+  const base = props.type === 'scan' ? '扫描任务'
+    : props.type === 'merge' ? '合并任务'
+    : props.type === 'test-table' ? '测试表生成任务'
+    : '归档任务'
   return `${base}执行详情`
 })
 
@@ -191,15 +205,36 @@ const load = async () => {
   try {
   if (props.type === 'scan' && props.scanTaskId) {
     run.value = await loadScanRun(props.scanTaskId)
+    taskData.value = await scanTasksApi.get(props.scanTaskId)
   } else if (props.type === 'merge' && props.mergeTaskId) {
     run.value = await loadMergeRun(props.mergeTaskId)
+    taskData.value = await tasksApi.get(props.mergeTaskId)
   } else if (props.type === 'archive' && props.scanTaskId) {
     run.value = await loadArchiveRun({ taskId: props.scanTaskId })
+    taskData.value = await scanTasksApi.get(props.scanTaskId)
+  } else if (props.type === 'test-table' && props.mergeTaskId) {
+    run.value = await loadTestTableRun(String(props.mergeTaskId))
+    taskData.value = null  // 测试表任务暂不加载原始数据
   } else {
     run.value = null
+    taskData.value = null
   }
-    if (run.value && !activeStepId.value && run.value.steps.length) {
-      activeStepId.value = run.value.steps[0].id
+    if (run.value && run.value.steps.length) {
+      const logs = run.value.logs || []
+      const normalize = (stepId?: string) => stepId || run.value.steps[0]?.id || ''
+      const logStep = [...logs]
+        .reverse()
+        .map(l => normalize(l.step_id))
+        .find(id => !!id)
+      const hasLogsForActive = activeStepId.value
+        ? logs.some(l => normalize(l.step_id) === activeStepId.value)
+        : false
+      const fallbackStep = run.value.steps.find(s => s.status === 'failed')
+        || run.value.steps.find(s => s.status === 'running')
+        || run.value.steps[0]
+      if (!activeStepId.value || !hasLogsForActive) {
+        activeStepId.value = logStep || (fallbackStep ? fallbackStep.id : '')
+      }
     }
     await nextTick(); scrollBottom()
   } catch (e: any) {
@@ -213,6 +248,7 @@ const startPoll = () => {
   if (props.type === 'scan') poll = setInterval(load, 2000)
   if (props.type === 'merge') poll = setInterval(load, 3000)
   if (props.type === 'archive') poll = setInterval(load, 2500)
+  if (props.type === 'test-table') poll = setInterval(load, 2000)
 }
 const stopPoll = () => { if (poll) { clearInterval(poll); poll = null } }
 
@@ -233,6 +269,12 @@ const scrollBottom = () => { if (logsRef.value) logsRef.value.scrollTop = logsRe
 const scrollTop = () => { if (logsRef.value) logsRef.value.scrollTop = 0 }
 
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '-'
+
+// 获取完整错误信息
+const errorMessage = computed(() => {
+  if (!taskData.value || run.value?.status !== 'failed') return ''
+  return taskData.value.error_message || ''
+})
 
 onMounted(() => { if (visible.value) { load(); startPoll() } })
 watch(filteredLogs, async () => { await nextTick(); scrollBottom() })
@@ -344,4 +386,20 @@ const forceRefresh = async () => { await load() }
 }
 .logs-empty { color: #cbd5e1; text-align: center; padding: 12px; }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 错误详情样式 */
+.error-detail {
+  margin: 0;
+  padding: 12px;
+  background: #2c2c2c;
+  color: #f56c6c;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 </style>
