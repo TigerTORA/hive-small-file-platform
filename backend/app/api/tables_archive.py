@@ -1,289 +1,24 @@
 """
-表归档API模块
-负责冷数据扫描、表归档、恢复等功能
+表归档与恢复API模块
+
+负责表的归档、恢复、状态查询和统计分析等功能。
+使用存储策略(Storage Policy)机制实现冷热数据分层存储。
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config.database import SessionLocal, get_db
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
-from app.monitor.cold_data_scanner import SimpleColdDataScanner
 from app.monitor.simple_archive_engine import SimpleArchiveEngine
 from app.services.scan_service import scan_task_manager
 
 router = APIRouter()
-
-
-@router.post("/scan-cold-data/{cluster_id}")
-async def scan_cold_data(
-    cluster_id: int,
-    # 兼容旧参数名 cold_days_threshold，同时支持 cold_threshold_days
-    cold_days_threshold: Optional[int] = Query(
-        None, description="冷数据阈值天数（兼容参数名）"
-    ),
-    cold_threshold_days: Optional[int] = Query(None, description="冷数据阈值天数"),
-    database_name: Optional[str] = Query(None, description="指定数据库名称"),
-    background: bool = Query(True, description="是否后台任务运行并输出任务日志"),
-    db: Session = Depends(get_db),
-):
-    """扫描集群中的冷数据表"""
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-
-    try:
-        threshold = (
-            cold_days_threshold
-            if cold_days_threshold is not None
-            else (cold_threshold_days if cold_threshold_days is not None else 90)
-        )
-
-        if not background:
-            cold_scanner = SimpleColdDataScanner(cluster)
-            scan_result = cold_scanner.scan_cold_data(
-                threshold_days=threshold, database_filter=database_name
-            )
-            cold_tables = scan_result.get("cold_tables", [])
-            updated_count = 0
-            for cold_table in cold_tables:
-                db_name = cold_table.get("database_name")
-                table_name = cold_table.get("table_name")
-                last_access_time = cold_table.get("last_access_time")
-                days_since_access = cold_table.get("days_since_last_access", 0)
-                latest_metric = (
-                    db.query(TableMetric)
-                    .filter(
-                        TableMetric.cluster_id == cluster_id,
-                        TableMetric.database_name == db_name,
-                        TableMetric.table_name == table_name,
-                    )
-                    .order_by(TableMetric.scan_time.desc())
-                    .first()
-                )
-                if latest_metric:
-                    latest_metric.is_cold_data = 1
-                    latest_metric.last_access_time = last_access_time
-                    latest_metric.days_since_last_access = days_since_access
-                    updated_count += 1
-            db.commit()
-            return {
-                "message": "Cold data scan completed",
-                "cluster_id": cluster_id,
-                "scan_config": {
-                    "threshold_days": threshold,
-                    "database_filter": database_name,
-                },
-                "scan_result": {
-                    "cold_tables_found": len(cold_tables),
-                    "database_records_updated": updated_count,
-                    "scan_timestamp": datetime.utcnow().isoformat(),
-                },
-            }
-
-        # 后台任务模式：集成任务视图 + 结构化日志
-        task = scan_task_manager.create_scan_task(
-            db, cluster_id, "cold-table-scan", f"扫描冷数据表(阈值{threshold}天)"
-        )
-
-        def run_cold_scan():
-            db_thread = SessionLocal()
-            try:
-                cluster_t = (
-                    db_thread.query(Cluster).filter(Cluster.id == cluster_id).first()
-                )
-                cold_scanner = SimpleColdDataScanner(cluster_t)
-                scan_task_manager.info(
-                    task.task_id,
-                    "T301",
-                    "开始冷数据表扫描",
-                    db=db_thread,
-                    phase="scan",
-                    ctx={"threshold_days": threshold, "db": database_name},
-                )
-                scan_result = cold_scanner.scan_cold_data(
-                    threshold_days=threshold, database_filter=database_name
-                )
-                cold_tables = (
-                    scan_result.get("cold_tables", [])
-                    if isinstance(scan_result, dict)
-                    else []
-                )
-                updated_count = 0
-                for cold_table in cold_tables:
-                    db_name = cold_table.get("database_name")
-                    table_name = cold_table.get("table_name")
-                    last_access_time = cold_table.get("last_access_time")
-                    days_since_access = cold_table.get("days_since_last_access", 0)
-                    latest_metric = (
-                        db_thread.query(TableMetric)
-                        .filter(
-                            TableMetric.cluster_id == cluster_id,
-                            TableMetric.database_name == db_name,
-                            TableMetric.table_name == table_name,
-                        )
-                        .order_by(TableMetric.scan_time.desc())
-                        .first()
-                    )
-                    if latest_metric:
-                        latest_metric.is_cold_data = 1
-                        latest_metric.last_access_time = last_access_time
-                        latest_metric.days_since_last_access = days_since_access
-                        updated_count += 1
-                db_thread.commit()
-                scan_task_manager.info(
-                    task.task_id,
-                    "T390",
-                    "冷数据表扫描完成",
-                    db=db_thread,
-                    phase="scan",
-                    ctx={"found": len(cold_tables), "updated": updated_count},
-                )
-                scan_task_manager.complete_task(db_thread, task.task_id, success=True)
-            except Exception as e:
-                scan_task_manager.error(
-                    task.task_id,
-                    "ET390",
-                    f"冷数据表扫描失败: {e}",
-                    db=db_thread,
-                    phase="scan",
-                )
-                scan_task_manager.complete_task(
-                    db_thread, task.task_id, success=False, error_message=str(e)
-                )
-            finally:
-                try:
-                    db_thread.close()
-                except Exception:
-                    pass
-
-        import threading
-
-        threading.Thread(target=run_cold_scan, daemon=True).start()
-        return {"message": "Cold data scan started", "task_id": task.task_id}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cold data scan failed: {str(e)}")
-
-
-@router.get("/cold-data-summary/{cluster_id}")
-async def get_cold_data_summary(cluster_id: int, db: Session = Depends(get_db)):
-    """获取集群冷数据统计摘要"""
-    # 获取冷数据表统计
-    cold_data_stats = (
-        db.query(
-            func.count(TableMetric.id).label("cold_table_count"),
-            func.sum(TableMetric.total_size).label("total_cold_size"),
-            func.avg(TableMetric.days_since_last_access).label("avg_days_since_access"),
-        )
-        .filter(TableMetric.cluster_id == cluster_id, TableMetric.is_cold_data == 1)
-        .first()
-    )
-
-    # 获取归档状态统计
-    archive_stats = (
-        db.query(TableMetric.archive_status, func.count(TableMetric.id).label("count"))
-        .filter(TableMetric.cluster_id == cluster_id)
-        .group_by(TableMetric.archive_status)
-        .all()
-    )
-
-    return {
-        "cluster_id": cluster_id,
-        "cold_data_summary": {
-            "cold_table_count": cold_data_stats.cold_table_count or 0,
-            "total_cold_size_bytes": cold_data_stats.total_cold_size or 0,
-            "avg_days_since_access": round(
-                cold_data_stats.avg_days_since_access or 0, 1
-            ),
-        },
-        "archive_status_breakdown": {status: count for status, count in archive_stats},
-    }
-
-
-@router.get("/cold-data-list/{cluster_id}")
-async def get_cold_data_list(
-    cluster_id: int,
-    database_name: Optional[str] = Query(None),
-    min_days_since_access: int = Query(0, description="最小未访问天数"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
-    order_by: str = Query("days_since_last_access", description="排序字段"),
-    order_desc: bool = Query(True, description="是否降序"),
-    db: Session = Depends(get_db),
-):
-    """获取冷数据表列表"""
-    query = db.query(TableMetric).filter(
-        TableMetric.cluster_id == cluster_id, TableMetric.is_cold_data == 1
-    )
-
-    if database_name:
-        query = query.filter(TableMetric.database_name == database_name)
-
-    if min_days_since_access > 0:
-        query = query.filter(
-            TableMetric.days_since_last_access >= min_days_since_access
-        )
-
-    # 排序
-    if hasattr(TableMetric, order_by):
-        order_column = getattr(TableMetric, order_by)
-        if order_desc:
-            query = query.order_by(order_column.desc())
-        else:
-            query = query.order_by(order_column.asc())
-
-    # 分页
-    total_count = query.count()
-    offset = (page - 1) * page_size
-    cold_tables = query.offset(offset).limit(page_size).all()
-
-    return {
-        "cluster_id": cluster_id,
-        "pagination": {
-            "page": page,
-            "page_size": page_size,
-            "total_count": total_count,
-            "total_pages": (total_count + page_size - 1) // page_size,
-        },
-        "filters": {
-            "database_name": database_name,
-            "min_days_since_access": min_days_since_access,
-        },
-        "cold_tables": [
-            {
-                "database_name": table.database_name,
-                "table_name": table.table_name,
-                "table_size": table.total_size,
-                "last_access_time": table.last_access_time,
-                "days_since_last_access": table.days_since_last_access,
-                "archive_status": table.archive_status,
-                "archive_location": table.archive_location,
-                "archived_at": table.archived_at,
-            }
-            for table in cold_tables
-        ],
-    }
-
-
-@router.post("/archive-table/{cluster_id}/{database_name}/{table_name}")
-async def archive_table(
-    cluster_id: int,
-    database_name: str,
-    table_name: str,
-    force: bool = Query(False, description="强制归档，跳过检查"),
-    db: Session = Depends(get_db),
-):
-    # 目录迁移归档已移除
-    raise HTTPException(
-        status_code=410,
-        detail="Directory-move archive removed. Use /archive-with-progress?mode=storage-policy",
-    )
 
 
 @router.post("/archive-with-progress/{cluster_id}/{database_name}/{table_name}")
@@ -301,7 +36,28 @@ async def archive_table_with_progress(
     ),
     db: Session = Depends(get_db),
 ):
-    """以后台任务形式执行归档，提供阶段与日志。返回 task_id 以供追踪。"""
+    """
+    以后台任务形式执行表归档
+
+    通过设置HDFS存储策略将表数据迁移到冷存储层。
+    支持进度追踪和结构化日志输出。
+
+    Args:
+        cluster_id: 集群ID
+        database_name: 数据库名称
+        table_name: 表名称
+        force: 是否强制归档,跳过检查
+        mode: 归档模式,目前仅支持 'storage-policy'
+        policy: 存储策略名称,默认 'COLD'
+        recursive: 是否递归应用到子目录,默认True
+        db: 数据库会话
+
+    Returns:
+        包含task_id和进度URL的字典,用于追踪归档进度
+
+    Raises:
+        HTTPException: 当集群不存在或归档模式不支持时
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
@@ -451,7 +207,24 @@ async def restore_table_with_progress(
     table_name: str,
     db: Session = Depends(get_db),
 ):
-    """以后台任务形式执行“策略恢复”（将存储策略设置回 HOT）。返回 task_id。"""
+    """
+    以后台任务形式执行表恢复
+
+    通过将存储策略设置为HOT,将表数据从冷存储层恢复到热存储层。
+    支持进度追踪和结构化日志输出。
+
+    Args:
+        cluster_id: 集群ID
+        database_name: 数据库名称
+        table_name: 表名称
+        db: 数据库会话
+
+    Returns:
+        包含task_id的字典,用于追踪恢复进度
+
+    Raises:
+        HTTPException: 当集群不存在时
+    """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
@@ -566,22 +339,27 @@ async def restore_table_with_progress(
     }
 
 
-@router.post("/restore-table/{cluster_id}/{database_name}/{table_name}")
-async def restore_table(
-    cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
-):
-    # 目录迁移恢复已移除
-    raise HTTPException(
-        status_code=410,
-        detail="Directory-move restore removed. Use /restore-with-progress for storage-policy=HOT",
-    )
-
-
 @router.get("/archive-status/{cluster_id}/{database_name}/{table_name}")
 async def get_archive_status(
     cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
 ):
-    """获取表的归档状态"""
+    """
+    获取表的归档状态
+
+    查询指定表的当前归档状态、归档位置、归档时间等信息。
+
+    Args:
+        cluster_id: 集群ID
+        database_name: 数据库名称
+        table_name: 表名称
+        db: 数据库会话
+
+    Returns:
+        包含表信息和归档详情的字典
+
+    Raises:
+        HTTPException: 当表不存在时返回404
+    """
     table_metric = (
         db.query(TableMetric)
         .filter(
@@ -622,7 +400,21 @@ async def list_archived_tables(
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    """获取已归档表列表"""
+    """
+    获取已归档表的分页列表
+
+    返回指定集群中所有已归档的表,支持数据库筛选和分页。
+
+    Args:
+        cluster_id: 集群ID
+        database_name: 数据库名称筛选,为空则返回所有数据库
+        page: 页码,从1开始
+        page_size: 每页记录数,1-200
+        db: 数据库会话
+
+    Returns:
+        包含分页信息和已归档表列表的字典
+    """
     query = db.query(TableMetric).filter(
         TableMetric.cluster_id == cluster_id, TableMetric.archive_status == "archived"
     )
@@ -667,7 +459,20 @@ async def get_archive_statistics(
     days_range: int = Query(30, description="统计天数范围"),
     db: Session = Depends(get_db),
 ):
-    """获取归档统计信息"""
+    """
+    获取归档统计信息
+
+    返回指定时间范围内的归档统计,包括归档表数量、总大小、平均大小,
+    以及按数据库分组的归档分布。
+
+    Args:
+        cluster_id: 集群ID
+        days_range: 统计天数范围,默认30天
+        db: 数据库会话
+
+    Returns:
+        包含时间范围、总体统计和数据库分布的字典
+    """
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days_range)
 

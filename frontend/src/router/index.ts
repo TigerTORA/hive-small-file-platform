@@ -65,6 +65,12 @@ const router = createRouter({
       name: 'BigScreen',
       component: () => import('@/views/BigScreen.vue'),
       meta: { title: '实时监控大屏', fullscreen: true }
+    },
+    {
+      path: '/test-table-generator',
+      name: 'TestTableGenerator',
+      component: () => import('@/views/TestTableGenerator.vue'),
+      meta: { title: '测试表生成器', requiresCluster: true }
     }
   ]
 })

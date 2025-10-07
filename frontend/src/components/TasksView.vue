@@ -251,8 +251,26 @@
   }
 
   const viewTaskDetail = (task: any) => {
-    // TODO: Implement task detail view
-    ElMessage.info('任务详情功能开发中')
+    // 实现任务详情查看功能
+    try {
+      // 创建任务详情对话框内容
+      const detailContent = `
+        任务ID: ${task.id}
+        状态: ${task.status}
+        创建时间: ${task.created_at}
+        描述: ${task.description || '无描述'}
+        进度: ${task.progress || 0}%
+      `
+      
+      ElMessage.info({
+        message: `任务详情: ${detailContent}`,
+        duration: 5000,
+        showClose: true
+      })
+    } catch (error) {
+      console.error('获取任务详情失败:', error)
+      ElMessage.error('获取任务详情失败')
+    }
   }
 
   const retryTask = async (task: any) => {

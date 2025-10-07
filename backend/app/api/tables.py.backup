@@ -624,15 +624,29 @@ async def get_table_partitions(
 
     try:
         from app.engines.safe_hive_engine import SafeHiveMergeEngine
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Getting partitions for {database_name}.{table_name} on cluster {cluster_id}")
 
         engine = SafeHiveMergeEngine(cluster)
 
         # 检查表是否存在
-        if not engine._table_exists(database_name, table_name):
-            raise HTTPException(status_code=404, detail="Table not found")
+        try:
+            table_exists = engine._table_exists(database_name, table_name)
+            if not table_exists:
+                raise HTTPException(status_code=404, detail="Table not found")
+        except Exception as e:
+            logger.error(f"Error checking table existence: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to check table existence: {str(e)}")
 
         # 检查是否为分区表
-        is_partitioned = engine._is_partitioned_table(database_name, table_name)
+        try:
+            is_partitioned = engine._is_partitioned_table(database_name, table_name)
+        except Exception as e:
+            logger.error(f"Error checking if table is partitioned: {str(e)}")
+            # 如果无法检查分区状态，假设为非分区表
+            is_partitioned = False
 
         if not is_partitioned:
             return {
@@ -643,21 +657,40 @@ async def get_table_partitions(
             }
 
         # 获取分区列表
-        partitions = engine._get_table_partitions(database_name, table_name)
+        try:
+            partitions = engine._get_table_partitions(database_name, table_name)
+            if partitions is None:
+                partitions = []
+        except Exception as e:
+            logger.error(f"Error getting table partitions: {str(e)}")
+            return {
+                "table_name": table_name,
+                "is_partitioned": True,
+                "partitions": [],
+                "error": f"Failed to get partitions: {str(e)}",
+                "message": "Error retrieving partition information",
+            }
 
         # 解析分区信息，提取分区键和值
         partition_info = []
         for partition in partitions:
-            # partition格式通常是: dt=2023-12-01/hour=00
-            partition_parts = {}
-            for part in partition.split("/"):
-                if "=" in part:
-                    key, value = part.split("=", 1)
-                    partition_parts[key] = value
+            try:
+                # partition格式通常是: dt=2023-12-01/hour=00
+                partition_parts = {}
+                for part in partition.split("/"):
+                    if "=" in part:
+                        key, value = part.split("=", 1)
+                        partition_parts[key] = value
 
-            partition_info.append(
-                {"partition_spec": partition, "partition_keys": partition_parts}
-            )
+                partition_info.append(
+                    {"partition_spec": partition, "partition_keys": partition_parts}
+                )
+            except Exception as e:
+                logger.warning(f"Error parsing partition {partition}: {str(e)}")
+                # 保留原始分区字符串
+                partition_info.append(
+                    {"partition_spec": partition, "partition_keys": {}}
+                )
 
         return {
             "table_name": table_name,
@@ -667,7 +700,12 @@ async def get_table_partitions(
             "total_partitions": len(partitions),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Unexpected error in get_table_partitions: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Failed to get partitions: {str(e)}"
         )
@@ -766,7 +804,6 @@ async def get_merge_preview(
             database_name=database_name,
             table_name=table_name,
             partition_filter=partition_filter,
-            merge_strategy="safe_merge",
             task_name=f"Preview for {database_name}.{table_name}",
         )
 
@@ -916,34 +953,6 @@ async def get_table_info(
         )
 
 
-@router.get("/{cluster_id}/{database_name}/{table_name}/partitions")
-async def get_table_partitions_list(
-    cluster_id: int, database_name: str, table_name: str, db: Session = Depends(get_db)
-):
-    """返回表的分区列表（简单字符串列表：key=val[/key2=val2]）。
-
-    说明：该接口仅用于前端分区选择，不做复杂分页；如分区很多，建议后续改造为分页/模糊查询。
-    """
-    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
-    if not cluster:
-        raise HTTPException(status_code=404, detail="Cluster not found")
-
-    try:
-        from app.engines.safe_hive_engine import SafeHiveMergeEngine
-
-        engine = SafeHiveMergeEngine(cluster)
-
-        if not engine._table_exists(database_name, table_name):
-            raise HTTPException(status_code=404, detail="Table not found")
-
-        parts = engine._get_table_partitions(database_name, table_name) or []
-        return {"partitions": parts}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get partitions: {str(e)}"
-        )
 
 
 @router.post("/scan-all-databases/{cluster_id}")

@@ -97,23 +97,23 @@ def execute_merge_task(self, task_id: int):
         # 执行合并，监控不同阶段的进度
         try:
             # 为 safe_merge 引擎添加进度回调
-            if task.merge_strategy == "safe_merge":
-                # SafeHiveMergeEngine 的进度监控
-                def progress_callback(phase, message):
-                    current_task.update_state(
-                        state="PROGRESS",
-                        meta={
-                            "status": "executing",
-                            "task_name": task.task_name,
-                            "table": f"{task.database_name}.{task.table_name}",
-                            "phase": phase,
-                            "message": message,
-                        },
-                    )
+            # 统一使用安全合并策略
+            # SafeHiveMergeEngine 的进度监控
+            def progress_callback(phase, message):
+                current_task.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "status": "executing",
+                        "task_name": task.task_name,
+                        "table": f"{task.database_name}.{task.table_name}",
+                        "phase": phase,
+                        "message": message,
+                    },
+                )
 
-                # 如果引擎支持进度回调，则设置
-                if hasattr(engine, "set_progress_callback"):
-                    engine.set_progress_callback(progress_callback)
+            # 如果引擎支持进度回调，则设置
+            if hasattr(engine, "set_progress_callback"):
+                engine.set_progress_callback(progress_callback)
 
             result = engine.execute_merge(task, db)
 
@@ -164,16 +164,20 @@ def execute_merge_task(self, task_id: int):
             raise Exception(f"Merge execution failed: {result['message']}")
 
     except Exception as e:
-        logger.error(f"Failed to execute merge task {task_id}: {e}")
+        logger.error(f"Failed to execute merge task {task_id}: {e}", exc_info=True)
 
         # 更新任务状态为失败
         try:
+            import traceback
             task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
             if task:
                 task.status = "failed"
-                task.error_message = str(e)
+                # 保存完整的错误信息,包括堆栈
+                full_error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                task.error_message = full_error[:5000]  # 限制长度避免数据库溢出
                 task.completed_time = datetime.utcnow()
-                task.current_phase = "failed"
+                task.execution_phase = "error"
+                task.current_operation = f"执行失败: {type(e).__name__}: {str(e)}"
                 db.commit()
 
                 # 释放表锁
@@ -330,7 +334,6 @@ def batch_create_merge_tasks(cluster_id: int, small_file_threshold: int = 1000):
                     task_name=smart_task_config["task_name"],
                     table_name=table_metric.table_name,
                     database_name=table_metric.database_name,
-                    merge_strategy=smart_task_config["recommended_strategy"],
                     strategy_reason=smart_task_config["strategy_reason"],
                     auto_selected=True,
                     status="pending",

@@ -8,29 +8,124 @@ from app.config.database import SessionLocal, get_db
 from app.config.settings import settings
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
+from app.models.test_table_task_log import TestTableTaskLog
 from app.schemas.merge_task import MergeTaskCreate, MergeTaskResponse
 
 router = APIRouter()
 # Reload hint: retry endpoint added; ensure router includes it
 
 
-@router.get("/", response_model=list[MergeTaskResponse])
+@router.get("/")
 async def list_tasks(
     cluster_id: int = Query(None),
     status: str = Query(None),
     limit: int = Query(50),
     db: Session = Depends(get_db),
 ):
-    """List merge tasks with filtering"""
-    query = db.query(MergeTask)
+    """List all types of tasks (merge, scan, archive, test-table-generation) with filtering"""
+    from app.models.scan_task import ScanTask
+    from app.schemas.test_table import TestTableTask
 
+    all_tasks = []
+
+    # 获取合并任务
+    merge_query = db.query(MergeTask)
     if cluster_id:
-        query = query.filter(MergeTask.cluster_id == cluster_id)
+        merge_query = merge_query.filter(MergeTask.cluster_id == cluster_id)
     if status:
-        query = query.filter(MergeTask.status == status)
+        merge_query = merge_query.filter(MergeTask.status == status)
 
-    tasks = query.order_by(MergeTask.created_time.desc()).limit(limit).all()
-    return tasks
+    merge_tasks = merge_query.order_by(MergeTask.created_time.desc()).limit(limit).all()
+    for task in merge_tasks:
+        all_tasks.append({
+            "id": task.id,
+            "type": "merge",
+            "task_name": task.task_name,
+            "database_name": task.database_name,
+            "table_name": task.table_name,
+            "cluster_id": task.cluster_id,
+            "status": task.status,
+            "created_time": task.created_time,
+            "started_time": task.started_time,
+            "completed_time": task.completed_time,
+            "error_message": task.error_message,
+            "progress": task.progress,
+            "current_phase": task.current_phase
+        })
+
+    # 获取扫描任务
+    scan_query = db.query(ScanTask)
+    if cluster_id:
+        scan_query = scan_query.filter(ScanTask.cluster_id == cluster_id)
+    if status:
+        scan_query = scan_query.filter(ScanTask.status == status)
+
+    scan_tasks = scan_query.order_by(ScanTask.start_time.desc()).limit(limit).all()
+    for task in scan_tasks:
+        # 根据task_type确定显示类型
+        display_type = "archive" if task.task_type and task.task_type.startswith('archive') else "scan"
+
+        # 计算进度
+        progress = 0.0
+        if task.total_items and task.total_items > 0:
+            progress = (task.completed_items or 0) / task.total_items * 100
+
+        all_tasks.append({
+            "id": task.id,
+            "type": display_type,
+            "subtype": task.task_type,
+            "task_name": task.task_name,
+            "database_name": getattr(task, 'database_name', ''),
+            "table_name": getattr(task, 'table_name', ''),
+            "cluster_id": task.cluster_id,
+            "status": task.status,
+            "created_time": task.start_time,
+            "started_time": task.start_time,
+            "completed_time": task.end_time,
+            "error_message": task.error_message,
+            "progress": progress,
+            "current_phase": task.current_item or task.task_type
+        })
+
+    # 获取测试表生成任务
+    try:
+        from app.models.test_table_task import TestTableTask as TestTableTaskModel
+
+        test_tasks_query = db.query(TestTableTaskModel)
+        if cluster_id:
+            test_tasks_query = test_tasks_query.filter(TestTableTaskModel.cluster_id == cluster_id)
+        if status:
+            test_tasks_query = test_tasks_query.filter(TestTableTaskModel.status == status)
+
+        test_tasks = test_tasks_query.order_by(TestTableTaskModel.created_time.desc()).limit(limit).all()
+        for task in test_tasks:
+            all_tasks.append({
+                "id": task.id,
+                "type": "test-table-generation",
+                "task_name": task.task_name,
+                "database_name": task.database_name,
+                "table_name": task.table_name,
+                "cluster_id": task.cluster_id,
+                "status": task.status,
+                "created_time": task.created_time,
+                "started_time": task.started_time,
+                "completed_time": task.completed_time,
+                "error_message": task.error_message,
+                "progress": task.progress_percentage,
+                "current_phase": task.current_phase,
+                "current_operation": task.current_operation
+            })
+    except Exception as e:
+        # 测试表任务表可能不存在，忽略错误
+        print(f"Warning: Could not load test table tasks: {e}")
+
+    # 按创建时间排序并限制数量
+    from datetime import datetime
+    all_tasks.sort(
+        key=lambda x: x["created_time"] if x["created_time"] else datetime.min,
+        reverse=True
+    )
+    return all_tasks[:limit]
 
 
 @router.post("/", response_model=MergeTaskResponse)
@@ -156,12 +251,15 @@ async def execute_task(task_id: int, db: Session = Depends(get_db)):
             engine.execute_merge(t, s)
         except Exception as e:
             try:
+                import traceback
                 t = s.query(MergeTask).filter(MergeTask.id == tid).first()
                 if t:
                     t.status = "failed"
-                    t.error_message = str(e)
+                    # 保存完整错误信息
+                    full_error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                    t.error_message = full_error[:5000]
                     t.execution_phase = "error"
-                    t.current_operation = f"执行失败: {e}"
+                    t.current_operation = f"执行失败: {type(e).__name__}: {str(e)}"
                     s.commit()
             except Exception:
                 s.rollback()
@@ -203,22 +301,96 @@ async def cancel_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{task_id}/logs")
-async def get_task_logs(task_id: int, db: Session = Depends(get_db)):
+async def get_task_logs(task_id: str, db: Session = Depends(get_db)):
     """Get logs for a specific task"""
-    # 验证任务是否存在
-    task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
-    if not task:
+    # 先检查是否是测试表任务（UUID格式）
+    from app.models.test_table_task import TestTableTask as TestTableTaskModel
+
+    # 尝试作为UUID查找测试表任务
+    test_task = db.query(TestTableTaskModel).filter(TestTableTaskModel.id == task_id).first()
+    if test_task:
+        # 读取持久化日志
+        persisted_logs = (
+            db.query(TestTableTaskLog)
+            .filter(TestTableTaskLog.task_id == task_id)
+            .order_by(TestTableTaskLog.timestamp.asc())
+            .all()
+        )
+
+        if persisted_logs:
+            normalized = []
+            for row in persisted_logs:
+                normalized.append(
+                    {
+                        "id": row.id,
+                        "log_level": row.log_level,
+                        "message": _sanitize_log_text(row.message),
+                        "details": row.details,
+                        "timestamp": row.timestamp,
+                        "phase": row.phase,
+                        "progress_percentage": row.progress_percentage,
+                    }
+                )
+            return normalized
+
+        # 兼容老任务：没有持久化日志时返回基础信息
+        fallback_logs = []
+        if test_task.started_time:
+            fallback_logs.append({
+                "id": 1,
+                "log_level": "INFO",
+                "message": _sanitize_log_text(f"任务开始执行: {test_task.task_name}"),
+                "details": None,
+                "timestamp": test_task.started_time,
+                "phase": test_task.current_phase,
+                "progress_percentage": test_task.progress_percentage,
+            })
+
+        if test_task.error_message:
+            fallback_logs.append({
+                "id": 2,
+                "log_level": "ERROR",
+                "message": _sanitize_log_text(f"任务执行失败: {test_task.error_message}"),
+                "details": test_task.current_operation,
+                "timestamp": test_task.completed_time or test_task.started_time,
+                "phase": test_task.current_phase,
+                "progress_percentage": test_task.progress_percentage,
+            })
+
+        if test_task.status == "success" and test_task.completed_time:
+            fallback_logs.append({
+                "id": 3,
+                "log_level": "INFO",
+                "message": _sanitize_log_text(
+                    f"任务执行成功 - 创建文件: {test_task.hdfs_files_created}, 分区: {test_task.hive_partitions_added}, 大小: {test_task.total_size_mb:.2f}MB"
+                ),
+                "details": test_task.current_operation,
+                "timestamp": test_task.completed_time,
+                "phase": test_task.current_phase,
+                "progress_percentage": test_task.progress_percentage,
+            })
+
+        return fallback_logs
+
+    # 如果不是测试表任务，尝试作为整数ID查找合并任务
+    try:
+        merge_task_id = int(task_id)
+        task = db.query(MergeTask).filter(MergeTask.id == merge_task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # 查询任务日志
+        from app.models.task_log import TaskLog
+
+        logs = (
+            db.query(TaskLog)
+            .filter(TaskLog.task_id == merge_task_id)
+            .order_by(TaskLog.timestamp.asc())
+            .all()
+        )
+    except ValueError:
+        # 既不是UUID也不是有效的整数ID
         raise HTTPException(status_code=404, detail="Task not found")
-
-    # 查询任务日志
-    from app.models.task_log import TaskLog
-
-    logs = (
-        db.query(TaskLog)
-        .filter(TaskLog.task_id == task_id)
-        .order_by(TaskLog.timestamp.asc())
-        .all()
-    )
 
     sanitized = []
     for log in logs:
@@ -260,15 +432,8 @@ async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
         # 导入引擎工厂
         from app.engines.engine_factory import MergeEngineFactory
 
-        # 根据任务的合并策略选择引擎
-        engine_type = None
-        if task.merge_strategy == "safe_merge":
-            engine_type = "safe_hive"
-        elif task.merge_strategy in ["concatenate", "insert_overwrite"]:
-            engine_type = "hive"
-
-        # 获取合并引擎
-        engine = MergeEngineFactory.get_engine(cluster, engine_type)
+        # 统一使用安全合并引擎
+        engine = MergeEngineFactory.get_engine(cluster, "safe_hive")
 
         # 获取预览信息
         preview = engine.get_merge_preview(task)
@@ -277,7 +442,7 @@ async def get_task_preview(task_id: int, db: Session = Depends(get_db)):
             "task_id": task.id,
             "task_name": task.task_name,
             "table": f"{task.database_name}.{task.table_name}",
-            "merge_strategy": task.merge_strategy,
+            "merge_strategy": "unified_safe_merge",
             "preview": preview,
         }
 

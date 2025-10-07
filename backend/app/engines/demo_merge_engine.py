@@ -293,9 +293,10 @@ class DemoMergeEngine:
 
             # 更新失败状态
             task.status = "failed"
-            task.error_message = error_message
+            # 确保保存完整错误信息
+            task.error_message = error_message if len(error_message) > 50 else f"合并执行失败: {error_message}"
             task.execution_phase = "error"
-            task.current_operation = f"执行失败: {error_message}"
+            task.current_operation = f"执行失败: {error_message[:200]}"
             task.completed_time = datetime.utcnow()
 
             merge_logger.log_task_completion(

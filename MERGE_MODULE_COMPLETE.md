@@ -174,7 +174,7 @@ npm run dev
 
 # 访问地址
 # API文档: http://localhost:8000/docs
-# 前端界面: http://localhost:5173
+# 前端界面: http://localhost:3000
 ```
 
 ### API测试示例

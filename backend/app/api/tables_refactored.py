@@ -5,7 +5,12 @@
 
 from fastapi import APIRouter
 
-from app.api import table_archiving, table_management, table_scanning
+from app.api import (
+    table_management,
+    table_scanning,
+    tables_archive,
+    tables_cold_data,
+)
 
 # 创建主路由器
 router = APIRouter()
@@ -15,7 +20,9 @@ router.include_router(table_management.router, tags=["Table Management"], prefix
 
 router.include_router(table_scanning.router, tags=["Table Scanning"], prefix="")
 
-router.include_router(table_archiving.router, tags=["Table Archiving"], prefix="")
+router.include_router(tables_cold_data.router, tags=["Cold Data"], prefix="")
+
+router.include_router(tables_archive.router, tags=["Table Archiving"], prefix="")
 
 # 兼容性路由重定向（如果需要的话）
 # 这里可以添加一些向后兼容的路由映射

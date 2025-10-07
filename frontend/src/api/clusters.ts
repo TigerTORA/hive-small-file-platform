@@ -200,3 +200,26 @@ export const clustersApi = {
     return api.delete(`/clusters/${id}/cache`)
   }
 }
+
+// Composition API风格的hook
+export const useClustersApi = () => {
+  return {
+    list: clustersApi.list.bind(clustersApi),
+    get: clustersApi.get.bind(clustersApi),
+    create: clustersApi.create.bind(clustersApi),
+    update: clustersApi.update.bind(clustersApi),
+    delete: clustersApi.delete.bind(clustersApi),
+    testConnection: clustersApi.testConnection.bind(clustersApi),
+    testConnectionReal: clustersApi.testConnectionReal.bind(clustersApi),
+    createWithValidation: clustersApi.createWithValidation.bind(clustersApi),
+    testConnectionConfig: clustersApi.testConnectionConfig.bind(clustersApi),
+    getStats: clustersApi.getStats.bind(clustersApi),
+    testConnectionEnhanced: clustersApi.testConnectionEnhanced.bind(clustersApi),
+    getConnectionStatistics: clustersApi.getConnectionStatistics.bind(clustersApi),
+    getConnectionHistory: clustersApi.getConnectionHistory.bind(clustersApi),
+    getStatus: clustersApi.getStatus.bind(clustersApi),
+    clearConnectionCache: clustersApi.clearConnectionCache.bind(clustersApi)
+  }
+}
+
+export default clustersApi
