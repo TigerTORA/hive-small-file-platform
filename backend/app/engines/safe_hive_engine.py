@@ -2765,7 +2765,11 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         hb = threading.Thread(target=_heartbeat, daemon=True)
         hb.start()
         try:
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] cursor.execute(sql) started...\n")
             cursor.execute(sql)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] cursor.execute(sql) completed\n")
             stop.set()
             hb.join(timeout=0.2)
             merge_logger.log_sql_execution(sql, phase, success=True)
@@ -3154,12 +3158,20 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         - 性能提升10倍以上(100分区从50分钟降至5分钟)
         - 支持格式转换
         """
+        import sys
+        # 写入日志文件
+        with open('/tmp/merge_debug.log', 'a') as f:
+            f.write(f"\n[{time.time()}] _execute_full_table_dynamic_partition_merge started for task {task.id}\n")
+        print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Method started")
+        sys.stdout.flush()
         database = task.database_name
         table = task.table_name
         ts = int(time.time())
         temp_table = f"{table}_merge_temp_{ts}"
         backup_table = f"{table}_backup_{ts}"
 
+        print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization...")
+        sys.stdout.flush()
         merge_logger.log(
             MergePhase.INITIALIZATION,
             MergeLogLevel.INFO,
@@ -3168,10 +3180,16 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
         try:
             # 1. 获取分区列
+            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling _get_partition_columns...")
+            sys.stdout.flush()
             partition_cols = self._get_partition_columns(database, table)
+            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] _get_partition_columns returned: {partition_cols}")
+            sys.stdout.flush()
             if not partition_cols:
                 raise Exception("无法获取分区列定义")
 
+            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging partition columns...")
+            sys.stdout.flush()
             merge_logger.log(
                 MergePhase.INITIALIZATION,
                 MergeLogLevel.INFO,
@@ -3179,17 +3197,41 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             )
 
             # 2. 获取统计信息
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Getting table location...\n")
+            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Getting table location...")
+            sys.stdout.flush()
             files_before = None
             try:
                 table_location = self._get_table_location(database, table)
+                with open('/tmp/merge_debug.log', 'a') as f:
+                    f.write(f"[{time.time()}] Table location: {table_location}\n")
+                print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Table location: {table_location}")
+                sys.stdout.flush()
                 if table_location:
+                    with open('/tmp/merge_debug.log', 'a') as f:
+                        f.write(f"[{time.time()}] Calling scan_directory_stats...\n")
+                    print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling scan_directory_stats...")
+                    sys.stdout.flush()
                     stats = self.webhdfs_client.scan_directory_stats(
                         table_location, self.cluster.small_file_threshold or 134217728
                     )
+                    with open('/tmp/merge_debug.log', 'a') as f:
+                        f.write(f"[{time.time()}] scan_directory_stats returned, files={stats.total_files}\n")
+                    print(f"[DEBUG _execute_full_table_dynamic_partition_merge] scan_directory_stats returned")
+                    sys.stdout.flush()
                     files_before = stats.total_files
             except Exception as e:
                 logger.warning(f"Failed to get file stats: {e}")
+                with open('/tmp/merge_debug.log', 'a') as f:
+                    f.write(f"[{time.time()}] Exception getting stats: {e}\n")
+                print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Exception getting stats: {e}")
+                sys.stdout.flush()
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Logging initialization complete, files_before={files_before}\n")
+            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization complete...")
+            sys.stdout.flush()
             merge_logger.log(
                 MergePhase.INITIALIZATION,
                 MergeLogLevel.INFO,
@@ -3197,17 +3239,27 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             )
 
             # 3. 创建临时表(保留分区定义)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Creating temp table...\n")
             merge_logger.log(
                 MergePhase.TEMP_TABLE_CREATION,
                 MergeLogLevel.INFO,
                 f"开始临时表创建: {temp_table}"
             )
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Creating hive connection...\n")
             conn = self._create_hive_connection(database)
             cursor = conn.cursor()
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Hive connection created\n")
 
             # 解析原表结构(不继承ACID属性)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Calling _parse_table_schema_from_show_create...\n")
             schema_info = self._parse_table_schema_from_show_create(database, table)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] _parse_table_schema_from_show_create returned\n")
 
             # 手动构建CREATE TABLE语句
             columns_ddl = ',\n  '.join([f"`{col}` {typ}" for col, typ in schema_info['columns']])
@@ -3255,7 +3307,12 @@ TBLPROPERTIES (
                 f"执行临时表DDL: 列数={len(schema_info['columns'])}, 分区列数={len(schema_info['partition_columns'])}, 格式={input_fmt}"
             )
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Executing CREATE TABLE SQL...\n")
+                f.write(f"SQL: {create_temp_sql[:200]}...\n")
             cursor.execute(create_temp_sql)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] CREATE TABLE executed successfully\n")
 
             merge_logger.log(
                 MergePhase.TEMP_TABLE_CREATION,
@@ -3323,8 +3380,12 @@ TBLPROPERTIES (
                             f"SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.{compression}Codec"
                         ])
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Executing {len(dynamic_partition_settings)} Hive settings...\n")
             for setting in dynamic_partition_settings:
                 cursor.execute(setting)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Hive settings executed\n")
 
             merge_logger.log(
                 MergePhase.EXECUTION,
@@ -3341,6 +3402,8 @@ TBLPROPERTIES (
             """
 
             # 使用心跳机制执行长时SQL
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Calling _execute_sql_with_heartbeat for INSERT...\n")
             self._execute_sql_with_heartbeat(
                 cursor=cursor,
                 sql=insert_sql,
@@ -3353,6 +3416,8 @@ TBLPROPERTIES (
                 interval=15
             )
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] INSERT completed, logging...\n")
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
@@ -3360,6 +3425,8 @@ TBLPROPERTIES (
             )
 
             # 6. 原子交换HDFS位置
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Starting atomic swap...\n")
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
@@ -3367,35 +3434,57 @@ TBLPROPERTIES (
             )
 
             # 先关闭当前连接
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Closing cursor and connection...\n")
             cursor.close()
             conn.close()
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Connection closed\n")
 
             # 调用原子交换方法 (内部会创建和管理新连接)
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Calling _atomic_swap_table_location...\n")
             swap_result = self._atomic_swap_table_location(
                 database=database,
                 original_table=table,
                 temp_table=temp_table,
                 merge_logger=merge_logger
             )
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] _atomic_swap_table_location returned\n")
 
             # 8. 获取合并后文件数
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Getting files_after count...\n")
             files_after = None
             try:
                 table_location = self._get_table_location(database, table)
+                with open('/tmp/merge_debug.log', 'a') as f:
+                    f.write(f"[{time.time()}] Table location for files_after: {table_location}\n")
                 if table_location:
+                    with open('/tmp/merge_debug.log', 'a') as f:
+                        f.write(f"[{time.time()}] Calling scan_directory_stats for files_after...\n")
                     stats = self.webhdfs_client.scan_directory_stats(
                         table_location, self.cluster.small_file_threshold or 134217728
                     )
                     files_after = stats.total_files
-            except Exception:
+                    with open('/tmp/merge_debug.log', 'a') as f:
+                        f.write(f"[{time.time()}] scan_directory_stats completed, files_after={files_after}\n")
+            except Exception as e:
+                with open('/tmp/merge_debug.log', 'a') as f:
+                    f.write(f"[{time.time()}] Exception getting files_after: {e}\n")
                 pass
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Logging completion...\n")
             merge_logger.log(
                 MergePhase.COMPLETION,
                 MergeLogLevel.INFO,
                 f"动态分区整表合并完成: 文件数 {files_before} → {files_after}"
             )
 
+            with open('/tmp/merge_debug.log', 'a') as f:
+                f.write(f"[{time.time()}] Returning result...\n")
             return {
                 "success": True,
                 "message": "Full table merge completed using dynamic partitions",

@@ -240,15 +240,32 @@ async def execute_task(task_id: int, db: Session = Depends(get_db)):
             c = s.query(Cluster).filter(Cluster.id == cluster_id).first()
             if not (t and c):
                 return
+
             if settings.DEMO_MODE:
                 from app.engines.demo_merge_engine import DemoMergeEngine
-
                 engine = DemoMergeEngine(c)
             else:
                 from app.engines.engine_factory import MergeEngineFactory
-
                 engine = MergeEngineFactory.get_engine(c)
-            engine.execute_merge(t, s)
+
+            result = engine.execute_merge(t, s)
+
+            # 根据execute_merge的返回值更新任务状态
+            if result and result.get('success'):
+                t.status = 'completed'
+                t.progress_percentage = 100
+                t.completed_time = datetime.now()
+                # 映射result中的数据到MergeTask字段
+                if 'files_before' in result:
+                    t.files_before = result['files_before']
+                if 'files_after' in result:
+                    t.files_after = result['files_after']
+                if 'size_saved' in result:
+                    t.size_saved = result['size_saved']
+            else:
+                t.status = 'failed'
+                t.error_message = result.get('message', '合并失败') if result else '合并失败:无返回值'
+            s.commit()
         except Exception as e:
             try:
                 import traceback
