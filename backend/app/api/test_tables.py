@@ -70,8 +70,7 @@ async def create_test_table(
                 config_copy = scenario_config.copy(update={
                     'table_name': request.config.table_name,
                     'database_name': request.config.database_name,
-                    'hdfs_base_path': request.config.hdfs_base_path,
-                    'data_generation_mode': request.config.data_generation_mode
+                    'hdfs_base_path': request.config.hdfs_base_path
                 })
                 request.config = config_copy
 
