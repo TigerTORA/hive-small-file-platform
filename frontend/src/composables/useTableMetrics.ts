@@ -1,8 +1,11 @@
 import { computed, type Ref } from 'vue'
 import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import type { TableMetric } from '@/api/tables'
 import { formatFileSize } from '@/utils/formatFileSize'
 import { formatNumber, formatTime } from '@/utils/tableHelpers'
+
+dayjs.extend(relativeTime)
 
 export interface RecommendationItem {
   id: string

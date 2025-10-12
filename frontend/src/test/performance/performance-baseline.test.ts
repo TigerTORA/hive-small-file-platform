@@ -223,7 +223,9 @@ describe('性能基准测试', () => {
                     total_small_files: 15000,
                     small_file_ratio: 30,
                     total_size_gb: 1000,
-                    small_file_size_gb: 50
+                    small_file_size_gb: 50,
+                    files_reduced: 20000,
+                    size_saved_gb: 128.5
                   }),
                 50
               ) // 模拟50ms API延迟
@@ -250,7 +252,26 @@ describe('性能基准测试', () => {
       // Mock所有API
       const mockDelay = 30
       ;(dashboardApi.getSummary as any).mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve({}), mockDelay))
+        () =>
+          new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({
+                  total_clusters: 0,
+                  active_clusters: 0,
+                  total_tables: 0,
+                  monitored_tables: 0,
+                  total_files: 0,
+                  total_small_files: 0,
+                  small_file_ratio: 0,
+                  total_size_gb: 0,
+                  small_file_size_gb: 0,
+                  files_reduced: 0,
+                  size_saved_gb: 0
+                }),
+              mockDelay
+            )
+          )
       )
       ;(dashboardApi.getTrends as any).mockImplementation(
         () => new Promise(resolve => setTimeout(() => resolve([]), mockDelay))

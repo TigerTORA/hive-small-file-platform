@@ -84,6 +84,11 @@ export const tablesApi = {
     })
   },
 
+  // 获取表的缓存详情（无需 Hive 实连）
+  getCachedTableInfo(clusterId: number, databaseName: string, tableName: string): Promise<any> {
+    return api.get(`/tables/${clusterId}/${databaseName}/${tableName}/info`)
+  },
+
   // 获取分区指标（分区表）
   getPartitionMetrics(
     clusterId: number,

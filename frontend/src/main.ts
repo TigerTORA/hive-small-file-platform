@@ -9,6 +9,12 @@ import App from './App.vue'
 import router from './router'
 import { useMonitoringStore } from '@/stores/monitoring'
 
+// 全局禁用Vue错误覆盖层
+if (typeof window !== 'undefined') {
+  window.__VUE_PROD_DEVTOOLS__ = false
+  window.__VUE_DEVTOOLS_OVERLAY__ = false
+}
+
 const app = createApp(App)
 
 // Initialize Sentry

@@ -119,18 +119,57 @@
           </div>
 
           <div class="cluster-stats-compact">
-            <div class="stats-row">
-              <div class="stat-item">
+            <div
+              class="stats-row"
+              :style="{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 'var(--space-3) var(--space-4)',
+                background: 'var(--gray-50)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--gray-200)'
+              }"
+            >
+              <div
+                class="stat-item"
+                :style="{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  flex: '1'
+                }"
+              >
                 <span class="stat-value">{{ getClusterStat(cluster.id, 'databases') }}</span>
                 <span class="stat-label">数据库</span>
               </div>
               <div class="stat-divider"></div>
-              <div class="stat-item">
+              <div
+                class="stat-item"
+                :style="{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  flex: '1'
+                }"
+              >
                 <span class="stat-value">{{ getClusterStat(cluster.id, 'tables') }}</span>
                 <span class="stat-label">表数量</span>
               </div>
               <div class="stat-divider"></div>
-              <div class="stat-item">
+              <div
+                class="stat-item"
+                :style="{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  flex: '1'
+                }"
+              >
                 <span class="stat-value">{{ getClusterStat(cluster.id, 'small_files') }}</span>
                 <span class="stat-label">小文件</span>
               </div>
@@ -452,7 +491,7 @@
 <script setup lang="ts">
   import { ref, onMounted, onUnmounted, computed } from 'vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
-  import { useRouter } from 'vue-router'
+  import { useRoute, useRouter } from 'vue-router'
   import {
     CaretBottom,
     Plus,
@@ -475,8 +514,10 @@
   import ConnectionStatusIndicator from '@/components/ConnectionStatusIndicator.vue'
   import { tablesApi } from '@/api/tables'
   import dayjs from 'dayjs'
+  import { useGlobalRefresh } from '@/composables/useGlobalRefresh'
 
   const router = useRouter()
+  const route = useRoute()
   const monitoringStore = useMonitoringStore()
 
   // 数据
@@ -676,31 +717,42 @@
   }
 
   const loadClusterStats = async () => {
-    // 调用真实API获取每个集群的统计数据
-    const stats: Record<number, any> = {}
-
-    for (const cluster of clusters.value) {
-      try {
-        const clusterStats = await clustersApi.getStats(cluster.id)
-        stats[cluster.id] = {
-          databases: clusterStats.total_databases,
-          tables: clusterStats.total_tables,
-          small_files: clusterStats.total_small_files,
-          pending_tasks: 0 // 暂时设为0，后续可以添加任务统计API
-        }
-      } catch (error) {
-        console.error(`Failed to load stats for cluster ${cluster.id}:`, error)
-        // 如果API调用失败，设置默认值
-        stats[cluster.id] = {
-          databases: 0,
-          tables: 0,
-          small_files: 0,
-          pending_tasks: 0
-        }
-      }
+    if (!clusters.value.length) {
+      clusterStats.value = {}
+      return
     }
 
-    clusterStats.value = stats
+    const defaultStats = {
+      databases: 0,
+      tables: 0,
+      small_files: 0,
+      pending_tasks: 0
+    }
+
+    const statsEntries = await Promise.all(
+      clusters.value.map(async (cluster) => {
+        try {
+          const res = await clustersApi.getStats(cluster.id)
+          return [
+            cluster.id,
+            {
+              databases: res.total_databases,
+              tables: res.total_tables,
+              small_files: res.total_small_files,
+              pending_tasks: 0
+            }
+          ] as const
+        } catch (error) {
+          console.error(`Failed to load stats for cluster ${cluster.id}:`, error)
+          return [cluster.id, { ...defaultStats }] as const
+        }
+      })
+    )
+
+    clusterStats.value = statsEntries.reduce<Record<number, any>>((acc, [id, stat]) => {
+      acc[id] = stat
+      return acc
+    }, {})
   }
 
   const getClusterStat = (clusterId: number, type: string) => {
@@ -723,11 +775,30 @@
   }
 
   const enterCluster = (clusterId: number) => {
-    // 设置选中的集群并跳转到监控中心
+    // 设置选中的集群，并跳转到原始目标路径（若有效），否则回到监控中心
     monitoringStore.setSelectedCluster(clusterId)
+    let redirectTarget: string | null = null
+
+    if (typeof route.query.redirect === 'string') {
+      try {
+        const decoded = decodeURIComponent(route.query.redirect)
+        const isDeprecatedClusterDetail = /^\/clusters\/\d+/.test(decoded)
+        if (decoded.startsWith('/') && !isDeprecatedClusterDetail) {
+          redirectTarget = decoded
+        }
+      } catch (error) {
+        console.warn('Failed to decode redirect path:', error)
+      }
+    }
+
+    const destination = redirectTarget || '/'
     ElMessage.success('集群选择成功，正在跳转...')
-    router.push('/')  // 跳转到监控中心
+    router.push(destination)
   }
+
+  useGlobalRefresh(() => {
+    loadClusters()
+  })
 
   const getStatusType = (status: string) => {
     return status === 'active' ? 'success' : 'danger'
@@ -1248,9 +1319,11 @@
 
 <style scoped>
   .clusters-management {
-    padding: var(--space-3) var(--space-4) var(--space-8) var(--space-4);
+    width: clamp(960px, 88vw, 1440px);
+    margin: 0 auto;
+    padding: clamp(1rem, 3vw, 2rem) clamp(1.5rem, 4vw, 2.5rem);
     min-height: 100vh;
-    background: var(--bg-app);
+    background: transparent;
     overflow-y: visible;
   }
 
@@ -1459,22 +1532,6 @@
     font-weight: var(--font-medium);
   }
 
-  .stat-item {
-    text-align: center;
-  }
-
-  .stat-value {
-    font-size: var(--text-2xl);
-    font-weight: var(--font-bold);
-    color: var(--primary-600);
-    margin-bottom: var(--space-1);
-  }
-
-  .stat-label {
-    font-size: var(--text-xs);
-    color: var(--gray-600);
-    font-weight: var(--font-medium);
-  }
 
   .cluster-operations {
     display: flex;
@@ -1542,6 +1599,7 @@
 
   @media (max-width: 768px) {
     .clusters-management {
+      width: 100%;
       padding: var(--space-4);
     }
 

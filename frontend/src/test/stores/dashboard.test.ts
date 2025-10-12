@@ -42,7 +42,9 @@ describe('Dashboard Store', () => {
         total_small_files: 0,
         small_file_ratio: 0,
         total_size_gb: 0,
-        small_file_size_gb: 0
+        small_file_size_gb: 0,
+        files_reduced: 0,
+        size_saved_gb: 0
       })
 
       expect(store.trends).toEqual([])
@@ -138,7 +140,9 @@ describe('Dashboard Store', () => {
         total_small_files: 15000,
         small_file_ratio: 30,
         total_size_gb: 1000,
-        small_file_size_gb: 200
+        small_file_size_gb: 200,
+        files_reduced: 12345,
+        size_saved_gb: 76.5
       }
 
       vi.mocked(dashboardApi.getSummary).mockResolvedValue(mockSummary)

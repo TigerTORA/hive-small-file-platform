@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { tasksApi, type MergeTask } from '@/api/tasks'
 import { clustersApi, type Cluster } from '@/api/clusters'
 import { scanTasksApi, type ScanTask } from '@/api/scanTasks'
@@ -27,10 +26,16 @@ export function useTasksData() {
   /**
    * 加载合并任务
    */
-  const loadTasks = async () => {
+  const loadTasks = async (clusterId?: number | null) => {
     loading.value = true
     try {
-      const allTasks = await tasksApi.list()
+      if (!clusterId) {
+        tasks.value = []
+        testTableTasks.value = []
+        return
+      }
+
+      const allTasks = await tasksApi.list({ cluster_id: clusterId })
       tasks.value = allTasks.filter((item: any) => !item.type || item.type === 'merge')
       testTableTasks.value = allTasks.filter((item: any) => item.type === 'test-table-generation')
     } catch (error) {
@@ -47,6 +52,10 @@ export function useTasksData() {
     loadingScan.value = true
     try {
       const cid = clusterFilter || undefined
+      if (!cid) {
+        scanTasks.value = []
+        return
+      }
       const status = statusFilter || undefined
       scanTasks.value = await scanTasksApi.list(cid as any, status)
     } catch (error) {

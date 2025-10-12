@@ -1,6 +1,7 @@
 import { ref, computed, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tablesApi } from '@/api/tables'
+import { FeatureManager } from '@/utils/feature-flags'
 import { getProgressColor } from '@/utils/tableHelpers'
 
 export const usePartitionManagement = (
@@ -53,9 +54,18 @@ export const usePartitionManagement = (
     return Math.round((small / files) * 100)
   }
 
+  const demoMode = FeatureManager.isEnabled('demoMode')
+
   const loadPartitionMetrics = async () => {
     partitionLoading.value = true
     partitionError.value = ''
+    if (demoMode) {
+      partitionItems.value = []
+      partitionTotal.value = 0
+      partitionLoading.value = false
+      partitionError.value = '演示模式未连接 Hive，分区统计已禁用'
+      return
+    }
     try {
       const { items, total } = await tablesApi.getPartitionMetrics(
         clusterId.value,
@@ -76,6 +86,10 @@ export const usePartitionManagement = (
   }
 
   const refreshPartitionMetrics = async () => {
+    if (demoMode) {
+      partitionError.value = '演示模式未连接 Hive，分区统计已禁用'
+      return
+    }
     await loadPartitionMetrics()
   }
 

@@ -61,7 +61,7 @@
             padding: 8px;
           "
         >
-          <el-checkbox-group v-model="selectedPartitions">
+          <el-checkbox-group v-model="internalSelectedPartitions">
             <div v-for="partition in partitions" :key="partition.partition_spec">
               <el-checkbox :label="partition.partition_spec">
                 {{ partition.partition_spec }}
@@ -165,7 +165,6 @@ defineProps<{
   clusters: Cluster[]
   tableInfo: any
   partitions: any[]
-  selectedPartitions: string[]
   partitionsLoading: boolean
   storageFormatOptions: Array<{ label: string; value: any }>
   compressionOptions: Array<{ label: string; value: string }>
@@ -183,6 +182,7 @@ defineEmits<{
 
 const visible = defineModel<boolean>()
 const formRef = defineModel<any>('formRef')
+const internalSelectedPartitions = defineModel<string[]>('selectedPartitions')
 </script>
 
 <style scoped>

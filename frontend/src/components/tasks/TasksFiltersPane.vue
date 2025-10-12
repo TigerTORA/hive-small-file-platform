@@ -1,52 +1,90 @@
 <template>
   <el-card class="filters-pane" shadow="never">
     <div class="filters-title">筛选器</div>
+
     <el-input
       v-model="globalSearch"
-      placeholder="搜索任务名/表名/数据库"
+      placeholder="搜索任务名称 / 数据库 / 表 / 集群"
       clearable
       size="small"
       class="filters-search"
     />
+
+    <div class="filter-section">
+      <div class="filter-header">集群</div>
+      <el-select
+        v-model="selectedCluster"
+        placeholder="全部集群"
+        size="small"
+        class="filter-select"
+        clearable
+        @clear="selectedCluster = 'all'"
+      >
+        <el-option
+          v-for="option in clusterOptions"
+          :key="option.value"
+          :label="option.label"
+          :value="option.value"
+        />
+      </el-select>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-header">时间范围</div>
+      <el-button-group class="timeframe-group">
+        <el-button
+          v-for="option in timeframeOptions"
+          :key="option.value"
+          size="small"
+          :type="selectedTimeframe === option.value ? 'primary' : 'default'"
+          @click="selectedTimeframe = option.value"
+        >
+          {{ option.label }}
+        </el-button>
+      </el-button-group>
+    </div>
+
     <div class="filter-section">
       <div class="filter-header">状态</div>
       <div class="filter-list">
         <div
-          v-for="s in statusOptions"
-          :key="s.value"
-          :class="['filter-item', { active: selectedStatuses.has(s.value) }]"
-          @click="$emit('toggleStatus', s.value)"
+          v-for="status in statusOptions"
+          :key="status.value"
+          :class="['filter-item', { active: selectedStatuses.has(status.value) }]"
+          @click="$emit('toggleStatus', status.value)"
         >
-          <span class="name">{{ s.label }}</span>
-          <span class="count">{{ statusCounts[s.value] || 0 }}</span>
+          <span class="name">{{ status.label }}</span>
+          <span class="count">{{ statusCounts[status.value] || 0 }}</span>
         </div>
       </div>
     </div>
+
     <div class="filter-section">
       <div class="filter-header">类型</div>
       <div class="filter-list">
         <div
-          v-for="t in typeOptions"
-          :key="t.value"
-          :class="['filter-item', { active: selectedTypes.has(t.value) }]"
-          @click="$emit('toggleType', t.value)"
+          v-for="type in typeOptions"
+          :key="type.value"
+          :class="['filter-item', { active: selectedTypes.has(type.value) }]"
+          @click="$emit('toggleType', type.value)"
         >
-          <span class="name">{{ t.label }}</span>
-          <span class="count">{{ typeCounts[t.value] || 0 }}</span>
+          <span class="name">{{ type.label }}</span>
+          <span class="count">{{ typeCounts[type.value] || 0 }}</span>
         </div>
       </div>
     </div>
-    <div class="filter-section">
+
+    <div class="filter-section" v-if="archiveSubtypeOptions.length">
       <div class="filter-header">归档子类型</div>
       <div class="filter-list">
         <div
-          v-for="t in archiveSubtypeOptions"
-          :key="t.value"
-          :class="['filter-item', { active: selectedArchiveSubtypes.has(t.value) }]"
-          @click="$emit('toggleArchiveSubtype', t.value)"
+          v-for="sub in archiveSubtypeOptions"
+          :key="sub.value"
+          :class="['filter-item', { active: selectedArchiveSubtypes.has(sub.value) }]"
+          @click="$emit('toggleArchiveSubtype', sub.value)"
         >
-          <span class="name">{{ t.label }}</span>
-          <span class="count">{{ archiveSubtypeCounts[t.value] || 0 }}</span>
+          <span class="name">{{ sub.label }}</span>
+          <span class="count">{{ archiveSubtypeCounts[sub.value] || 0 }}</span>
         </div>
       </div>
     </div>
@@ -58,8 +96,6 @@
 </template>
 
 <script setup lang="ts">
-import { toRefs } from 'vue'
-
 const props = defineProps<{
   globalSearch: string
   selectedStatuses: Set<string>
@@ -71,6 +107,8 @@ const props = defineProps<{
   statusCounts: Record<string, number>
   typeCounts: Record<string, number>
   archiveSubtypeCounts: Record<string, number>
+  clusterOptions: Array<{ label: string; value: number | 'all' }>
+  timeframeOptions: Array<{ label: string; value: '24h' | '7d' | '30d' | 'all' }>
 }>()
 
 defineEmits<{
@@ -82,6 +120,10 @@ defineEmits<{
 }>()
 
 const globalSearch = defineModel<string>('globalSearch')
+const selectedCluster = defineModel<number | 'all'>('selectedCluster', { default: 'all' })
+const selectedTimeframe = defineModel<'24h' | '7d' | '30d' | 'all'>('selectedTimeframe', {
+  default: 'all'
+})
 </script>
 
 <style scoped>
@@ -91,26 +133,39 @@ const globalSearch = defineModel<string>('globalSearch')
   align-self: start;
   max-height: calc(100vh - 96px);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .filters-title {
   font-weight: 600;
   color: var(--gray-900);
-  margin-bottom: 8px;
 }
 
 .filters-search {
-  margin-bottom: 8px;
+  width: 100%;
 }
 
 .filter-section {
-  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .filter-header {
   font-size: 13px;
   color: #606266;
-  margin-bottom: 6px;
+}
+
+.filter-select {
+  width: 100%;
+}
+
+.timeframe-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .filter-list {
@@ -144,7 +199,7 @@ const globalSearch = defineModel<string>('globalSearch')
 }
 
 .filter-actions {
-  margin-top: 12px;
+  margin-top: auto;
   text-align: right;
 }
 

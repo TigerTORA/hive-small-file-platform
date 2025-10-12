@@ -146,8 +146,8 @@
               :page-sizes="[20, 50, 100, 200]"
               :total="total"
               layout="total, sizes, prev, pager, next, jumper"
-              @size-change="reloadPage"
-              @current-change="reloadPage"
+              @size-change="handlePageSizeChange"
+              @current-change="handleCurrentPageChange"
             />
           </div>
         </div>
@@ -177,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, onMounted, watch, computed } from 'vue'
+  import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { tablesApi, type TableMetric } from '@/api/tables'
@@ -186,6 +186,7 @@
   import dayjs from 'dayjs'
   import TaskRunDialog from '@/components/TaskRunDialog.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
+  import { useGlobalRefresh } from '@/composables/useGlobalRefresh'
   import { Search, Filter, Operation } from '@element-plus/icons-vue'
 
   // 数据
@@ -221,6 +222,8 @@
   const pageSize = ref(50)
   const lastUpdated = ref('')
   const currentClusterName = ref('')
+  const TABLE_RELOAD_DELAY = 200
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null
 
   // 选择与批量
   const selectedRows = ref<TableMetric[]>([])
@@ -478,6 +481,19 @@
     }
   }
 
+  const scheduleTableReload = (resetPage = false) => {
+    if (resetPage) {
+      currentPage.value = 1
+    }
+    if (reloadTimer) {
+      clearTimeout(reloadTimer)
+    }
+    reloadTimer = window.setTimeout(() => {
+      reloadPage()
+      reloadTimer = null
+    }, TABLE_RELOAD_DELAY)
+  }
+
   const reloadPage = () => {
     if (filterArchivedOnly.value || filterColdOnly.value) {
       loadArchiveData()
@@ -503,6 +519,16 @@
         flags: flags.join(','),
       },
     })
+  }
+
+  const handlePageSizeChange = (size: number) => {
+    pageSize.value = size
+    scheduleTableReload()
+  }
+
+  const handleCurrentPageChange = (page: number) => {
+    currentPage.value = page
+    scheduleTableReload()
   }
 
   const triggerScan = async () => {
@@ -809,59 +835,67 @@
 
   // 响应数据库变更
   watch(selectedDatabase, () => {
-    currentPage.value = 1
-    loadTableMetrics()
-    reloadPage()
+    scheduleTableReload(true)
   })
 
   // 集群变化时刷新只读集群名称
-  watch(clusterId, () => {
-    loadCurrentClusterName()
-    if (filterArchivedOnly.value || filterColdOnly.value) {
-      loadArchiveData()
-    } else {
-      loadTableMetrics()
-    }
+  watch(clusterId, async () => {
+    await loadCurrentClusterName()
+    await loadDatabases()
+    scheduleTableReload(true)
   })
 
   // 其他筛选/搜索变更后同步路由
-  watch([searchText, filterPartitioned, filterSmall, filterArchivedOnly, filterColdOnly], () => {
-    currentPage.value = 1
-    reloadPage()
-  })
-  watch([columnsMerge, columnsArchive, columnsAll], saveColumnPrefs, { deep: true })
-
-  // 分页变化时，按筛选决定数据来源
-  watch([currentPage, pageSize], () => {
-    if (filterArchivedOnly.value || filterColdOnly.value) {
-      loadArchiveData()
-    } else {
-      loadTableMetrics()
+  watch(
+    [searchText, filterPartitioned, filterSmall, filterArchivedOnly, filterColdOnly],
+    () => {
+      scheduleTableReload(true)
     }
-  })
+  )
+  watch([columnsMerge, columnsArchive, columnsAll], saveColumnPrefs, { deep: true })
 
   const bulkWorking = ref(false)
   const bulkCreateMergeTasks = async () => {
     if (!clusterId.value || !selectedRows.value.length) return
     bulkWorking.value = true
     try {
-      for (const row of selectedRows.value) {
-        await tasksApi.create({
-          cluster_id: clusterId.value as number,
-          task_name: `merge_${row.database_name}.${row.table_name}`,
-          database_name: row.database_name,
-          table_name: row.table_name,
-          merge_strategy: 'safe_merge',
-        })
+      const payloads = selectedRows.value.map((row, idx) => ({
+        cluster_id: clusterId.value as number,
+        task_name: `merge_${row.database_name}.${row.table_name}_${idx + 1}`,
+        database_name: row.database_name,
+        table_name: row.table_name,
+        merge_strategy: 'safe_merge' as const
+      }))
+      const results = await Promise.allSettled(payloads.map(data => tasksApi.create(data)))
+      const success = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.length - success
+      if (success) {
+        ElMessage.success(`已创建 ${success} 个合并任务`)
+        scheduleTableReload()
       }
-      ElMessage.success(`已创建 ${selectedRows.value.length} 个合并任务`)
-    } catch (e) {
-      console.error(e)
-      ElMessage.error('批量创建任务失败')
+      if (failed) {
+        ElMessage.error(`有 ${failed} 个任务创建失败，请检查日志`)
+      }
     } finally {
       bulkWorking.value = false
     }
   }
+
+  onBeforeUnmount(() => {
+    if (reloadTimer) {
+      clearTimeout(reloadTimer)
+    }
+  })
+
+  const handleGlobalRefresh = async () => {
+    await loadCurrentClusterName()
+    await loadDatabases()
+    scheduleTableReload(true)
+  }
+
+  useGlobalRefresh(() => {
+    handleGlobalRefresh()
+  })
 
   
 </script>

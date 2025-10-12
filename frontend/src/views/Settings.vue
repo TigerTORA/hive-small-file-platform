@@ -43,6 +43,7 @@
         </div>
         <div class="metric-value">{{ systemInfo.version }}</div>
         <div class="metric-label">系统版本</div>
+        <div class="metric-subtext">环境：{{ systemInfo.environment }}</div>
       </div>
 
       <div
@@ -392,7 +393,6 @@
 <script setup lang="ts">
   import { ref, onMounted } from 'vue'
   import { ElMessage } from 'element-plus'
-  import api from '@/api'
   import {
     Check,
     Refresh,
@@ -404,6 +404,8 @@
     Delete,
     RefreshLeft
   } from '@element-plus/icons-vue'
+  import { systemApi } from '@/api/system'
+  import { useGlobalRefresh } from '@/composables/useGlobalRefresh'
 
   const activeTab = ref('scan')
 
@@ -437,11 +439,18 @@
 
   const systemInfo = ref({
     version: '1.0.0',
-    uptime: '2 天 3 小时',
-    python_version: '3.9.0',
+    uptime: '检测中',
+    python_version: '3.11',
     db_connected: true,
     redis_connected: true,
-    celery_active: true
+    celery_active: true,
+    environment: 'development'
+  })
+  const systemStatus = ref({
+    api_status: 'unknown',
+    database_status: 'unknown',
+    redis_status: 'unknown',
+    celery_active: false
   })
 
   // 方法
@@ -493,7 +502,6 @@
   }
 
   const checkSystemHealth = async () => {
-    // 检查系统健康状态
     const loadingMessage = ElMessage({
       message: '正在检查系统状态...',
       type: 'info',
@@ -501,24 +509,33 @@
     })
 
     try {
-      // 检查后端API健康状态
-      const response = await api.get('/health')
-      
-      // 检查系统状态信息
+      const response = await systemApi.getHealth()
+
       systemStatus.value = {
-        ...systemStatus.value,
-        api_status: 'healthy',
-        database_status: 'connected',
-        redis_status: 'connected',
-        celery_active: true
+        api_status: response.status || 'unknown',
+        database_status: response.status === 'healthy' ? 'connected' : 'unknown',
+        redis_status: response.status === 'healthy' ? 'connected' : 'unknown',
+        celery_active: response.status === 'healthy'
       }
-      
-      loadingMessage.close()
-      ElMessage.success('系统状态检查完成，一切正常')
+
+      systemInfo.value = {
+        ...systemInfo.value,
+        uptime: response.status === 'healthy' ? '运行中' : '检测失败',
+        environment: response.server_config?.environment || 'unknown'
+      }
+
+      ElMessage.success('系统状态检查完成')
     } catch (error) {
-      loadingMessage.close()
       console.error('系统健康检查失败:', error)
+      systemStatus.value = {
+        api_status: 'unhealthy',
+        database_status: 'unknown',
+        redis_status: 'unknown',
+        celery_active: false
+      }
       ElMessage.error('系统健康检查失败，请检查服务状态')
+    } finally {
+      loadingMessage.close()
     }
   }
 
@@ -577,16 +594,12 @@
     }
   }
 
-  onMounted(() => {
-    // 加载设置数据
-    console.log('Settings page mounted')
-    
+  onMounted(async () => {
     try {
-      // 从localStorage加载保存的设置
       const savedSettings = localStorage.getItem('hive-platform-settings')
       if (savedSettings) {
         const parsedSettings = JSON.parse(savedSettings)
-        
+
         if (parsedSettings.scan) {
           scanSettings.value = { ...scanSettings.value, ...parsedSettings.scan }
         }
@@ -596,12 +609,16 @@
         if (parsedSettings.alert) {
           alertSettings.value = { ...alertSettings.value, ...parsedSettings.alert }
         }
-        
-        console.log('设置数据已从本地存储加载')
       }
     } catch (error) {
       console.error('加载设置数据失败:', error)
     }
+
+    await checkSystemHealth()
+  })
+
+  useGlobalRefresh(async () => {
+    await checkSystemHealth()
   })
 </script>
 
@@ -708,6 +725,12 @@
   }
 
   /* Cloudera风格表单面板 */
+  .metric-subtext {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #8f9bb3;
+  }
+
   .cloudera-form-panel {
     background: var(--bg-primary);
     border-radius: var(--radius-xl);

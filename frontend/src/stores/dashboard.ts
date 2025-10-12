@@ -22,7 +22,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     total_small_files: 0,
     small_file_ratio: 0,
     total_size_gb: 0,
-    small_file_size_gb: 0
+    small_file_size_gb: 0,
+    files_reduced: 0,
+    size_saved_gb: 0
   })
 
   const trends = ref<TrendPoint[]>([])
@@ -191,7 +193,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
       total_small_files: 0,
       small_file_ratio: 0,
       total_size_gb: 0,
-      small_file_size_gb: 0
+      small_file_size_gb: 0,
+      files_reduced: 0,
+      size_saved_gb: 0
     }
     trends.value = []
     fileDistribution.value = []

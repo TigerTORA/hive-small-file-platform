@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { tablesApi, type TableMetric } from '@/api/tables'
-import { tasksApi } from '@/api/tasks'
+import { FeatureManager } from '@/utils/feature-flags'
 
 export const useTableDetail = (
   clusterId: Ref<number>,
@@ -28,21 +28,25 @@ export const useTableDetail = (
 
       if (tableMetric.value) {
         try {
-          const info = await tasksApi.getTableInfo(clusterId.value, database.value, tableName.value)
-          if (info && Object.prototype.hasOwnProperty.call(info, 'merge_supported')) {
-            mergeSupported.value = info.merge_supported !== false
-          } else {
-            mergeSupported.value = true
-          }
-          unsupportedReason.value =
-            info?.unsupported_reason && info.merge_supported === false
-              ? info.unsupported_reason
-              : ''
+          const info = await tablesApi.getCachedTableInfo(
+            clusterId.value,
+            database.value,
+            tableName.value
+          )
           tableInfoExtra.value = info || null
+
+          mergeSupported.value = info?.merge_supported !== false
+          unsupportedReason.value =
+            info?.merge_supported === false ? info?.unsupported_reason || '' : ''
         } catch (error) {
           mergeSupported.value = true
           unsupportedReason.value = ''
           tableInfoExtra.value = null
+        }
+
+        if (FeatureManager.isEnabled('demoMode')) {
+          mergeSupported.value = false
+          unsupportedReason.value = '演示模式下仅展示缓存信息，治理操作已禁用'
         }
       }
     } catch (error) {
