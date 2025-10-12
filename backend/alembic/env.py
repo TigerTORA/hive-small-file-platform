@@ -1,8 +1,15 @@
+import os
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import app.models  # noqa: E402,F401
+from app.config.database import Base  # noqa: E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -12,17 +19,6 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-import os
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-import sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.models import cluster, merge_task, partition_metric, table_metric
-from app.models.cluster import Base
 
 target_metadata = Base.metadata
 

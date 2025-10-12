@@ -104,6 +104,12 @@ dump.rdb
 # Temporary files
 *.tmp
 *.temp
+.tmp_smallfiles/
+.tmp_scan*.json
+.tmp_tasklogs*.json
+.tmp-backend-pid
+.tmp-frontend-pid
+.playwright-mcp/
 
 # Backend coverage artifacts
 backend/.coverage
@@ -117,3 +123,18 @@ backend/var/data/
 
 # Local AI/dev workspace
 .claude/
+
+# E2E测试报告和截图(不提交到代码仓库)
+docs/e2e-reports/*.png
+docs/e2e-reports/*.docx
+docs/e2e-reports/screenshots/
+
+# Claude/AI工具缓存和临时目录
+web-bundles/
+worktrees/
+
+# 确保macOS垃圾文件被完全忽略
+**/.DS_Store
+# BMAD (local only)
+.bmad-core/
+.bmad-*/

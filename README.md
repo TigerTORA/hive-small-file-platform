@@ -79,10 +79,26 @@ hive-small-file-platform/
 ### 环境要求
 
 - Python 3.9+
-- Node.js 16+
+- Node.js 20.x (建议使用 nvm 并执行 `nvm use`)
 - PostgreSQL 12+ 或 MySQL 8+
 - Redis 6+
 - 可访问的 CDH/CDP 集群
+
+### 演示快速启动（推荐）
+
+```bash
+# 安装依赖
+make install-dev
+
+# 启动后端
+cd backend && uvicorn app.main:app --reload --port 8000
+
+# 启动前端
+cd frontend && npm run dev
+
+# 运行最小化测试
+make demo-test
+```
 
 ### 1. 克隆项目
 
@@ -128,6 +144,12 @@ npm install
 # 启动开发服务器
 npm run dev
 ```
+
+### Demo 模式（无 Hive 环境）
+
+- 项目默认启用了本地 SQLite（`backend/var/data/hive_small_file_db.db`）缓存数据，未连接真实 Hive/HDFS 时依旧可以浏览仪表盘与表详情。
+- 分区扫描、实时合并等需要 Hive 的操作在演示模式下会自动禁用并显示提示。
+- 使用 `make demo-test` 可运行最小化的自动化测试（后端缓存接口 + 前端 Vitest）。
 
 ### 4. 启动 Celery 服务
 
@@ -178,6 +200,20 @@ GitHub Actions 会构建并推送镜像到 GHCR，并创建 Release。
 - 每周报告：`Weekly Status Report` 工作流会按周生成最新报告工件。
 
 提示：将徽章中的 `your-username/hive-small-file-platform` 替换为实际仓库路径即可显示状态。
+
+## 端到端测试
+
+- 前置条件：本地后端实例已在 `http://127.0.0.1:8000` 运行，并具备访问 Hive/CDP 环境的网络权限。
+- 一键执行：
+  ```bash
+  make e2e
+  ```
+  该命令会：
+  1. 调用 `scripts/env/setup_e2e_cluster.py`，确保 `CDP-14` 集群存在（若已存在则跳过，可用 `--force-update` 覆写）。
+  2. 执行一次后端冒烟（跳过前端校验，避免与 Playwright Dev Server 冲突）。
+  3. 运行 `npm run test:e2e`，自动启动 Vite Dev Server 并执行 `src/test/e2e` 下的 Playwright 用例。
+- 快速子集：仅跑基础冒烟用例可执行 `npm run test:e2e:smoke`。
+- 可视化对比：继续使用 `npm run test:visual`（Percy/Playwright Snapshot）。
 
 ## 迁移与配置（升级指南）
 
