@@ -315,28 +315,15 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             self.update_task_status(
                 task, "failed", error_message=msg, db_session=db_session
             )
-            return {
-                "success": False,
-                "files_before": 0,
-                "files_after": 0,
-                "size_saved": 0,
-                "duration": time.time() - start_time,
-                "message": msg,
-                "sql_executed": [],
-                "temp_table_created": "",
-                "backup_table_created": "",
-                "log_summary": {},
-                "detailed_logs": [],
-            }
+            result = self._init_merge_result_dict()
+            result["duration"] = time.time() - start_time
+            result["message"] = msg
+            return result
 
         original_format = self.metadata_manager._infer_storage_format_name(fmt)
         original_compression = self.metadata_manager._infer_table_compression(fmt, original_format)
         target_format = self._determine_target_format(original_format, task.target_storage_format)
-        compression_pref = (
-            task.target_compression.upper() if task.target_compression else None
-        )
-        if compression_pref in {"", "DEFAULT"}:
-            compression_pref = None
+        compression_pref = self._normalize_compression_preference(task.target_compression)
 
         if task.partition_filter and (
             task.target_storage_format or task.target_compression
@@ -1749,6 +1736,30 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         if target_format not in {"PARQUET", "ORC", "TEXTFILE", "RCFILE", "AVRO"}:
             target_format = original_format or "TEXTFILE"
         return target_format
+
+    def _normalize_compression_preference(
+        self, compression_preference: Optional[str]
+    ) -> Optional[str]:
+        """规范化压缩偏好设置.
+
+        将用户指定的压缩偏好转换为规范格式:
+        - None/空字符串/"DEFAULT" → None
+        - 其他 → 大写
+
+        Args:
+            compression_preference: 用户指定的压缩偏好
+
+        Returns:
+            Optional[str]: 规范化后的压缩偏好,或None
+        """
+        if not compression_preference:
+            return None
+
+        normalized = compression_preference.upper()
+        if normalized in {"", "DEFAULT"}:
+            return None
+
+        return normalized
 
     def _calculate_job_compression(
         self,

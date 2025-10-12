@@ -169,5 +169,49 @@ class TestCalculateJobCompression:
         assert result2 == "LZO"
 
 
+class TestNormalizeCompressionPreference:
+    """测试_normalize_compression_preference方法 (Story 6.4新增)"""
+
+    def test_normalize_none_input(self, engine):
+        """测试None输入返回None"""
+        result = engine._normalize_compression_preference(None)
+        assert result is None
+
+    def test_normalize_empty_string(self, engine):
+        """测试空字符串返回None"""
+        result = engine._normalize_compression_preference("")
+        assert result is None
+
+    def test_normalize_default_keyword(self, engine):
+        """测试DEFAULT关键字返回None"""
+        result = engine._normalize_compression_preference("DEFAULT")
+        assert result is None
+
+    def test_normalize_default_lowercase(self, engine):
+        """测试default小写也返回None"""
+        result = engine._normalize_compression_preference("default")
+        assert result is None
+
+    def test_normalize_snappy(self, engine):
+        """测试SNAPPY被转换为大写"""
+        result = engine._normalize_compression_preference("snappy")
+        assert result == "SNAPPY"
+
+    def test_normalize_gzip(self, engine):
+        """测试GZIP被转换为大写"""
+        result = engine._normalize_compression_preference("gzip")
+        assert result == "GZIP"
+
+    def test_normalize_keep(self, engine):
+        """测试KEEP被保留"""
+        result = engine._normalize_compression_preference("KEEP")
+        assert result == "KEEP"
+
+    def test_normalize_already_uppercase(self, engine):
+        """测试已经大写的值保持不变"""
+        result = engine._normalize_compression_preference("LZO")
+        assert result == "LZO"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
