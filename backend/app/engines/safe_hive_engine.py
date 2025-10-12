@@ -302,19 +302,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         # 初始化详尽日志记录器
         merge_logger = MergeTaskLogger(task, db_session)
 
-        result = {
-            "success": False,
-            "files_before": 0,
-            "files_after": 0,
-            "size_saved": 0,
-            "duration": 0.0,
-            "message": "",
-            "sql_executed": [],
-            "temp_table_created": "",
-            "backup_table_created": "",
-            "log_summary": {},
-            "detailed_logs": [],
-        }
+        result = self._init_merge_result_dict()
 
         temp_table_name = self._generate_temp_table_name(task.table_name)
         backup_table_name = self._generate_backup_table_name(task.table_name)
@@ -343,11 +331,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
         original_format = self.metadata_manager._infer_storage_format_name(fmt)
         original_compression = self.metadata_manager._infer_table_compression(fmt, original_format)
-        target_format = (
-            task.target_storage_format or original_format or "TEXTFILE"
-        ).upper()
-        if target_format not in {"PARQUET", "ORC", "TEXTFILE", "RCFILE", "AVRO"}:
-            target_format = original_format or "TEXTFILE"
+        target_format = self._determine_target_format(original_format, task.target_storage_format)
         compression_pref = (
             task.target_compression.upper() if task.target_compression else None
         )
@@ -379,16 +363,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 },
             )
 
-        base_compression = (original_compression or "").upper()
-        if base_compression in {"", "DEFAULT"}:
-            base_compression = None
-        job_compression = None
-        if compression_pref == "KEEP":
-            job_compression = base_compression
-        elif compression_pref:
-            job_compression = compression_pref
-        else:
-            job_compression = base_compression or "SNAPPY"
+        job_compression = self._calculate_job_compression(original_compression, compression_pref)
 
         # 【分区表整表合并自动转换】
         # 如果partition_filter为空,检测是否分区表,如果是则使用动态分区整表合并
@@ -1737,6 +1712,68 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         """生成备份表名"""
         timestamp = int(time.time())
         return f"{table_name}_backup_{timestamp}"
+
+    def _init_merge_result_dict(self) -> Dict[str, Any]:
+        """初始化合并结果字典.
+
+        Returns:
+            Dict[str, Any]: 包含所有默认字段的结果字典
+        """
+        return {
+            "success": False,
+            "files_before": 0,
+            "files_after": 0,
+            "size_saved": 0,
+            "duration": 0.0,
+            "message": "",
+            "sql_executed": [],
+            "temp_table_created": "",
+            "backup_table_created": "",
+            "log_summary": {},
+            "detailed_logs": [],
+        }
+
+    def _determine_target_format(
+        self, original_format: Optional[str], task_target_format: Optional[str]
+    ) -> str:
+        """确定目标存储格式.
+
+        Args:
+            original_format: 原始表格式
+            task_target_format: 任务指定的目标格式
+
+        Returns:
+            str: 最终确定的目标格式 (大写)
+        """
+        target_format = (task_target_format or original_format or "TEXTFILE").upper()
+        if target_format not in {"PARQUET", "ORC", "TEXTFILE", "RCFILE", "AVRO"}:
+            target_format = original_format or "TEXTFILE"
+        return target_format
+
+    def _calculate_job_compression(
+        self,
+        original_compression: Optional[str],
+        compression_preference: Optional[str],
+    ) -> str:
+        """计算最终的作业压缩设置.
+
+        Args:
+            original_compression: 原始表的压缩设置
+            compression_preference: 用户指定的压缩偏好 (可能是KEEP/SNAPPY/GZIP等)
+
+        Returns:
+            str: 最终的压缩设置
+        """
+        base_compression = (original_compression or "").upper()
+        if base_compression in {"", "DEFAULT"}:
+            base_compression = None
+
+        if compression_preference == "KEEP":
+            return base_compression
+        elif compression_preference:
+            return compression_preference
+        else:
+            return base_compression or "SNAPPY"
 
     def _create_temp_table(self, task: MergeTask, temp_table_name: str) -> List[str]:
         """创建临时表并执行合并"""
