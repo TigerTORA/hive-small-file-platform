@@ -1377,15 +1377,6 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             logger.error(f"Hive connection test failed: {e}")
             return False
 
-    def _get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
-        """获取表的HDFS位置（优先MetaStore，其次HS2，最后默认路径）"""
-        try:
-            return PathResolver.get_table_location(
-                self.cluster, database_name, table_name
-            )
-        except Exception as e:
-            logger.error(f"Failed to resolve table location: {e}")
-            return None
 
     def _create_hive_connection(self, database_name: str = None):
         """创建Hive连接（支持LDAP认证）"""
@@ -1418,142 +1409,11 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         except Exception as e:
             logger.warning(f"Failed to cleanup connections: {e}")
 
-    def _table_exists(self, database_name: str, table_name: str) -> bool:
-        """检查表是否存在"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f'SHOW TABLES LIKE "{table_name}"')
-            result = cursor.fetchone()
-            cursor.close()
-            conn.close()
-            return result is not None
-        except Exception:
-            return False
 
-    def _is_partitioned_table(self, database_name: str, table_name: str) -> bool:
-        """检查表是否为分区表"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
 
-            rows = cursor.fetchall()
-            is_partitioned = False
 
-            for row in rows:
-                if len(row) >= 2 and row[0] and "Partition Information" in str(row[0]):
-                    is_partitioned = True
-                    break
 
-            cursor.close()
-            conn.close()
-            return is_partitioned
-        except Exception as e:
-            logger.error(f"Failed to check if table is partitioned: {e}")
-            return False
 
-    def _get_table_partitions(self, database_name: str, table_name: str) -> List[str]:
-        """获取表的分区列表"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"SHOW PARTITIONS {table_name}")
-            partitions = [row[0] for row in cursor.fetchall()]
-            cursor.close()
-            conn.close()
-            return partitions
-        except Exception as e:
-            logger.error(f"Failed to get table partitions: {e}")
-            return []
-
-    def _get_table_format_info(
-        self, database_name: str, table_name: str
-    ) -> Dict[str, Any]:
-        """获取表的格式/属性信息，用于安全校验。
-        返回：{'input_format': str, 'serde_lib': str, 'storage_handler': str, 'tblproperties': {k:v}}
-        """
-        info: Dict[str, Any] = {
-            "input_format": "",
-            "output_format": "",
-            "serde_lib": "",
-            "storage_handler": "",
-            "tblproperties": {},
-            "table_type": "",
-        }
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            # 读取格式信息
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
-            rows = cursor.fetchall()
-            for row in rows:
-                if not row or len(row) < 2:
-                    continue
-                k = str(row[0]).strip()
-                v = str(row[1]).strip() if row[1] is not None else ""
-                if "InputFormat" in k:
-                    info["input_format"] = v
-                elif "OutputFormat" in k:
-                    info["output_format"] = v
-                elif "SerDe Library" in k:
-                    info["serde_lib"] = v
-                elif "Storage Handler" in k:
-                    info["storage_handler"] = v
-                elif "Table Type" in k or k.lower().startswith("type"):
-                    # values like EXTERNAL_TABLE / MANAGED_TABLE
-                    info["table_type"] = v
-            # 读取表属性
-            try:
-                cursor.execute(f"SHOW TBLPROPERTIES {table_name}")
-                props = cursor.fetchall()
-                for pr in props:
-                    # 常见返回为 (key, value)
-                    if len(pr) >= 2:
-                        info["tblproperties"][str(pr[0]).strip()] = str(pr[1]).strip()
-            except Exception:
-                pass
-            cursor.close()
-            conn.close()
-        except Exception:
-            pass
-        return info
-
-    def _infer_storage_format_name(self, fmt: Dict[str, Any]) -> str:
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde = str(fmt.get("serde_lib", "")).lower()
-        for fmt_name, keywords in self._FORMAT_KEYWORDS.items():
-            if any(keyword in input_fmt for keyword in keywords):
-                return fmt_name
-            if any(keyword in serde for keyword in keywords):
-                return fmt_name
-        return "TEXTFILE"
-
-    def _infer_table_compression(self, fmt: Dict[str, Any], storage_format: str) -> str:
-        props = {
-            str(k).lower(): str(v).upper()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
-        if storage_format == "ORC":
-            value = props.get("orc.compress") or props.get("orc.default.compress")
-            if value:
-                return value.upper()
-            return "ZLIB"
-        if storage_format == "PARQUET":
-            value = props.get("parquet.compression")
-            if value:
-                return value.upper()
-            return "SNAPPY"
-        if storage_format == "TEXTFILE":
-            value = props.get("compression") or props.get("fileoutputformat.compress")
-            if value:
-                return value.upper()
-            codec = props.get("mapreduce.output.fileoutputformat.compress.codec")
-            if codec:
-                codec = codec.rsplit(".", 1)[-1]
-                return codec.upper()
-            return "NONE"
-        return "DEFAULT"
 
     def _apply_output_settings(
         self,
@@ -1660,107 +1520,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 details={"code": "W902"},
             )
 
-    def _is_unsupported_table_type(self, fmt: Dict[str, Any]) -> bool:
-        """识别不受支持的表类型（Hudi/Iceberg/Delta/ACID等）"""
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde_lib = str(fmt.get("serde_lib", "")).lower()
-        storage_handler = str(fmt.get("storage_handler", "")).lower()
-        props = {
-            str(k).lower(): str(v).lower()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
 
-        # Hudi 检测：handler/serde/input 或 hoodie.* 属性
-        if (
-            "hudi" in input_fmt
-            or "hudi" in serde_lib
-            or "hudi" in storage_handler
-            or any(k.startswith("hoodie.") for k in props.keys())
-        ):
-            return True
-        # Iceberg 检测
-        if (
-            "iceberg" in input_fmt
-            or "iceberg" in storage_handler
-            or "iceberg" in serde_lib
-        ):
-            return True
-        # Delta 检测
-        if "delta" in input_fmt or "delta" in storage_handler or "delta" in serde_lib:
-            return True
-        # ACID 事务表：必须 transactional=true 或 storage handler 含 acid
-        if props.get("transactional") == "true" or "acid" in storage_handler:
-            return True
-        return False
 
-    def _unsupported_reason(self, fmt: Dict[str, Any]) -> str:
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde_lib = str(fmt.get("serde_lib", "")).lower()
-        storage_handler = str(fmt.get("storage_handler", "")).lower()
-        props = {
-            str(k).lower(): str(v).lower()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
-
-        if (
-            "hudi" in input_fmt
-            or "hudi" in serde_lib
-            or "hudi" in storage_handler
-            or any(k.startswith("hoodie.") for k in props.keys())
-        ):
-            return "目标表为 Hudi 表，当前合并引擎不支持对 Hudi 表执行合并，请使用 Hudi 自带的压缩/合并机制（如 compaction/cluster）"
-        if (
-            "iceberg" in input_fmt
-            or "iceberg" in storage_handler
-            or "iceberg" in serde_lib
-        ):
-            return "目标表为 Iceberg 表，当前合并引擎不支持该表的合并操作"
-        if "delta" in input_fmt or "delta" in storage_handler or "delta" in serde_lib:
-            return "目标表为 Delta 表，当前合并引擎不支持该表的合并操作"
-        if props.get("transactional") == "true" or "acid" in storage_handler:
-            return "目标表为 ACID/事务表，当前合并引擎不支持该表的合并操作"
-        return "目标表类型不受支持，已阻止合并操作"
-
-    def _get_table_columns(
-        self, database_name: str, table_name: str
-    ) -> (List[str], List[str]):
-        """获取表的字段列表（非分区列、分区列）"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
-            rows = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            nonpart: List[str] = []
-            parts: List[str] = []
-            in_part = False
-            for row in rows:
-                if not row or len(row) < 1:
-                    continue
-                first = str(row[0]).strip()
-                if not first:
-                    continue
-                if first.startswith("#"):
-                    if "Partition Information" in first:
-                        in_part = True
-                    continue
-                if first.lower() == "col_name" or first.lower().startswith("name"):
-                    continue
-                # 过滤非字段行（如详细信息）
-                if ":" in first:
-                    # 进入详细信息部分
-                    break
-                if in_part:
-                    parts.append(first)
-                else:
-                    nonpart.append(first)
-            # 去掉可能的空白/无效项
-            nonpart = [c for c in nonpart if c and c != "col_name"]
-            parts = [c for c in parts if c and c != "col_name"]
-            return nonpart, parts
-        except Exception:
-            return [], []
 
     def _partition_filter_to_spec(self, partition_filter: str) -> Optional[str]:
         """将 WHERE 风格的分区过滤转换为 PARTITION 规范，例如:
@@ -2879,37 +2640,6 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
     # ========== Hive原生分区合并辅助方法 ==========
 
-    def _is_partitioned_table(self, database: str, table: str) -> bool:
-        """
-        检测表是否为分区表
-
-        Args:
-            database: 数据库名
-            table: 表名
-
-        Returns:
-            True if table is partitioned, False otherwise
-        """
-        try:
-            conn = self._create_hive_connection(database)
-            cursor = conn.cursor()
-
-            # 使用SHOW PARTITIONS检测(如果表是分区表会返回分区列表,否则报错)
-            try:
-                cursor.execute(f"SHOW PARTITIONS {database}.{table}")
-                # 如果执行成功,说明是分区表
-                cursor.close()
-                conn.close()
-                return True
-            except Exception:
-                # 如果报错(Table is not a partitioned table),说明不是分区表
-                cursor.close()
-                conn.close()
-                return False
-
-        except Exception as e:
-            logger.error(f"Failed to check if table is partitioned: {e}")
-            return False
 
     def _get_partition_columns(self, database: str, table: str) -> list[str]:
         """
