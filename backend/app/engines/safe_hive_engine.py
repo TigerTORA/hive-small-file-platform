@@ -756,11 +756,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             original_location = (
                 self.metadata_manager._get_table_location(task.database_name, task.table_name) or ""
             )
-            parent_dir = (
-                "/".join([p for p in original_location.rstrip("/").split("/")[:-1]])
-                if original_location
-                else ""
-            )
+            parent_dir = self._extract_parent_directory(original_location)
             # 直接读取临时表LOCATION，作为影子目录来源
             temp_location = (
                 self.metadata_manager._get_table_location(task.database_name, temp_table_name) or ""
@@ -1781,6 +1777,33 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             return False
         return self.metadata_manager._is_partitioned_table(database_name, table_name)
 
+    def _extract_parent_directory(self, hdfs_path: Optional[str]) -> str:
+        """从HDFS路径中提取父目录.
+
+        将完整的HDFS路径提取为父目录路径,用于创建备份或影子目录.
+
+        Args:
+            hdfs_path: HDFS路径,例如 "hdfs://namenode/user/hive/warehouse/db.db/table"
+
+        Returns:
+            str: 父目录路径,例如 "hdfs://namenode/user/hive/warehouse/db.db"
+                 如果输入为空或None,返回空字符串
+
+        Examples:
+            >>> _extract_parent_directory("hdfs://nn/user/hive/warehouse/db.db/table")
+            "hdfs://nn/user/hive/warehouse/db.db"
+            >>> _extract_parent_directory("hdfs://nn/user/hive/warehouse/db.db/table/")
+            "hdfs://nn/user/hive/warehouse/db.db"
+            >>> _extract_parent_directory("")
+            ""
+            >>> _extract_parent_directory(None)
+            ""
+        """
+        if not hdfs_path:
+            return ""
+        # 移除尾部斜杠,分割路径,去掉最后一个部分(表名),重新组合
+        return "/".join([p for p in hdfs_path.rstrip("/").split("/")[:-1]])
+
     def _calculate_job_compression(
         self,
         original_compression: Optional[str],
@@ -2297,11 +2320,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             # 例如：hdfs://.../parent/.merge_shadow/<ts>
             ts_id = int(time.time())
             # 将影子目录切回原父目录，避免 /warehouse 路径的 HttpFS 限制
-            parent_dir = (
-                "/".join([p for p in original_location.rstrip("/").split("/")[:-1]])
-                if original_location
-                else ""
-            )
+            parent_dir = self._extract_parent_directory(original_location)
             shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ""
             shadow_dir = f"{shadow_root}/{ts_id}" if shadow_root else ""
 

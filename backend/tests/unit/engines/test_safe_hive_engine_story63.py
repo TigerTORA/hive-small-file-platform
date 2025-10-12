@@ -261,5 +261,64 @@ class TestNormalizeCompressionPreference:
         assert result == "LZO"
 
 
+class TestExtractParentDirectory:
+    """测试_extract_parent_directory方法 (Story 6.6新增)"""
+
+    def test_extract_from_normal_path(self, engine):
+        """测试从正常路径提取父目录"""
+        result = engine._extract_parent_directory(
+            "hdfs://namenode/user/hive/warehouse/db.db/table"
+        )
+        assert result == "hdfs://namenode/user/hive/warehouse/db.db"
+
+    def test_extract_from_path_with_trailing_slash(self, engine):
+        """测试从带尾部斜杠的路径提取父目录"""
+        result = engine._extract_parent_directory(
+            "hdfs://namenode/user/hive/warehouse/db.db/table/"
+        )
+        assert result == "hdfs://namenode/user/hive/warehouse/db.db"
+
+    def test_extract_from_none(self, engine):
+        """测试None输入返回空字符串"""
+        result = engine._extract_parent_directory(None)
+        assert result == ""
+
+    def test_extract_from_empty_string(self, engine):
+        """测试空字符串返回空字符串"""
+        result = engine._extract_parent_directory("")
+        assert result == ""
+
+    def test_extract_from_root_path(self, engine):
+        """测试根路径的父目录"""
+        result = engine._extract_parent_directory("hdfs://namenode/user")
+        assert result == "hdfs://namenode"
+
+    def test_extract_from_single_level_path(self, engine):
+        """测试单级路径"""
+        result = engine._extract_parent_directory("hdfs://namenode")
+        assert result == "hdfs:/"
+
+    def test_extract_preserves_protocol(self, engine):
+        """测试保留协议前缀"""
+        result = engine._extract_parent_directory(
+            "webhdfs://namenode:50070/user/hive/warehouse/table"
+        )
+        assert result == "webhdfs://namenode:50070/user/hive/warehouse"
+
+    def test_extract_from_deep_path(self, engine):
+        """测试深层路径"""
+        result = engine._extract_parent_directory(
+            "hdfs://nn/a/b/c/d/e/f/table"
+        )
+        assert result == "hdfs://nn/a/b/c/d/e/f"
+
+    def test_extract_multiple_trailing_slashes(self, engine):
+        """测试多个尾部斜杠"""
+        result = engine._extract_parent_directory(
+            "hdfs://namenode/user/hive/warehouse/table///"
+        )
+        assert result == "hdfs://namenode/user/hive/warehouse"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
