@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from celery import current_task
 from sqlalchemy.orm import sessionmaker

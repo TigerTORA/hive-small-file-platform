@@ -2,16 +2,14 @@
 Hive文件统计器
 负责统计表和分区的文件数量
 """
+
 import logging
-import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from pyhive import hive
-from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
-from app.models.merge_task import MergeTask
-from app.utils.merge_logger import MergeLogLevel, MergePhase, MergeTaskLogger
+from app.utils.merge_logger import MergeLogLevel, MergePhase
 from app.utils.webhdfs_client import WebHDFSClient
 
 logger = logging.getLogger(__name__)
@@ -19,16 +17,16 @@ logger = logging.getLogger(__name__)
 
 class HiveFileCounter:
     """Hive文件统计器,用于精确统计表和分区的文件数量"""
-    
+
     def __init__(
         self,
         cluster: Cluster,
         webhdfs_client: WebHDFSClient,
-        hive_password: Optional[str] = None
+        hive_password: Optional[str] = None,
     ):
         """
         初始化文件统计器
-        
+
         Args:
             cluster: 集群配置对象
             webhdfs_client: WebHDFS客户端实例
@@ -37,7 +35,7 @@ class HiveFileCounter:
         self.cluster = cluster
         self.webhdfs_client = webhdfs_client
         self.hive_password = hive_password
-        
+
     def _create_hive_connection(self, database_name: str = None):
         """创建Hive连接(支持LDAP认证)"""
         hive_conn_params = {
@@ -238,11 +236,7 @@ class HiveFileCounter:
             return 0
 
     def _wait_for_partition_data(
-        self,
-        database: str,
-        table: str,
-        partition_spec: str,
-        timeout: int = 3600
+        self, database: str, table: str, partition_spec: str, timeout: int = 3600
     ):
         """
         轮询检查分区数据是否生成完成
@@ -257,6 +251,7 @@ class HiveFileCounter:
             Exception: 超时或检查失败
         """
         import time
+
         start = time.time()
         check_interval = 10  # 每10秒检查一次
 
@@ -264,14 +259,20 @@ class HiveFileCounter:
 
         while time.time() - start < timeout:
             try:
-                partition_path = self._resolve_partition_path(database, table, partition_spec)
+                partition_path = self._resolve_partition_path(
+                    database, table, partition_spec
+                )
                 if partition_path:
                     file_count = self._count_partition_files(partition_path)
                     if file_count > 0:
-                        logger.info(f"临时分区数据已生成: {partition_path}, 文件数={file_count}")
+                        logger.info(
+                            f"临时分区数据已生成: {partition_path}, 文件数={file_count}"
+                        )
                         return
                     else:
-                        logger.debug(f"临时分区数据尚未生成,继续等待... ({int(time.time() - start)}秒)")
+                        logger.debug(
+                            f"临时分区数据尚未生成,继续等待... ({int(time.time() - start)}秒)"
+                        )
             except Exception as e:
                 logger.debug(f"检查分区数据时出错,继续等待: {e}")
 
@@ -280,11 +281,7 @@ class HiveFileCounter:
         raise Exception(f"等待分区数据超时({timeout}秒): {partition_spec}")
 
     def _cleanup_temp_partition(
-        self,
-        database: str,
-        table: str,
-        temp_partition_spec: str,
-        merge_logger
+        self, database: str, table: str, temp_partition_spec: str, merge_logger
     ):
         """
         删除临时分区(失败时的清理操作)
@@ -298,19 +295,18 @@ class HiveFileCounter:
         try:
             conn = self._create_hive_connection(database)
             cursor = conn.cursor()
-            drop_sql = f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({temp_partition_spec})"
+            drop_sql = (
+                f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({temp_partition_spec})"
+            )
             cursor.execute(drop_sql)
             cursor.close()
             conn.close()
             merge_logger.log(
                 MergePhase.ROLLBACK,
                 MergeLogLevel.INFO,
-                f"已清理临时分区: {temp_partition_spec}"
+                f"已清理临时分区: {temp_partition_spec}",
             )
         except Exception as e:
             merge_logger.log(
-                MergePhase.ROLLBACK,
-                MergeLogLevel.WARNING,
-                f"清理临时分区失败: {e}"
+                MergePhase.ROLLBACK, MergeLogLevel.WARNING, f"清理临时分区失败: {e}"
             )
-

@@ -1,12 +1,11 @@
 """
 测试表任务数据模型
 """
+
 import json
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
 
 from app.config.database import Base
 
@@ -53,13 +52,13 @@ class TestTableTask(Base):
     def table_name(self) -> str:
         """获取表名"""
         config = self.get_config_dict()
-        return config.get('table_name', 'test_table')
+        return config.get("table_name", "test_table")
 
     @property
     def database_name(self) -> str:
         """获取数据库名"""
         config = self.get_config_dict()
-        return config.get('database_name', 'test_db')
+        return config.get("database_name", "test_db")
 
     @property
     def task_name(self) -> str:

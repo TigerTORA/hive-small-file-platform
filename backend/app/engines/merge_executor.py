@@ -6,7 +6,7 @@
 import logging
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Optional
 
 from sqlalchemy.orm import Session
 
@@ -142,10 +142,12 @@ class MergeTaskExecutor:
             # 获取表路径和格式信息
             table_path = self._get_table_path(task)
             if not table_path:
-                raise RuntimeError(f"Unable to determine table path for {task.database_name}.{task.table_name}")
+                raise RuntimeError(
+                    f"Unable to determine table path for {task.database_name}.{task.table_name}"
+                )
 
             storage_format = self._get_table_format(task)
-            
+
             self._report_progress("unified_merge", "Creating shadow directory...")
             self._update_task_progress(
                 task,
@@ -159,14 +161,19 @@ class MergeTaskExecutor:
             if task.partition_filter:
                 # 分区表：为特定分区创建影子目录
                 partition_path = self._resolve_partition_path(task, table_path)
-                parent = "/".join(p for p in partition_path.rstrip("/").split("/")[:-1]) or "/"
+                parent = (
+                    "/".join(p for p in partition_path.rstrip("/").split("/")[:-1])
+                    or "/"
+                )
                 partition_name = partition_path.split("/")[-1]
                 shadow_path = f"{parent}/.shadow_{partition_name}_{ts}"
                 backup_path = f"{parent}/.backup_{partition_name}_{ts}"
                 target_path = partition_path
             else:
                 # 非分区表：为整个表创建影子目录
-                parent = "/".join(p for p in table_path.rstrip("/").split("/")[:-1]) or "/"
+                parent = (
+                    "/".join(p for p in table_path.rstrip("/").split("/")[:-1]) or "/"
+                )
                 shadow_path = f"{parent}/.shadow_merge_{ts}"
                 backup_path = f"{parent}/.backup_merge_{ts}"
                 target_path = table_path
@@ -190,20 +197,28 @@ class MergeTaskExecutor:
             sql_shadow = f"INSERT OVERWRITE DIRECTORY '{shadow_path}'"
             if storage_format in ("PARQUET", "ORC"):
                 sql_shadow += f" STORED AS {storage_format}"
-            
+
             # 根据是否有分区过滤器构建查询
             if task.partition_filter:
-                sql_shadow += f" SELECT * FROM {table_identifier} WHERE {task.partition_filter}"
+                sql_shadow += (
+                    f" SELECT * FROM {table_identifier} WHERE {task.partition_filter}"
+                )
             else:
                 sql_shadow += f" SELECT * FROM {table_identifier}"
 
-            with self.connection_manager.get_hive_connection(task.database_name) as conn:
+            with self.connection_manager.get_hive_connection(
+                task.database_name
+            ) as conn:
                 cursor = conn.cursor()
                 # 设置压缩和优化参数
                 try:
                     cursor.execute("SET hive.exec.compress.output=true")
-                    cursor.execute("SET mapreduce.output.fileoutputformat.compress=true")
-                    cursor.execute("SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec")
+                    cursor.execute(
+                        "SET mapreduce.output.fileoutputformat.compress=true"
+                    )
+                    cursor.execute(
+                        "SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.SnappyCodec"
+                    )
                     if task.target_file_size is not None and task.target_file_size < 0:
                         cursor.execute("SET hive.exec.reducers.max=1")
                         cursor.execute("SET mapreduce.job.reduces=1")
@@ -224,7 +239,9 @@ class MergeTaskExecutor:
                 raise RuntimeError("Shadow directory validation failed")
 
             # 执行原子目录切换
-            self._report_progress("unified_merge", "Performing atomic directory swap...")
+            self._report_progress(
+                "unified_merge", "Performing atomic directory swap..."
+            )
             self._update_task_progress(
                 task,
                 db_session,
@@ -233,12 +250,12 @@ class MergeTaskExecutor:
             )
 
             hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
-            
+
             # 原子切换：目标→备份，影子→目标
             ok1, msg1 = hdfs.move_file(target_path, backup_path)
             if not ok1:
                 raise RuntimeError(f"Failed to backup target directory: {msg1}")
-            
+
             ok2, msg2 = hdfs.move_file(shadow_path, target_path)
             if not ok2:
                 # 回滚
@@ -268,11 +285,13 @@ class MergeTaskExecutor:
 
             # 尝试清理影子目录
             try:
-                if 'shadow_path' in locals():
+                if "shadow_path" in locals():
                     hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
                     hdfs.delete_file(shadow_path, recursive=True)
                     merge_logger.log(
-                        MergePhase.ROLLBACK, MergeLogLevel.INFO, "Shadow directory cleaned up"
+                        MergePhase.ROLLBACK,
+                        MergeLogLevel.INFO,
+                        "Shadow directory cleaned up",
                     )
             except Exception as cleanup_error:
                 merge_logger.log(
@@ -384,7 +403,6 @@ class MergeTaskExecutor:
             logger.error(f"Failed to update task progress: {e}")
             db_session.rollback()
 
-
     def _partition_filter_to_spec(self, partition_filter: str) -> Optional[str]:
         """将分区过滤器转换为分区规格"""
         try:
@@ -405,6 +423,7 @@ class MergeTaskExecutor:
             # 简单实现：从partition_filter中提取分区信息
             # 例如："dt='2023-12-01'" -> "dt=2023-12-01"
             import re
+
             matches = re.findall(r"(\w+)='([^']+)'", task.partition_filter)
             if matches:
                 partition_spec = "/".join([f"{key}={value}" for key, value in matches])
@@ -421,7 +440,7 @@ class MergeTaskExecutor:
             hdfs: WebHDFSClient = self.connection_manager.webhdfs_client
             # 检查目录是否存在且包含文件
             status = hdfs.get_file_status(shadow_path)
-            if status and status.get('type') == 'DIRECTORY':
+            if status and status.get("type") == "DIRECTORY":
                 # 检查目录是否包含数据文件
                 files = hdfs.list_directory(shadow_path)
                 return len(files) > 0

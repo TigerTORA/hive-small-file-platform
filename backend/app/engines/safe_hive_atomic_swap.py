@@ -2,6 +2,7 @@
 Hive原子交换管理器
 负责表的原子性切换、回滚等操作
 """
+
 import logging
 import socket
 import threading
@@ -22,19 +23,19 @@ logger = logging.getLogger(__name__)
 
 class HiveAtomicSwapManager:
     """Hive原子交换管理器,负责表的原子性切换操作"""
-    
+
     def __init__(
         self,
         cluster: Cluster,
         webhdfs_client: WebHDFSClient,
         yarn_monitor: Optional[YarnResourceManagerMonitor] = None,
         hive_password: Optional[str] = None,
-        extract_error_detail_func = None,
-        update_task_progress_func = None,
+        extract_error_detail_func=None,
+        update_task_progress_func=None,
     ):
         """
         初始化原子交换管理器
-        
+
         Args:
             cluster: 集群配置对象
             webhdfs_client: WebHDFS客户端实例
@@ -49,7 +50,7 @@ class HiveAtomicSwapManager:
         self.hive_password = hive_password
         self._extract_error_detail = extract_error_detail_func
         self._update_task_progress = update_task_progress_func
-        
+
     def _create_hive_connection(self, database_name: str = None):
         """创建Hive连接(支持LDAP认证)"""
         hive_conn_params = {
@@ -486,7 +487,7 @@ class HiveAtomicSwapManager:
         database: str,
         original_table: str,
         temp_table: str,
-        merge_logger: MergeTaskLogger
+        merge_logger: MergeTaskLogger,
     ) -> Dict[str, Any]:
         """
         原子交换表的HDFS位置
@@ -525,7 +526,7 @@ class HiveAtomicSwapManager:
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
-                f"原表路径: {original_path}, 临时表路径: {temp_path}"
+                f"原表路径: {original_path}, 临时表路径: {temp_path}",
             )
 
             # Step 2: 备份原表目录
@@ -533,7 +534,7 @@ class HiveAtomicSwapManager:
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.INFO,
-                    f"备份原表数据: {original_path} -> {backup_path}"
+                    f"备份原表数据: {original_path} -> {backup_path}",
                 )
 
                 success, msg = self.webhdfs_client.move_file(original_path, backup_path)
@@ -544,7 +545,7 @@ class HiveAtomicSwapManager:
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
-                f"移动合并后数据: {temp_path} -> {original_path}"
+                f"移动合并后数据: {temp_path} -> {original_path}",
             )
 
             success, msg = self.webhdfs_client.move_file(temp_path, original_path)
@@ -553,7 +554,7 @@ class HiveAtomicSwapManager:
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.ERROR,
-                    f"移动失败,回滚备份: {msg}"
+                    f"移动失败,回滚备份: {msg}",
                 )
                 if self.webhdfs_client.exists(backup_path):
                     self.webhdfs_client.move_file(backup_path, original_path)
@@ -561,9 +562,7 @@ class HiveAtomicSwapManager:
 
             # Step 4: 刷新元数据
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "刷新Hive元数据"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "刷新Hive元数据"
             )
 
             conn = self._create_hive_connection(database)
@@ -580,7 +579,7 @@ class HiveAtomicSwapManager:
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.INFO,
-                    "元数据刷新完成,表验证通过"
+                    "元数据刷新完成,表验证通过",
                 )
 
             finally:
@@ -589,9 +588,7 @@ class HiveAtomicSwapManager:
 
             # Step 5: 清理
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "清理备份和临时表"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "清理备份和临时表"
             )
 
             # 删除备份
@@ -605,23 +602,17 @@ class HiveAtomicSwapManager:
             cursor.close()
             conn.close()
 
-            merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "原子交换完成"
-            )
+            merge_logger.log(MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "原子交换完成")
 
             return {
                 "success": True,
                 "original_location": original_path,
-                "backup_location": backup_path
+                "backup_location": backup_path,
             }
 
         except Exception as e:
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.ERROR,
-                f"原子交换失败: {e}"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.ERROR, f"原子交换失败: {e}"
             )
             raise
 
@@ -665,7 +656,8 @@ class HiveAtomicSwapManager:
             cur = conn.cursor()
             cur.execute(f"dfs -mv {src} {dst}")
             try:
-                cur.close(); conn.close()
+                cur.close()
+                conn.close()
             except Exception:
                 pass
             merge_logger.log_hdfs_operation(
@@ -734,4 +726,3 @@ class HiveAtomicSwapManager:
             raise
 
         return sql_statements
-

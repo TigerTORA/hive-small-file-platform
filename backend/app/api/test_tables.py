@@ -1,6 +1,7 @@
 """
 测试表管理API路由
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -23,10 +24,12 @@ router = APIRouter()
 @router.post("/check-timeout")
 async def check_timeout_tasks(db: Session = Depends(get_db)):
     """检测并标记超时任务"""
-    marked_count = test_table_service.check_and_mark_timeout_tasks(db, timeout_minutes=30)
+    marked_count = test_table_service.check_and_mark_timeout_tasks(
+        db, timeout_minutes=30
+    )
     return {
         "marked_timeout_tasks": marked_count,
-        "message": f"已标记 {marked_count} 个超时任务为失败状态"
+        "message": f"已标记 {marked_count} 个超时任务为失败状态",
     }
 
 
@@ -50,15 +53,14 @@ async def get_test_scenarios():
             "development": "light",
             "testing": "default",
             "performance_test": "heavy",
-            "stress_test": "extreme"
-        }
+            "stress_test": "extreme",
+        },
     }
 
 
 @router.post("/create", response_model=TestTableTaskResponse)
 async def create_test_table(
-    request: TestTableCreateRequest,
-    db: Session = Depends(get_db)
+    request: TestTableCreateRequest, db: Session = Depends(get_db)
 ):
     """创建测试表"""
     try:
@@ -67,11 +69,13 @@ async def create_test_table(
             scenario_config = SCENARIO_CONFIGS.get(request.config.scenario)
             if scenario_config:
                 # 使用copy()创建副本,避免污染全局单例
-                config_copy = scenario_config.copy(update={
-                    'table_name': request.config.table_name,
-                    'database_name': request.config.database_name,
-                    'hdfs_base_path': request.config.hdfs_base_path
-                })
+                config_copy = scenario_config.copy(
+                    update={
+                        "table_name": request.config.table_name,
+                        "database_name": request.config.database_name,
+                        "hdfs_base_path": request.config.hdfs_base_path,
+                    }
+                )
                 request.config = config_copy
 
         task = await test_table_service.create_test_table(request, db)
@@ -100,8 +104,7 @@ async def get_test_table_task(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/delete")
 async def delete_test_table(
-    request: TestTableDeleteRequest,
-    db: Session = Depends(get_db)
+    request: TestTableDeleteRequest, db: Session = Depends(get_db)
 ):
     """删除测试表"""
     try:
@@ -115,8 +118,7 @@ async def delete_test_table(
 
 @router.post("/verify", response_model=TestTableVerifyResult)
 async def verify_test_table(
-    request: TestTableVerifyRequest,
-    db: Session = Depends(get_db)
+    request: TestTableVerifyRequest, db: Session = Depends(get_db)
 ):
     """验证测试表"""
     try:
@@ -135,7 +137,7 @@ async def validate_test_config(
     hdfs_base_path: str = Query(..., description="HDFS路径"),
     partition_count: int = Query(..., ge=1, le=1000, description="分区数"),
     files_per_partition: int = Query(..., ge=1, le=1000, description="每分区文件数"),
-    file_size_kb: int = Query(..., ge=1, le=1024, description="文件大小KB")
+    file_size_kb: int = Query(..., ge=1, le=1024, description="文件大小KB"),
 ):
     """验证测试配置"""
     try:
@@ -146,7 +148,7 @@ async def validate_test_config(
             partition_count=partition_count,
             files_per_partition=files_per_partition,
             file_size_kb=file_size_kb,
-            scenario=TestTableScenario.CUSTOM
+            scenario=TestTableScenario.CUSTOM,
         )
 
         return {
@@ -155,22 +157,15 @@ async def validate_test_config(
             "estimated_files": config.get_total_files(),
             "estimated_size_mb": config.get_estimated_size_mb(),
             "estimated_duration_minutes": config.get_estimated_duration_minutes(),
-            "warnings": _get_config_warnings(config)
+            "warnings": _get_config_warnings(config),
         }
 
     except ValueError as e:
-        return {
-            "valid": False,
-            "error": str(e),
-            "config": None
-        }
+        return {"valid": False, "error": str(e), "config": None}
 
 
 @router.get("/cluster/{cluster_id}/existing-tables")
-async def get_cluster_test_tables(
-    cluster_id: int,
-    db: Session = Depends(get_db)
-):
+async def get_cluster_test_tables(cluster_id: int, db: Session = Depends(get_db)):
     """获取集群中的测试表"""
     from app.models.cluster import Cluster
 
@@ -191,9 +186,9 @@ async def get_cluster_test_tables(
                     "partition_count": 10,
                     "estimated_files": 1000,
                     "created_time": "2024-01-01T00:00:00Z",
-                    "size_mb": 50.0
+                    "size_mb": 50.0,
                 }
-            ]
+            ],
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询测试表失败: {str(e)}")
@@ -206,7 +201,7 @@ def _get_scenario_description(scenario: TestTableScenario) -> str:
         TestTableScenario.DEFAULT: "默认测试 - 适合完整功能测试",
         TestTableScenario.HEAVY: "重度测试 - 适合性能测试，大量小文件场景",
         TestTableScenario.EXTREME: "极限测试 - 仅限高性能测试环境，慎用！",
-        TestTableScenario.CUSTOM: "自定义配置 - 根据需求自定义参数"
+        TestTableScenario.CUSTOM: "自定义配置 - 根据需求自定义参数",
     }
     return descriptions.get(scenario, "未知场景")
 
@@ -227,8 +222,8 @@ def _get_config_warnings(config: TestTableConfig) -> list[str]:
     if total_size_mb > 500:
         warnings.append(f"预估大小较大 ({total_size_mb:.1f}MB)，请确保有足够磁盘空间")
 
-    if config.hdfs_base_path.startswith('/user/'):
-        if 'prod' in config.hdfs_base_path.lower():
+    if config.hdfs_base_path.startswith("/user/"):
+        if "prod" in config.hdfs_base_path.lower():
             warnings.append("⚠️ 路径包含 'prod'，请确认不是生产环境路径")
 
     if config.partition_count > 50:

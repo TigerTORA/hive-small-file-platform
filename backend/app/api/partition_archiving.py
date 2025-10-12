@@ -3,11 +3,10 @@
 负责分区级别的冷数据扫描、分区归档、恢复等功能
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.config.database import SessionLocal, get_db

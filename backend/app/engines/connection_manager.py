@@ -4,7 +4,7 @@
 """
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from pyhive import hive
 
@@ -51,11 +51,15 @@ class HiveConnectionManager:
                 return decrypted
             else:
                 # 解密返回None，可能是明文密码
-                logger.warning(f"Password decryption returned None for cluster {self.cluster.id}, using as plain text")
+                logger.warning(
+                    f"Password decryption returned None for cluster {self.cluster.id}, using as plain text"
+                )
                 return self.cluster.hive_password
         except Exception as e:
             # 解密异常，可能是明文密码
-            logger.warning(f"Password decryption failed for cluster {self.cluster.id}: {e}, using as plain text")
+            logger.warning(
+                f"Password decryption failed for cluster {self.cluster.id}: {e}, using as plain text"
+            )
             return self.cluster.hive_password
 
     def test_connections(self) -> bool:

@@ -2,9 +2,9 @@
 Hive临时表管理器
 负责临时表的创建、验证和清理
 """
+
 import logging
 import time
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pyhive import hive
@@ -12,25 +12,25 @@ from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
-from app.utils.merge_logger import MergeLogLevel, MergePhase, MergeTaskLogger
+from app.utils.merge_logger import MergeLogLevel, MergePhase
 
 logger = logging.getLogger(__name__)
 
 
 class HiveTempTableManager:
     """Hive临时表管理器,负责临时表的生命周期管理"""
-    
+
     def __init__(self, cluster: Cluster, hive_password: Optional[str] = None):
         """
         初始化临时表管理器
-        
+
         Args:
             cluster: 集群配置对象
             hive_password: 解密后的Hive密码(可选)
         """
         self.cluster = cluster
         self.hive_password = hive_password
-        
+
     def _create_hive_connection(self, database_name: str = None):
         """创建Hive连接(支持LDAP认证)"""
         hive_conn_params = {
@@ -293,9 +293,7 @@ class HiveTempTableManager:
                 cursor.execute(create_like_sql)
                 sql_statements.append(create_like_sql)
                 if effective_format and effective_format != original_format:
-                    alter_temp_fmt = (
-                        f"ALTER TABLE {temp_table_name} SET FILEFORMAT {effective_format}"
-                    )
+                    alter_temp_fmt = f"ALTER TABLE {temp_table_name} SET FILEFORMAT {effective_format}"
                     merge_logger.log_sql_execution(
                         alter_temp_fmt, MergePhase.TEMP_TABLE_CREATION
                     )
@@ -308,9 +306,7 @@ class HiveTempTableManager:
                             job_compression, self._ORC_COMPRESSION.get("NONE")
                         )
                         if mapped_prop:
-                            tbl_sql = (
-                                f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('orc.compress'='{mapped_prop}')"
-                            )
+                            tbl_sql = f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('orc.compress'='{mapped_prop}')"
                             cursor.execute(tbl_sql)
                             merge_logger.log_sql_execution(
                                 tbl_sql, MergePhase.TEMP_TABLE_CREATION
@@ -321,9 +317,7 @@ class HiveTempTableManager:
                             job_compression, self._PARQUET_COMPRESSION.get("NONE")
                         )
                         if mapped_prop:
-                            tbl_sql = (
-                                f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('parquet.compression'='{mapped_prop}')"
-                            )
+                            tbl_sql = f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('parquet.compression'='{mapped_prop}')"
                             cursor.execute(tbl_sql)
                             merge_logger.log_sql_execution(
                                 tbl_sql, MergePhase.TEMP_TABLE_CREATION
@@ -349,7 +343,8 @@ class HiveTempTableManager:
                             properties.append(f"'orc.compress'='{mapped}'")
                     elif effective_format == "PARQUET":
                         mapped = self._PARQUET_COMPRESSION.get(
-                            effective_compression, self._PARQUET_COMPRESSION.get("SNAPPY")
+                            effective_compression,
+                            self._PARQUET_COMPRESSION.get("SNAPPY"),
                         )
                         if mapped:
                             properties.append(f"'parquet.compression'='{mapped}'")
@@ -364,9 +359,7 @@ class HiveTempTableManager:
                     if task.partition_filter
                     else f"SELECT * FROM {task.table_name} DISTRIBUTE BY 1"
                 )
-                create_sql = (
-                    f"CREATE TABLE {temp_table_name}{storage_clause}{props_clause} AS {select_sql}"
-                )
+                create_sql = f"CREATE TABLE {temp_table_name}{storage_clause}{props_clause} AS {select_sql}"
                 # 长时 SQL：增加心跳日志
                 self._execute_sql_with_heartbeat(
                     cursor=cursor,
@@ -451,4 +444,3 @@ class HiveTempTableManager:
             result["message"] = str(e)
 
         return result
-

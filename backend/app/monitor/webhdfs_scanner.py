@@ -1,10 +1,8 @@
-import json
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 import requests
 

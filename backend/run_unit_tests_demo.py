@@ -5,7 +5,6 @@
 
 import sys
 import traceback
-from unittest.mock import MagicMock, Mock, patch
 
 
 def demo_strategy_selection_tests():

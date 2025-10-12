@@ -2,6 +2,7 @@
 Hive分区路径解析器
 负责分区路径的解析、查询和规格格式转换
 """
+
 import logging
 import re
 from typing import Dict, List, Optional
@@ -21,7 +22,7 @@ class HivePartitionPathResolver:
         self,
         cluster: Cluster,
         webhdfs_client: WebHDFSClient,
-        hive_password: Optional[str] = None
+        hive_password: Optional[str] = None,
     ):
         """
         初始化分区路径解析器
@@ -54,6 +55,7 @@ class HivePartitionPathResolver:
     def _get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
         """获取表的HDFS位置"""
         from app.services.path_resolver import PathResolver
+
         try:
             return PathResolver.get_table_location(
                 self.cluster, database_name, table_name
@@ -109,16 +111,16 @@ class HivePartitionPathResolver:
         将包含OR条件的partition_filter拆分成多个单分区条件
         例如: (partition_id='p1' OR partition_id='p2') -> ['partition_id=\'p1\'', 'partition_id=\'p2\'']
         """
-        if not partition_filter or 'or' not in partition_filter.lower():
+        if not partition_filter or "or" not in partition_filter.lower():
             return [partition_filter] if partition_filter else []
 
         # 移除外层括号
         cleaned = partition_filter.strip()
-        if cleaned.startswith('(') and cleaned.endswith(')'):
+        if cleaned.startswith("(") and cleaned.endswith(")"):
             cleaned = cleaned[1:-1].strip()
 
         # 使用正则分割OR (忽略大小写)
-        parts = re.split(r'\s+or\s+', cleaned, flags=re.IGNORECASE)
+        parts = re.split(r"\s+or\s+", cleaned, flags=re.IGNORECASE)
         return [part.strip() for part in parts if part.strip()]
 
     def validate_partition_filter(
@@ -164,7 +166,9 @@ class HivePartitionPathResolver:
         parts = [f"{key}='{value}'" for key, value in partition_kv.items()]
         return ", ".join(parts)
 
-    def generate_temp_partition_kv(self, partition_kv: Dict[str, str], ts: int) -> Dict[str, str]:
+    def generate_temp_partition_kv(
+        self, partition_kv: Dict[str, str], ts: int
+    ) -> Dict[str, str]:
         """
         生成临时分区键值对
 
@@ -175,7 +179,9 @@ class HivePartitionPathResolver:
         temp_kv = {}
         for key, value in partition_kv.items():
             # 提取原始分区值(移除可能的前缀和特殊字符)
-            clean_value = value.replace("partition_", "").replace("-", "").replace(":", "")
+            clean_value = (
+                value.replace("partition_", "").replace("-", "").replace(":", "")
+            )
             temp_value = f"temp_{clean_value}_{ts}"
             temp_kv[key] = temp_value
         return temp_kv
@@ -226,12 +232,16 @@ class HivePartitionPathResolver:
                 # 移除可能的括号
                 partition_key = partition_filter.split("=")[0].strip().strip("()")
                 standard_format = f"{partition_key}={partition_value}"
-                logger.info(f"查找分区目录: partition_key={partition_key}, partition_value={partition_value}, standard_format={standard_format}")
+                logger.info(
+                    f"查找分区目录: partition_key={partition_key}, partition_value={partition_value}, standard_format={standard_format}"
+                )
 
                 # 首先查找标准格式的分区目录
                 for file_info in file_statuses:
                     if file_info.is_directory and standard_format in file_info.path:
-                        logger.info(f"通过WebHDFS找到分区路径(标准格式): {file_info.path}")
+                        logger.info(
+                            f"通过WebHDFS找到分区路径(标准格式): {file_info.path}"
+                        )
                         return file_info.path
 
                 # 如果没找到标准格式,尝试匹配只包含分区值的目录(非标准格式)
@@ -239,16 +249,21 @@ class HivePartitionPathResolver:
                     # 确保不会误匹配到标准格式的一部分
                     path_suffix = file_info.path.split("/")[-1]
                     if file_info.is_directory and path_suffix == partition_value:
-                        logger.info(f"通过WebHDFS找到分区路径(非标准格式): {file_info.path}")
+                        logger.info(
+                            f"通过WebHDFS找到分区路径(非标准格式): {file_info.path}"
+                        )
                         return file_info.path
 
-                logger.warning(f"未找到匹配分区值 '{partition_value}' 的目录(标准格式:{standard_format})")
+                logger.warning(
+                    f"未找到匹配分区值 '{partition_value}' 的目录(标准格式:{standard_format})"
+                )
                 return self._resolve_partition_path_fallback(
                     database_name, table_name, partition_filter
                 )
 
             except Exception as hdfs_e:
                 import traceback
+
                 logger.warning(f"WebHDFS查询分区目录失败: {hdfs_e}")
                 logger.warning(f"异常堆栈: {traceback.format_exc()}")
                 return self._resolve_partition_path_fallback(
@@ -257,6 +272,7 @@ class HivePartitionPathResolver:
 
         except Exception as e:
             import traceback
+
             logger.warning(f"Failed to get partition HDFS path via WebHDFS: {e}")
             logger.warning(f"外层异常堆栈: {traceback.format_exc()}")
             # 回退到简单拼接方法
@@ -268,8 +284,12 @@ class HivePartitionPathResolver:
         self, database_name: str, table_name: str, partition_filter: str
     ) -> Optional[str]:
         """根据分区过滤器解析分区在 HDFS 的路径 - 兼容方法,调用新实现"""
-        logger.info(f"resolve_partition_path被调用: database={database_name}, table={table_name}, filter={partition_filter}")
-        result = self.get_partition_hdfs_path(database_name, table_name, partition_filter)
+        logger.info(
+            f"resolve_partition_path被调用: database={database_name}, table={table_name}, filter={partition_filter}"
+        )
+        result = self.get_partition_hdfs_path(
+            database_name, table_name, partition_filter
+        )
         logger.info(f"resolve_partition_path返回: {result}")
         return result
 
@@ -302,7 +322,9 @@ class HivePartitionPathResolver:
             if not normalized:
                 return None
 
-            logger.info(f"_resolve_partition_path_fallback: root={root}, normalized={normalized}")
+            logger.info(
+                f"_resolve_partition_path_fallback: root={root}, normalized={normalized}"
+            )
             return root.rstrip("/") + "/" + normalized
         except Exception as e:
             logger.error(f"_resolve_partition_path_fallback failed: {e}")

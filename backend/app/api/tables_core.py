@@ -2,8 +2,6 @@
 核心表查询 API
 提供基础的表指标查询、数据库列表、表列表等功能
 """
-import time
-from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -149,9 +147,7 @@ async def analyze_small_file_ratios(cluster_id: int, db: Session = Depends(get_d
         # 计算预估节省空间
         if table.small_files > 0 and table.avg_file_size > 0:
             small_files_total_size = table.small_files * table.avg_file_size
-            estimated_savings_gb = (
-                small_files_total_size / (1024 * 1024 * 1024) * 0.3
-            )
+            estimated_savings_gb = small_files_total_size / (1024 * 1024 * 1024) * 0.3
         else:
             estimated_savings_gb = 0
 

@@ -3,12 +3,11 @@ WebHDFS客户端工具类
 通过REST API与HDFS交互，支持Simple认证
 """
 
-import json
 import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import requests
 

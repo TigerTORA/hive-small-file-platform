@@ -6,15 +6,13 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from app.config.database import SessionLocal
 from app.models.cluster import Cluster
 from app.models.cluster_status_history import ClusterStatusHistory
-from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.services.enhanced_connection_service import (
     ConnectionType,
     enhanced_connection_service,

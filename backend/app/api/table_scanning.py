@@ -1,22 +1,16 @@
-"""
-表扫描API模块
-负责表扫描、进度跟踪等功能
-"""
+"""表扫描API模块，负责表扫描、进度跟踪等功能。"""
 
-import asyncio
-import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config.database import get_db
 from app.models.cluster import Cluster
-from app.models.partition_metric import PartitionMetric
 from app.models.table_metric import TableMetric
 from app.monitor.hybrid_table_scanner import HybridTableScanner
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
-from app.schemas.scan_task import ScanTaskLog, ScanTaskProgress, ScanTaskResponse
+from app.schemas.scan_task import ScanTaskProgress
 from app.schemas.table_metric import ScanRequest
 from app.services.scan_service import scan_task_manager
 from app.utils.webhdfs_client import WebHDFSClient
@@ -89,6 +83,18 @@ async def scan_all_cluster_databases_with_progress(
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # Demo 模式下直接提示
+    from app.config.settings import settings
+
+    if settings.DEMO_MODE:
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "page_size": 0,
+            "detail": "partition metrics disabled in demo mode",
+        }
 
     try:
         task_id = scan_task_manager.scan_cluster_with_progress(
@@ -301,7 +307,8 @@ async def get_partition_metrics(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to get partition metrics: {str(e)}"
+            status_code=503,
+            detail="Partition metrics require Hive/WebHDFS connectivity. Configure live cluster access to enable.",
         )
 
 

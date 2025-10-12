@@ -3,7 +3,6 @@
 Test API endpoints with populated test data
 """
 
-import json
 import sys
 
 import requests

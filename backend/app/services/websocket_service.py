@@ -3,14 +3,13 @@ WebSocket 实时推送服务
 负责向前端推送集群状态变更、连接测试结果等实时数据
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +143,7 @@ class WebSocketManager:
     async def broadcast_to_group(self, group_name: str, message: dict):
         """向指定组广播消息（用于测试表任务进度）"""
         ws_message = WebSocketMessage(
-            type=message.get("type", "group_message"),
-            data=message.get("data", message)
+            type=message.get("type", "group_message"), data=message.get("data", message)
         )
 
         # 使用组名作为主题进行广播

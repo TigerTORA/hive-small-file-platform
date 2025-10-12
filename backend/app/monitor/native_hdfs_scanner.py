@@ -1,10 +1,8 @@
-import json
 import logging
-import re
 import subprocess
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
