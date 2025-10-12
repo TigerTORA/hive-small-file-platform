@@ -777,7 +777,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 hdfs: WebHDFSClient = self.webhdfs_client
                 ts_id = int(time.time())
                 # 首选：备份到 .merge_shadow 根
-                shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ""
+                shadow_root = self._build_shadow_root_path(parent_dir)
                 backup_dir = f"{shadow_root}/backup_{ts_id}"
                 ok1, msg1 = self._hdfs_rename_with_fallback(
                     src=original_location,
@@ -1804,6 +1804,26 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         # 移除尾部斜杠,分割路径,去掉最后一个部分(表名),重新组合
         return "/".join([p for p in hdfs_path.rstrip("/").split("/")[:-1]])
 
+    def _build_shadow_root_path(self, parent_dir: str) -> str:
+        """构建影子目录根路径.
+
+        在父目录下创建.merge_shadow根目录,用于存放合并过程中的临时数据.
+
+        Args:
+            parent_dir: 父目录路径
+
+        Returns:
+            str: 影子目录根路径,格式为 "{parent_dir}/.merge_shadow"
+                 如果parent_dir为空,返回空字符串
+
+        Examples:
+            >>> _build_shadow_root_path("hdfs://nn/user/hive/warehouse/db.db")
+            "hdfs://nn/user/hive/warehouse/db.db/.merge_shadow"
+            >>> _build_shadow_root_path("")
+            ""
+        """
+        return f"{parent_dir}/.merge_shadow" if parent_dir else ""
+
     def _calculate_job_compression(
         self,
         original_compression: Optional[str],
@@ -2321,7 +2341,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             ts_id = int(time.time())
             # 将影子目录切回原父目录，避免 /warehouse 路径的 HttpFS 限制
             parent_dir = self._extract_parent_directory(original_location)
-            shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ""
+            shadow_root = self._build_shadow_root_path(parent_dir)
             shadow_dir = f"{shadow_root}/{ts_id}" if shadow_root else ""
 
             # 外部表：预创建影子目标目录，优先通过 HS2 执行 dfs，失败再回退 WebHDFS

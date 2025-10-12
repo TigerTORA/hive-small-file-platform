@@ -261,6 +261,41 @@ class TestNormalizeCompressionPreference:
         assert result == "LZO"
 
 
+class TestBuildShadowRootPath:
+    """测试_build_shadow_root_path方法 (Story 6.7新增)"""
+
+    def test_build_with_valid_parent(self, engine):
+        """测试用有效父目录构建影子根路径"""
+        result = engine._build_shadow_root_path(
+            "hdfs://namenode/user/hive/warehouse/db.db"
+        )
+        assert result == "hdfs://namenode/user/hive/warehouse/db.db/.merge_shadow"
+
+    def test_build_with_empty_parent(self, engine):
+        """测试空父目录返回空字符串"""
+        result = engine._build_shadow_root_path("")
+        assert result == ""
+
+    def test_build_with_trailing_slash(self, engine):
+        """测试带尾部斜杠的父目录"""
+        result = engine._build_shadow_root_path(
+            "hdfs://namenode/user/hive/warehouse/db.db/"
+        )
+        assert result == "hdfs://namenode/user/hive/warehouse/db.db//.merge_shadow"
+
+    def test_build_preserves_protocol(self, engine):
+        """测试保留协议前缀"""
+        result = engine._build_shadow_root_path(
+            "webhdfs://namenode:50070/user/hive/warehouse"
+        )
+        assert result == "webhdfs://namenode:50070/user/hive/warehouse/.merge_shadow"
+
+    def test_build_with_deep_path(self, engine):
+        """测试深层路径"""
+        result = engine._build_shadow_root_path("hdfs://nn/a/b/c/d/e/f")
+        assert result == "hdfs://nn/a/b/c/d/e/f/.merge_shadow"
+
+
 class TestExtractParentDirectory:
     """测试_extract_parent_directory方法 (Story 6.6新增)"""
 
