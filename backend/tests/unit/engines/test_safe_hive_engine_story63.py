@@ -169,6 +169,54 @@ class TestCalculateJobCompression:
         assert result2 == "LZO"
 
 
+class TestShouldUseDynamicPartitionMerge:
+    """测试_should_use_dynamic_partition_merge方法 (Story 6.5新增)"""
+
+    def test_should_use_when_no_filter_and_partitioned(self, engine):
+        """测试无partition_filter且是分区表时返回True"""
+        # Mock task对象
+        task = MagicMock()
+        task.partition_filter = None
+
+        # Mock metadata_manager返回True (是分区表)
+        engine.metadata_manager._is_partitioned_table = MagicMock(return_value=True)
+
+        result = engine._should_use_dynamic_partition_merge(task, "test_db", "test_table")
+        assert result is True
+
+    def test_should_not_use_when_has_filter(self, engine):
+        """测试有partition_filter时返回False"""
+        task = MagicMock()
+        task.partition_filter = "dt='2023-01-01'"
+
+        # 即使是分区表也应返回False
+        engine.metadata_manager._is_partitioned_table = MagicMock(return_value=True)
+
+        result = engine._should_use_dynamic_partition_merge(task, "test_db", "test_table")
+        assert result is False
+
+    def test_should_not_use_when_not_partitioned(self, engine):
+        """测试非分区表时返回False"""
+        task = MagicMock()
+        task.partition_filter = None
+
+        # Mock metadata_manager返回False (非分区表)
+        engine.metadata_manager._is_partitioned_table = MagicMock(return_value=False)
+
+        result = engine._should_use_dynamic_partition_merge(task, "test_db", "test_table")
+        assert result is False
+
+    def test_should_not_use_when_both_conditions_fail(self, engine):
+        """测试有filter且非分区表时返回False"""
+        task = MagicMock()
+        task.partition_filter = "dt='2023-01-01'"
+
+        engine.metadata_manager._is_partitioned_table = MagicMock(return_value=False)
+
+        result = engine._should_use_dynamic_partition_merge(task, "test_db", "test_table")
+        assert result is False
+
+
 class TestNormalizeCompressionPreference:
     """测试_normalize_compression_preference方法 (Story 6.4新增)"""
 

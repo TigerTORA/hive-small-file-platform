@@ -354,18 +354,17 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
         # 【分区表整表合并自动转换】
         # 如果partition_filter为空,检测是否分区表,如果是则使用动态分区整表合并
-        if not task.partition_filter:
-            if self.metadata_manager._is_partitioned_table(task.database_name, task.table_name):
-                merge_logger.log(
-                    MergePhase.INITIALIZATION,
-                    MergeLogLevel.INFO,
-                    "检测到分区表整表合并请求,使用动态分区方案",
-                )
+        if self._should_use_dynamic_partition_merge(task, task.database_name, task.table_name):
+            merge_logger.log(
+                MergePhase.INITIALIZATION,
+                MergeLogLevel.INFO,
+                "检测到分区表整表合并请求,使用动态分区方案",
+            )
 
-                # 直接调用动态分区合并方法并返回
-                return self._execute_full_table_dynamic_partition_merge(
-                    task=task, merge_logger=merge_logger, db_session=db_session
-                )
+            # 直接调用动态分区合并方法并返回
+            return self._execute_full_table_dynamic_partition_merge(
+                task=task, merge_logger=merge_logger, db_session=db_session
+            )
 
         # 如果指定了分区过滤器，优先按分区级别执行合并（不进行整表原子切换）
         if task.partition_filter:
@@ -1760,6 +1759,27 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             return None
 
         return normalized
+
+    def _should_use_dynamic_partition_merge(
+        self, task, database_name: str, table_name: str
+    ) -> bool:
+        """判断是否应该使用动态分区合并.
+
+        当满足以下条件时返回True:
+        1. 未指定partition_filter (整表合并)
+        2. 目标表是分区表
+
+        Args:
+            task: 合并任务对象
+            database_name: 数据库名
+            table_name: 表名
+
+        Returns:
+            bool: True表示应使用动态分区合并,False表示使用常规合并
+        """
+        if task.partition_filter:
+            return False
+        return self.metadata_manager._is_partitioned_table(database_name, table_name)
 
     def _calculate_job_compression(
         self,
