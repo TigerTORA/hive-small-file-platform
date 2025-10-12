@@ -261,6 +261,50 @@ class TestNormalizeCompressionPreference:
         assert result == "LZO"
 
 
+class TestCalculateEffectiveMetaCompression:
+    """测试_calculate_effective_meta_compression方法 (Story 6.8新增)"""
+
+    def test_keep_with_original_compression(self, engine):
+        """测试KEEP保留原始压缩"""
+        result = engine._calculate_effective_meta_compression("GZIP", "KEEP")
+        assert result == "GZIP"
+
+    def test_keep_with_no_original(self, engine):
+        """测试KEEP但无原始压缩返回None"""
+        result = engine._calculate_effective_meta_compression(None, "KEEP")
+        assert result is None
+
+    def test_keep_with_empty_original(self, engine):
+        """测试KEEP但原始为空字符串返回None"""
+        result = engine._calculate_effective_meta_compression("", "KEEP")
+        assert result is None
+
+    def test_keep_with_default_original(self, engine):
+        """测试KEEP但原始为DEFAULT返回None"""
+        result = engine._calculate_effective_meta_compression("DEFAULT", "KEEP")
+        assert result is None
+
+    def test_use_job_compression(self, engine):
+        """测试使用作业压缩覆盖原始"""
+        result = engine._calculate_effective_meta_compression("GZIP", "SNAPPY")
+        assert result == "SNAPPY"
+
+    def test_job_compression_overrides_none(self, engine):
+        """测试作业压缩覆盖None原始"""
+        result = engine._calculate_effective_meta_compression(None, "LZO")
+        assert result == "LZO"
+
+    def test_no_compression_specified(self, engine):
+        """测试两者都为None返回None"""
+        result = engine._calculate_effective_meta_compression(None, None)
+        assert result is None
+
+    def test_original_normalized_uppercase(self, engine):
+        """测试原始压缩被规范化为大写"""
+        result = engine._calculate_effective_meta_compression("gzip", "KEEP")
+        assert result == "GZIP"
+
+
 class TestBuildShadowRootPath:
     """测试_build_shadow_root_path方法 (Story 6.7新增)"""
 

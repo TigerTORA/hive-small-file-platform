@@ -887,14 +887,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             except Exception as _:
                 pass
 
-            base_compression = (original_compression or "").upper()
-            if base_compression in {"", "DEFAULT"}:
-                base_compression = None
-            effective_meta_compression = None
-            if job_compression == "KEEP":
-                effective_meta_compression = base_compression
-            elif job_compression:
-                effective_meta_compression = job_compression
+            effective_meta_compression = self._calculate_effective_meta_compression(
+                original_compression, job_compression
+            )
 
             if (effective_format := target_format) and (
                 effective_format != original_format
@@ -1823,6 +1818,40 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             ""
         """
         return f"{parent_dir}/.merge_shadow" if parent_dir else ""
+
+    def _calculate_effective_meta_compression(
+        self, original_compression: Optional[str], job_compression: Optional[str]
+    ) -> Optional[str]:
+        """计算最终的元数据压缩设置.
+
+        根据原始压缩和作业压缩设置,计算应该写入元数据的有效压缩设置.
+
+        Args:
+            original_compression: 原始表的压缩设置
+            job_compression: 合并作业的压缩设置(可以是KEEP或具体压缩算法)
+
+        Returns:
+            Optional[str]: 有效的元数据压缩设置
+                          - None: 无需更新元数据
+                          - "SNAPPY/GZIP/etc": 具体的压缩算法
+
+        Logic:
+            1. 规范化original_compression (移除空字符串和DEFAULT)
+            2. 如果job_compression是KEEP,使用原始压缩
+            3. 否则使用job_compression
+        """
+        # 规范化原始压缩设置
+        base_compression = (original_compression or "").upper()
+        if base_compression in {"", "DEFAULT"}:
+            base_compression = None
+
+        # 计算有效压缩
+        if job_compression == "KEEP":
+            return base_compression
+        elif job_compression:
+            return job_compression
+        else:
+            return None
 
     def _calculate_job_compression(
         self,
