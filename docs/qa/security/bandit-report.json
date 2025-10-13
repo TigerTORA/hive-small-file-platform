@@ -1,0 +1,2897 @@
+{
+  "errors": [],
+  "generated_at": "2025-10-13T01:53:23Z",
+  "metrics": {
+    "_totals": {
+      "CONFIDENCE.HIGH": 53,
+      "CONFIDENCE.LOW": 38,
+      "CONFIDENCE.MEDIUM": 35,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 53,
+      "SEVERITY.MEDIUM": 73,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 12058,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/base_engine.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 156,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/connection_manager.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 108,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/demo_merge_engine.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 1,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 331,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/engine_factory.py": {
+      "CONFIDENCE.HIGH": 1,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 209,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/hive_partition_merge_executor.py": {
+      "CONFIDENCE.HIGH": 5,
+      "CONFIDENCE.LOW": 2,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 5,
+      "SEVERITY.MEDIUM": 2,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 566,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/hive_partition_path_resolver.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 259,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/merge_executor.py": {
+      "CONFIDENCE.HIGH": 5,
+      "CONFIDENCE.LOW": 2,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 5,
+      "SEVERITY.MEDIUM": 2,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 373,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/merge_progress_tracker.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 245,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/real_hive_engine.py": {
+      "CONFIDENCE.HIGH": 4,
+      "CONFIDENCE.LOW": 5,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 4,
+      "SEVERITY.MEDIUM": 5,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 1047,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_atomic_swap.py": {
+      "CONFIDENCE.HIGH": 6,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 6,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 610,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_engine.py": {
+      "CONFIDENCE.HIGH": 13,
+      "CONFIDENCE.LOW": 10,
+      "CONFIDENCE.MEDIUM": 33,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 13,
+      "SEVERITY.MEDIUM": 43,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 3364,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_engine_original_backup.py": {
+      "CONFIDENCE.HIGH": 16,
+      "CONFIDENCE.LOW": 10,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 16,
+      "SEVERITY.MEDIUM": 11,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 3383,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_engine_refactored.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 67,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_file_counter.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 263,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_metadata_manager.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 2,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 378,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_temp_table.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 8,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 8,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 373,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/safe_hive_utils.py": {
+      "CONFIDENCE.HIGH": 1,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 147,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "app/engines/validation_service.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 179,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": [
+    {
+      "code": "164             # \u8bb0\u5f55\u6a21\u62df\u7684SQL\n165             create_sql = f\"CREATE TABLE {temp_table_name} AS SELECT * FROM {task.database_name}.{task.table_name}\"\n166             result[\"sql_executed\"].append(create_sql)\n",
+      "col_offset": 25,
+      "end_col_offset": 114,
+      "filename": "app/engines/demo_merge_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 165,
+      "line_range": [
+        165
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "217                 )\n218         except Exception:\n219             # \u4e0d\u56e0\u6307\u6807\u8ba1\u7b97\u5931\u8d25\u5f71\u54cd\u4efb\u52a1\u521b\u5efa\n220             pass\n221 \n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/engine_factory.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 218,
+      "line_range": [
+        218,
+        219,
+        220
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "287             # 8. INSERT OVERWRITE \u5230\u4e34\u65f6\u5206\u533a(Hive\u81ea\u52a8\u5408\u5e76)\n288             insert_sql = f\"\"\"\n289                 INSERT OVERWRITE TABLE {database}.{table}\n290                 PARTITION ({temp_partition_spec})\n291                 SELECT {non_partition_cols} FROM {database}.{table}\n292                 WHERE {partition_spec}\n293             \"\"\"\n294             merge_logger.log(\n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 288,
+      "line_range": [
+        288,
+        289,
+        290,
+        291,
+        292,
+        293
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "369                 )\n370             except:\n371                 pass\n372 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 370,
+      "line_range": [
+        370,
+        371
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "379                     cursor.close()\n380                 except:\n381                     pass\n382             if conn:\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 380,
+      "line_range": [
+        380,
+        381
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "384                     conn.close()\n385                 except:\n386                     pass\n387 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 385,
+      "line_range": [
+        385,
+        386
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "540             partition_cols_str = \", \".join(partition_cols)\n541             insert_sql = f\"\"\"\n542                 INSERT OVERWRITE TABLE {temp_table}\n543                 PARTITION ({partition_cols_str})\n544                 SELECT * FROM {table}\n545             \"\"\"\n546 \n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 541,
+      "line_range": [
+        541,
+        542,
+        543,
+        544,
+        545
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "595                     files_after = stats.total_files\n596             except Exception:\n597                 pass\n598 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 596,
+      "line_range": [
+        596,
+        597
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "624                 conn.close()\n625             except:\n626                 pass\n627 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/hive_partition_merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 625,
+      "line_range": [
+        625,
+        626
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "203                 sql_shadow += (\n204                     f\" SELECT * FROM {table_identifier} WHERE {task.partition_filter}\"\n205                 )\n",
+      "col_offset": 20,
+      "end_col_offset": 86,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 204,
+      "line_range": [
+        204
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "206             else:\n207                 sql_shadow += f\" SELECT * FROM {table_identifier}\"\n208 \n",
+      "col_offset": 30,
+      "end_col_offset": 66,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 207,
+      "line_range": [
+        207
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "224                         cursor.execute(\"SET mapreduce.job.reduces=1\")\n225                 except Exception:\n226                     pass\n227                 cursor.execute(sql_shadow)\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 225,
+      "line_range": [
+        225,
+        226
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "312                 return connector.get_table_location(task.database_name, task.table_name)\n313         except Exception:\n314             pass\n315         # \u515c\u5e95\uff1aDESCRIBE FORMATTED \u89e3\u6790 Location\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 313,
+      "line_range": [
+        313,
+        314
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "329                             return val.strip()\n330                     except Exception:\n331                         continue\n332         except Exception:\n",
+      "col_offset": 20,
+      "end_col_offset": 32,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 330,
+      "line_range": [
+        330,
+        331
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "356                             return \"TEXTFILE\"\n357                     except Exception:\n358                         continue\n359         except Exception:\n",
+      "col_offset": 20,
+      "end_col_offset": 32,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 357,
+      "line_range": [
+        357,
+        358
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "358                         continue\n359         except Exception:\n360             pass\n361         return \"TEXTFILE\"\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/merge_executor.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 359,
+      "line_range": [
+        359,
+        360
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "776                 create_sql = (\n777                     f\"CREATE {('EXTERNAL ' if is_external else '')}TABLE {temp_table_name} \"\n778                     f\"TBLPROPERTIES('transactional'='false') \"\n779                     f\"AS SELECT * FROM {task.table_name} WHERE {task.partition_filter}\"\n780                 )\n",
+      "col_offset": 20,
+      "end_col_offset": 87,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 777,
+      "line_range": [
+        777,
+        778,
+        779
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "782                 create_sql = (\n783                     f\"CREATE {('EXTERNAL ' if is_external else '')}TABLE {temp_table_name} \"\n784                     f\"TBLPROPERTIES('transactional'='false') \"\n785                     f\"AS SELECT * FROM {task.table_name}\"\n786                 )\n",
+      "col_offset": 20,
+      "end_col_offset": 57,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 783,
+      "line_range": [
+        783,
+        784,
+        785
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "894                                     cur_op = f\"{op_desc} - YARN {pct}% {getattr(app,'state','')} (\u961f\u5217:{getattr(app,'queue','')}) (\u5df2\u7b49\u5f85{waited}s)\"\n895                                 except Exception:\n896                                     pass\n897                         except Exception:\n",
+      "col_offset": 32,
+      "end_col_offset": 40,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 895,
+      "line_range": [
+        895,
+        896
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "896                                     pass\n897                         except Exception:\n898                             pass\n899                     if db_session is not None:\n",
+      "col_offset": 24,
+      "end_col_offset": 32,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 897,
+      "line_range": [
+        897,
+        898
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "908                             )\n909                         except Exception:\n910                             pass\n911                 except Exception:\n",
+      "col_offset": 24,
+      "end_col_offset": 32,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 909,
+      "line_range": [
+        909,
+        910
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "910                             pass\n911                 except Exception:\n912                     pass\n913 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 911,
+      "line_range": [
+        911,
+        912
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "951             if task.partition_filter:\n952                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name} WHERE {task.partition_filter}\"\n953             else:\n",
+      "col_offset": 37,
+      "end_col_offset": 108,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 952,
+      "line_range": [
+        952
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "953             else:\n954                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name}\"\n955 \n",
+      "col_offset": 37,
+      "end_col_offset": 78,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 954,
+      "line_range": [
+        954
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "961             # \u68c0\u67e5\u4e34\u65f6\u8868\u884c\u6570\uff08\u771f\u5b9e\u67e5\u8be2\uff09\n962             count_temp_sql = f\"SELECT COUNT(*) FROM {temp_table_name}\"\n963             cursor.execute(count_temp_sql)\n",
+      "col_offset": 29,
+      "end_col_offset": 70,
+      "filename": "app/engines/real_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 962,
+      "line_range": [
+        962
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "212                         )\n213                     except Exception:\n214                         pass\n215                 waited += 2\n",
+      "col_offset": 20,
+      "end_col_offset": 28,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 213,
+      "line_range": [
+        213,
+        214
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "329                                     cur_op = f\"{op_desc} - YARN {pct}% {getattr(app,'state','')} (\u961f\u5217:{getattr(app,'queue','')}) (\u5df2\u7b49\u5f85{waited}s)\"\n330                                 except Exception:\n331                                     pass\n332                         except Exception:\n",
+      "col_offset": 32,
+      "end_col_offset": 40,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 330,
+      "line_range": [
+        330,
+        331
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "331                                     pass\n332                         except Exception:\n333                             # \u76d1\u63a7\u5931\u8d25\u4e0d\u5f71\u54cd\u4e3b\u6d41\u7a0b\n334                             pass\n335 \n",
+      "col_offset": 24,
+      "end_col_offset": 32,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 332,
+      "line_range": [
+        332,
+        333,
+        334
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "342                     )\n343                 except Exception:\n344                     pass\n345 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 343,
+      "line_range": [
+        343,
+        344
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "575                 # \u9a8c\u8bc1\u8868\u53ef\u67e5\u8be2\n576                 cursor.execute(f\"SELECT 1 FROM {database}.{original_table} LIMIT 1\")\n577                 cursor.fetchone()\n",
+      "col_offset": 31,
+      "end_col_offset": 83,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 576,
+      "line_range": [
+        576
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "660                 conn.close()\n661             except Exception:\n662                 pass\n663             merge_logger.log_hdfs_operation(\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 661,
+      "line_range": [
+        661,
+        662
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "676                 )\n677             except Exception:\n678                 pass\n679             return True, \"\"\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_atomic_swap.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 677,
+      "line_range": [
+        677,
+        678
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "169             )\n170         except Exception:\n171             pass\n172         return str(exc)\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 170,
+      "line_range": [
+        170,
+        171
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "838                     conn.close()\n839                 except Exception:\n840                     pass\n841                 result[\"backup_table_created\"] = backup_dir\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 839,
+      "line_range": [
+        839,
+        840
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "886                     result[\"files_after\"] = files_after\n887             except Exception as _:\n888                 pass\n889 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 887,
+      "line_range": [
+        887,
+        888
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1295                         )\n1296                     except Exception:\n1297                         pass\n1298                 waited += 2\n",
+      "col_offset": 20,
+      "end_col_offset": 28,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1296,
+      "line_range": [
+        1296,
+        1297
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1909             if task.partition_filter:\n1910                 create_sql = f\"\"\"\n1911                 CREATE TABLE {temp_table_name} \n1912                 AS SELECT * FROM {task.table_name} \n1913                 WHERE {task.partition_filter}\n1914                 \"\"\"\n1915             else:\n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 1910,
+      "line_range": [
+        1910,
+        1911,
+        1912,
+        1913,
+        1914
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "1915             else:\n1916                 create_sql = f\"\"\"\n1917                 CREATE TABLE {temp_table_name} \n1918                 AS SELECT * FROM {task.table_name}\n1919                 \"\"\"\n1920 \n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 1916,
+      "line_range": [
+        1916,
+        1917,
+        1918,
+        1919
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "1951             if task.partition_filter:\n1952                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name} WHERE {task.partition_filter}\"\n1953             else:\n",
+      "col_offset": 37,
+      "end_col_offset": 108,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 1952,
+      "line_range": [
+        1952
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "1953             else:\n1954                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name}\"\n1955 \n",
+      "col_offset": 37,
+      "end_col_offset": 78,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 1954,
+      "line_range": [
+        1954
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "1960             # \u68c0\u67e5\u4e34\u65f6\u8868\u884c\u6570\n1961             count_temp_sql = f\"SELECT COUNT(*) FROM {temp_table_name}\"\n1962             cursor.execute(count_temp_sql)\n",
+      "col_offset": 29,
+      "end_col_offset": 70,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 1961,
+      "line_range": [
+        1961
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2061                 conn.close()\n2062             except Exception:\n2063                 pass\n2064             merge_logger.log_hdfs_operation(\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2062,
+      "line_range": [
+        2062,
+        2063
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2077                 )\n2078             except Exception:\n2079                 pass\n2080             return True, \"\"\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2078,
+      "line_range": [
+        2078,
+        2079
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2441                 # 1) \u9884\u521b\u5efa\u5f71\u5b50\u76ee\u5f55\uff08\u4e0a\u65b9\u5df2 mkdir\uff09\uff0c2) \u5199\u5165\u5f71\u5b50\u76ee\u5f55\n2442                 insert_dir_sql = f\"INSERT OVERWRITE DIRECTORY '{shadow_dir}'{fmt_clause} SELECT * FROM {task.table_name}\"\n2443                 # 3) \u521b\u5efa\u5916\u90e8\u4e34\u65f6\u8868\u6620\u5c04\u5f71\u5b50\u76ee\u5f55\n",
+      "col_offset": 33,
+      "end_col_offset": 121,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2442,
+      "line_range": [
+        2442
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2533                 select_sql = (\n2534                     f\"SELECT * FROM {task.table_name} WHERE {task.partition_filter} DISTRIBUTE BY 1\"\n2535                     if task.partition_filter\n",
+      "col_offset": 20,
+      "end_col_offset": 100,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2534,
+      "line_range": [
+        2534
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2535                     if task.partition_filter\n2536                     else f\"SELECT * FROM {task.table_name} DISTRIBUTE BY 1\"\n2537                 )\n",
+      "col_offset": 25,
+      "end_col_offset": 75,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2536,
+      "line_range": [
+        2536
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2656                                     cur_op = f\"{op_desc} - YARN {pct}% {getattr(app,'state','')} (\u961f\u5217:{getattr(app,'queue','')}) (\u5df2\u7b49\u5f85{waited}s)\"\n2657                                 except Exception:\n2658                                     pass\n2659                         except Exception:\n",
+      "col_offset": 32,
+      "end_col_offset": 40,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2657,
+      "line_range": [
+        2657,
+        2658
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2658                                     pass\n2659                         except Exception:\n2660                             # \u76d1\u63a7\u5931\u8d25\u4e0d\u5f71\u54cd\u4e3b\u6d41\u7a0b\n2661                             pass\n2662 \n",
+      "col_offset": 24,
+      "end_col_offset": 32,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2659,
+      "line_range": [
+        2659,
+        2660,
+        2661
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2669                     )\n2670                 except Exception:\n2671                     pass\n2672 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2670,
+      "line_range": [
+        2670,
+        2671
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2682         try:\n2683             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n2684                 f.write(f\"[{time.time()}] cursor.execute(sql) started...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 2683,
+      "line_range": [
+        2683
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "2685             cursor.execute(sql)\n2686             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n2687                 f.write(f\"[{time.time()}] cursor.execute(sql) completed\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 2686,
+      "line_range": [
+        2686
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3057         # \u5199\u5165\u65e5\u5fd7\u6587\u4ef6\n3058         with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3059             f.write(\n",
+      "col_offset": 18,
+      "end_col_offset": 40,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3058,
+      "line_range": [
+        3058
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3104             # 2. \u83b7\u53d6\u7edf\u8ba1\u4fe1\u606f\n3105             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3106                 f.write(f\"[{time.time()}] Getting table location...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3105,
+      "line_range": [
+        3105
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3113                 table_location = self.metadata_manager._get_table_location(database, table)\n3114                 with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3115                     f.write(f\"[{time.time()}] Table location: {table_location}\\n\")\n",
+      "col_offset": 26,
+      "end_col_offset": 48,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3114,
+      "line_range": [
+        3114
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3120                 if table_location:\n3121                     with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3122                         f.write(f\"[{time.time()}] Calling scan_directory_stats...\\n\")\n",
+      "col_offset": 30,
+      "end_col_offset": 52,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3121,
+      "line_range": [
+        3121
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3129                     )\n3130                     with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3131                         f.write(\n",
+      "col_offset": 30,
+      "end_col_offset": 52,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3130,
+      "line_range": [
+        3130
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3140                 logger.warning(f\"Failed to get file stats: {e}\")\n3141                 with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3142                     f.write(f\"[{time.time()}] Exception getting stats: {e}\\n\")\n",
+      "col_offset": 26,
+      "end_col_offset": 48,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3141,
+      "line_range": [
+        3141
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3147 \n3148             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3149                 f.write(\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3148,
+      "line_range": [
+        3148
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3162             # 3. \u521b\u5efa\u4e34\u65f6\u8868(\u4fdd\u7559\u5206\u533a\u5b9a\u4e49)\n3163             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3164                 f.write(f\"[{time.time()}] Creating temp table...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3163,
+      "line_range": [
+        3163
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3170 \n3171             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3172                 f.write(f\"[{time.time()}] Creating hive connection...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3171,
+      "line_range": [
+        3171
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3174             cursor = conn.cursor()\n3175             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3176                 f.write(f\"[{time.time()}] Hive connection created\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3175,
+      "line_range": [
+        3175
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3178             # \u89e3\u6790\u539f\u8868\u7ed3\u6784(\u4e0d\u7ee7\u627fACID\u5c5e\u6027)\n3179             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3180                 f.write(\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3179,
+      "line_range": [
+        3179
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3183             schema_info = self._parse_table_schema_from_show_create(database, table)\n3184             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3185                 f.write(\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3184,
+      "line_range": [
+        3184
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3238 \n3239             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3240                 f.write(f\"[{time.time()}] Executing CREATE TABLE SQL...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3239,
+      "line_range": [
+        3239
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3242             cursor.execute(create_temp_sql)\n3243             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3244                 f.write(f\"[{time.time()}] CREATE TABLE executed successfully\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3243,
+      "line_range": [
+        3243
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3312 \n3313             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3314                 f.write(\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3313,
+      "line_range": [
+        3313
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3318                 cursor.execute(setting)\n3319             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3320                 f.write(f\"[{time.time()}] Hive settings executed\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3319,
+      "line_range": [
+        3319
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3329             partition_cols_str = \", \".join(partition_cols)\n3330             insert_sql = f\"\"\"\n3331                 INSERT OVERWRITE TABLE {temp_table}\n3332                 PARTITION ({partition_cols_str})\n3333                 SELECT * FROM {table}\n3334             \"\"\"\n3335 \n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3330,
+      "line_range": [
+        3330,
+        3331,
+        3332,
+        3333,
+        3334
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "3336             # \u4f7f\u7528\u5fc3\u8df3\u673a\u5236\u6267\u884c\u957f\u65f6SQL\n3337             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3338                 f.write(\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3337,
+      "line_range": [
+        3337
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3352 \n3353             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3354                 f.write(f\"[{time.time()}] INSERT completed, logging...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3353,
+      "line_range": [
+        3353
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3361             # 6. \u539f\u5b50\u4ea4\u6362HDFS\u4f4d\u7f6e\n3362             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3363                 f.write(f\"[{time.time()}] Starting atomic swap...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3362,
+      "line_range": [
+        3362
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3370             # \u5148\u5173\u95ed\u5f53\u524d\u8fde\u63a5\n3371             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3372                 f.write(f\"[{time.time()}] Closing cursor and connection...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3371,
+      "line_range": [
+        3371
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3374             conn.close()\n3375             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3376                 f.write(f\"[{time.time()}] Connection closed\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3375,
+      "line_range": [
+        3375
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3378             # \u8c03\u7528\u539f\u5b50\u4ea4\u6362\u65b9\u6cd5 (\u5185\u90e8\u4f1a\u521b\u5efa\u548c\u7ba1\u7406\u65b0\u8fde\u63a5)\n3379             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3380                 f.write(f\"[{time.time()}] Calling _atomic_swap_table_location...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3379,
+      "line_range": [
+        3379
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3386             )\n3387             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3388                 f.write(f\"[{time.time()}] _atomic_swap_table_location returned\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3387,
+      "line_range": [
+        3387
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3390             # 8. \u83b7\u53d6\u5408\u5e76\u540e\u6587\u4ef6\u6570\n3391             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3392                 f.write(f\"[{time.time()}] Getting files_after count...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3391,
+      "line_range": [
+        3391
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3395                 table_location = self.metadata_manager._get_table_location(database, table)\n3396                 with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3397                     f.write(\n",
+      "col_offset": 26,
+      "end_col_offset": 48,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3396,
+      "line_range": [
+        3396
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3400                 if table_location:\n3401                     with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3402                         f.write(\n",
+      "col_offset": 30,
+      "end_col_offset": 52,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3401,
+      "line_range": [
+        3401
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3408                     files_after = stats.total_files\n3409                     with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3410                         f.write(\n",
+      "col_offset": 30,
+      "end_col_offset": 52,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3409,
+      "line_range": [
+        3409
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3413             except Exception as e:\n3414                 with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3415                     f.write(f\"[{time.time()}] Exception getting files_after: {e}\\n\")\n",
+      "col_offset": 26,
+      "end_col_offset": 48,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3414,
+      "line_range": [
+        3414
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3417 \n3418             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3419                 f.write(f\"[{time.time()}] Logging completion...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3418,
+      "line_range": [
+        3418
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3425 \n3426             with open(\"/tmp/merge_debug.log\", \"a\") as f:\n3427                 f.write(f\"[{time.time()}] Returning result...\\n\")\n",
+      "col_offset": 22,
+      "end_col_offset": 44,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 3426,
+      "line_range": [
+        3426
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "3447                 conn.close()\n3448             except:\n3449                 pass\n3450 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3448,
+      "line_range": [
+        3448,
+        3449
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3543                 # \u9a8c\u8bc1\u8868\u53ef\u67e5\u8be2\n3544                 cursor.execute(f\"SELECT 1 FROM {database}.{original_table} LIMIT 1\")\n3545                 cursor.fetchone()\n",
+      "col_offset": 31,
+      "end_col_offset": 83,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3544,
+      "line_range": [
+        3544
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "4001             # 8. INSERT OVERWRITE \u5230\u4e34\u65f6\u5206\u533a(Hive\u81ea\u52a8\u5408\u5e76)\n4002             insert_sql = f\"\"\"\n4003                 INSERT OVERWRITE TABLE {database}.{table}\n4004                 PARTITION ({temp_partition_spec})\n4005                 SELECT {non_partition_cols} FROM {database}.{table}\n4006                 WHERE {partition_spec}\n4007             \"\"\"\n4008             merge_logger.log(\n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 4002,
+      "line_range": [
+        4002,
+        4003,
+        4004,
+        4005,
+        4006,
+        4007
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "4081                 )\n4082             except:\n4083                 pass\n4084 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4082,
+      "line_range": [
+        4082,
+        4083
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "4091                     cursor.close()\n4092                 except:\n4093                     pass\n4094             if conn:\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4092,
+      "line_range": [
+        4092,
+        4093
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "4096                     conn.close()\n4097                 except:\n4098                     pass\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4097,
+      "line_range": [
+        4097,
+        4098
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "165             )\n166         except Exception:\n167             pass\n168         return str(exc)\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 166,
+      "line_range": [
+        166,
+        167
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "877                     conn.close()\n878                 except Exception:\n879                     pass\n880                 result[\"backup_table_created\"] = backup_dir\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 878,
+      "line_range": [
+        878,
+        879
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "925                     result[\"files_after\"] = files_after\n926             except Exception as _:\n927                 pass\n928 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 926,
+      "line_range": [
+        926,
+        927
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1339                         )\n1340                     except Exception:\n1341                         pass\n1342                 waited += 2\n",
+      "col_offset": 20,
+      "end_col_offset": 28,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1340,
+      "line_range": [
+        1340,
+        1341
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1509                         info[\"tblproperties\"][str(pr[0]).strip()] = str(pr[1]).strip()\n1510             except Exception:\n1511                 pass\n1512             cursor.close()\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1510,
+      "line_range": [
+        1510,
+        1511
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1513             conn.close()\n1514         except Exception:\n1515             pass\n1516         return info\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1514,
+      "line_range": [
+        1514,
+        1515
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2004             if task.partition_filter:\n2005                 create_sql = f\"\"\"\n2006                 CREATE TABLE {temp_table_name} \n2007                 AS SELECT * FROM {task.table_name} \n2008                 WHERE {task.partition_filter}\n2009                 \"\"\"\n2010             else:\n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2005,
+      "line_range": [
+        2005,
+        2006,
+        2007,
+        2008,
+        2009
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2010             else:\n2011                 create_sql = f\"\"\"\n2012                 CREATE TABLE {temp_table_name} \n2013                 AS SELECT * FROM {task.table_name}\n2014                 \"\"\"\n2015 \n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2011,
+      "line_range": [
+        2011,
+        2012,
+        2013,
+        2014
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2046             if task.partition_filter:\n2047                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name} WHERE {task.partition_filter}\"\n2048             else:\n",
+      "col_offset": 37,
+      "end_col_offset": 108,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2047,
+      "line_range": [
+        2047
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2048             else:\n2049                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name}\"\n2050 \n",
+      "col_offset": 37,
+      "end_col_offset": 78,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2049,
+      "line_range": [
+        2049
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2055             # \u68c0\u67e5\u4e34\u65f6\u8868\u884c\u6570\n2056             count_temp_sql = f\"SELECT COUNT(*) FROM {temp_table_name}\"\n2057             cursor.execute(count_temp_sql)\n",
+      "col_offset": 29,
+      "end_col_offset": 70,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2056,
+      "line_range": [
+        2056
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2156                 conn.close()\n2157             except Exception:\n2158                 pass\n2159             merge_logger.log_hdfs_operation(\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2157,
+      "line_range": [
+        2157,
+        2158
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2172                 )\n2173             except Exception:\n2174                 pass\n2175             return True, \"\"\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2173,
+      "line_range": [
+        2173,
+        2174
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2540                 # 1) \u9884\u521b\u5efa\u5f71\u5b50\u76ee\u5f55\uff08\u4e0a\u65b9\u5df2 mkdir\uff09\uff0c2) \u5199\u5165\u5f71\u5b50\u76ee\u5f55\n2541                 insert_dir_sql = f\"INSERT OVERWRITE DIRECTORY '{shadow_dir}'{fmt_clause} SELECT * FROM {task.table_name}\"\n2542                 # 3) \u521b\u5efa\u5916\u90e8\u4e34\u65f6\u8868\u6620\u5c04\u5f71\u5b50\u76ee\u5f55\n",
+      "col_offset": 33,
+      "end_col_offset": 121,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2541,
+      "line_range": [
+        2541
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2632                 select_sql = (\n2633                     f\"SELECT * FROM {task.table_name} WHERE {task.partition_filter} DISTRIBUTE BY 1\"\n2634                     if task.partition_filter\n",
+      "col_offset": 20,
+      "end_col_offset": 100,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2633,
+      "line_range": [
+        2633
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2634                     if task.partition_filter\n2635                     else f\"SELECT * FROM {task.table_name} DISTRIBUTE BY 1\"\n2636                 )\n",
+      "col_offset": 25,
+      "end_col_offset": 75,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 2635,
+      "line_range": [
+        2635
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "2755                                     cur_op = f\"{op_desc} - YARN {pct}% {getattr(app,'state','')} (\u961f\u5217:{getattr(app,'queue','')}) (\u5df2\u7b49\u5f85{waited}s)\"\n2756                                 except Exception:\n2757                                     pass\n2758                         except Exception:\n",
+      "col_offset": 32,
+      "end_col_offset": 40,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2756,
+      "line_range": [
+        2756,
+        2757
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2757                                     pass\n2758                         except Exception:\n2759                             # \u76d1\u63a7\u5931\u8d25\u4e0d\u5f71\u54cd\u4e3b\u6d41\u7a0b\n2760                             pass\n2761 \n",
+      "col_offset": 24,
+      "end_col_offset": 32,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2758,
+      "line_range": [
+        2758,
+        2759,
+        2760
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2768                     )\n2769                 except Exception:\n2770                     pass\n2771 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2769,
+      "line_range": [
+        2769,
+        2770
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3365             partition_cols_str = \", \".join(partition_cols)\n3366             insert_sql = f\"\"\"\n3367                 INSERT OVERWRITE TABLE {temp_table}\n3368                 PARTITION ({partition_cols_str})\n3369                 SELECT * FROM {table}\n3370             \"\"\"\n3371 \n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3366,
+      "line_range": [
+        3366,
+        3367,
+        3368,
+        3369,
+        3370
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "3418                     files_after = stats.total_files\n3419             except Exception:\n3420                 pass\n3421 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3419,
+      "line_range": [
+        3419,
+        3420
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3447                 conn.close()\n3448             except:\n3449                 pass\n3450 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3448,
+      "line_range": [
+        3448,
+        3449
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3543                 # \u9a8c\u8bc1\u8868\u53ef\u67e5\u8be2\n3544                 cursor.execute(f\"SELECT 1 FROM {database}.{original_table} LIMIT 1\")\n3545                 cursor.fetchone()\n",
+      "col_offset": 31,
+      "end_col_offset": 83,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3544,
+      "line_range": [
+        3544
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "4001             # 8. INSERT OVERWRITE \u5230\u4e34\u65f6\u5206\u533a(Hive\u81ea\u52a8\u5408\u5e76)\n4002             insert_sql = f\"\"\"\n4003                 INSERT OVERWRITE TABLE {database}.{table}\n4004                 PARTITION ({temp_partition_spec})\n4005                 SELECT {non_partition_cols} FROM {database}.{table}\n4006                 WHERE {partition_spec}\n4007             \"\"\"\n4008             merge_logger.log(\n",
+      "col_offset": 25,
+      "end_col_offset": 15,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 4002,
+      "line_range": [
+        4002,
+        4003,
+        4004,
+        4005,
+        4006,
+        4007
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "4081                 )\n4082             except:\n4083                 pass\n4084 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4082,
+      "line_range": [
+        4082,
+        4083
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "4091                     cursor.close()\n4092                 except:\n4093                     pass\n4094             if conn:\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4092,
+      "line_range": [
+        4092,
+        4093
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "4096                     conn.close()\n4097                 except:\n4098                     pass\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "app/engines/safe_hive_engine_original_backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 4097,
+      "line_range": [
+        4097,
+        4098
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "263                         info[\"tblproperties\"][str(pr[0]).strip()] = str(pr[1]).strip()\n264             except Exception:\n265                 pass\n266             cursor.close()\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "app/engines/safe_hive_metadata_manager.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 264,
+      "line_range": [
+        264,
+        265
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "267             conn.close()\n268         except Exception:\n269             pass\n270         return info\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/safe_hive_metadata_manager.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 268,
+      "line_range": [
+        268,
+        269
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "88             if task.partition_filter:\n89                 create_sql = f\"\"\"\n90                 CREATE TABLE {temp_table_name} \n91                 AS SELECT * FROM {task.table_name} \n92                 WHERE {task.partition_filter}\n93                 \"\"\"\n94             else:\n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 89,
+      "line_range": [
+        89,
+        90,
+        91,
+        92,
+        93
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "94             else:\n95                 create_sql = f\"\"\"\n96                 CREATE TABLE {temp_table_name} \n97                 AS SELECT * FROM {task.table_name}\n98                 \"\"\"\n99 \n",
+      "col_offset": 29,
+      "end_col_offset": 19,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 95,
+      "line_range": [
+        95,
+        96,
+        97,
+        98
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "265                 # 1) \u9884\u521b\u5efa\u5f71\u5b50\u76ee\u5f55\uff08\u4e0a\u65b9\u5df2 mkdir\uff09\uff0c2) \u5199\u5165\u5f71\u5b50\u76ee\u5f55\n266                 insert_dir_sql = f\"INSERT OVERWRITE DIRECTORY '{shadow_dir}'{fmt_clause} SELECT * FROM {task.table_name}\"\n267                 # 3) \u521b\u5efa\u5916\u90e8\u4e34\u65f6\u8868\u6620\u5c04\u5f71\u5b50\u76ee\u5f55\n",
+      "col_offset": 33,
+      "end_col_offset": 121,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 266,
+      "line_range": [
+        266
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "357                 select_sql = (\n358                     f\"SELECT * FROM {task.table_name} WHERE {task.partition_filter} DISTRIBUTE BY 1\"\n359                     if task.partition_filter\n",
+      "col_offset": 20,
+      "end_col_offset": 100,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 358,
+      "line_range": [
+        358
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "359                     if task.partition_filter\n360                     else f\"SELECT * FROM {task.table_name} DISTRIBUTE BY 1\"\n361                 )\n",
+      "col_offset": 25,
+      "end_col_offset": 75,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 360,
+      "line_range": [
+        360
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "416             if task.partition_filter:\n417                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name} WHERE {task.partition_filter}\"\n418             else:\n",
+      "col_offset": 37,
+      "end_col_offset": 108,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 417,
+      "line_range": [
+        417
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "418             else:\n419                 count_original_sql = f\"SELECT COUNT(*) FROM {task.table_name}\"\n420 \n",
+      "col_offset": 37,
+      "end_col_offset": 78,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 419,
+      "line_range": [
+        419
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "425             # \u68c0\u67e5\u4e34\u65f6\u8868\u884c\u6570\n426             count_temp_sql = f\"SELECT COUNT(*) FROM {temp_table_name}\"\n427             cursor.execute(count_temp_sql)\n",
+      "col_offset": 29,
+      "end_col_offset": 70,
+      "filename": "app/engines/safe_hive_temp_table.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 426,
+      "line_range": [
+        426
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "117             )\n118         except Exception:\n119             pass\n120         return str(exc)\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "app/engines/safe_hive_utils.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 118,
+      "line_range": [
+        118,
+        119
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    }
+  ]
+}
