@@ -4,7 +4,6 @@
 """
 
 import logging
-import time
 from typing import Any, Dict, Optional
 
 from app.engines.connection_manager import HiveConnectionManager

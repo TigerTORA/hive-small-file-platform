@@ -1,0 +1,20 @@
+{
+  "generated_at": "2025-10-08T15:10:44.856162",
+  "preset": "small_scale",
+  "preset_description": "小规模演示 - 适合快速展示和测试",
+  "statistics": {
+    "total_clusters": 1,
+    "total_tables": 60,
+    "total_small_files": 171663,
+    "problem_tables": 34,
+    "scan_tasks": 20,
+    "merge_tasks": 10
+  },
+  "features_enabled": {
+    "demo_mode": true,
+    "advanced_charts": true,
+    "smart_recommendations": true,
+    "performance_monitoring": true,
+    "fullscreen_mode": true
+  }
+}

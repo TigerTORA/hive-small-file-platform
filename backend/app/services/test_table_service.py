@@ -1,6 +1,7 @@
 """
 测试表生成服务 - 使用Python直接操作Hive和HDFS
 """
+
 import asyncio
 import json
 import logging
@@ -11,15 +12,13 @@ from datetime import datetime
 from time import monotonic
 from typing import Any, Dict, List, Optional, Tuple
 
-from pyhive import hive
 from sqlalchemy.orm import Session
 
+from app.config.database import SessionLocal
 from app.models.cluster import Cluster
 from app.models.test_table_task import TestTableTask as TestTableTaskModel
 from app.models.test_table_task_log import TestTableTaskLog
-from app.config.database import SessionLocal
 from app.schemas.test_table import (
-    TestTableConfig,
     TestTableCreateRequest,
     TestTableDeleteRequest,
     TestTableTask,
@@ -27,8 +26,6 @@ from app.schemas.test_table import (
     TestTableVerifyResult,
 )
 from app.services.websocket_service import websocket_manager
-from app.utils.encryption import decrypt_cluster_password
-from app.utils.webhdfs_client import WebHDFSClient
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +89,7 @@ class TestTableService:
         return False
 
     async def create_test_table(
-        self,
-        request: TestTableCreateRequest,
-        db: Session
+        self, request: TestTableCreateRequest, db: Session
     ) -> TestTableTask:
         """创建测试表"""
         # 验证集群存在
@@ -117,10 +112,12 @@ class TestTableService:
         db.refresh(db_task)
 
         # 启动后台任务
-        force_recreate = getattr(request, 'force_recreate', False)
+        force_recreate = getattr(request, "force_recreate", False)
 
         def run_task():
-            asyncio.run(self._execute_create_task(task_id, request.cluster_id, force_recreate))
+            asyncio.run(
+                self._execute_create_task(task_id, request.cluster_id, force_recreate)
+            )
 
         thread = threading.Thread(target=run_task, daemon=True)
         thread.start()
@@ -128,10 +125,7 @@ class TestTableService:
         return TestTableTask(**db_task.to_dict())
 
     async def _execute_create_task(
-        self,
-        task_id: str,
-        cluster_id: int,
-        force_recreate: bool
+        self, task_id: str, cluster_id: int, force_recreate: bool
     ):
         """执行创建任务"""
         # 使用独立的数据库会话
@@ -249,7 +243,9 @@ class TestTableService:
                 "准备HDFS目录结构",
                 phase="hdfs_setup",
                 details={
-                    "base_path": config_dict.get("hdfs_base_path", "/user/test/small_files_test"),
+                    "base_path": config_dict.get(
+                        "hdfs_base_path", "/user/test/small_files_test"
+                    ),
                     "partition_count": partition_count,
                     "mode": generation_mode,
                 },
@@ -263,13 +259,13 @@ class TestTableService:
                 "INFO",
                 "使用Beeline模式，跳过HDFS目录显式创建，由Hive在INSERT数据时自动生成",
                 phase="hdfs_setup",
-                    details={
-                        "base_path": config_dict.get(
-                            "hdfs_base_path", "/user/test/small_files_test"
-                        )
-                    },
-                    progress=task.progress_percentage,
-                )
+                details={
+                    "base_path": config_dict.get(
+                        "hdfs_base_path", "/user/test/small_files_test"
+                    )
+                },
+                progress=task.progress_percentage,
+            )
 
             # 阶段4: 创建Hive表
             task.current_phase = "hive_table_creation"
@@ -329,9 +325,9 @@ class TestTableService:
                 details={
                     "expected_partitions": partition_count,
                     "added_partitions": partitions_added,
-                    "failed_partitions": partition_failures[:5]
-                    if partition_failures
-                    else [],
+                    "failed_partitions": (
+                        partition_failures[:5] if partition_failures else []
+                    ),
                 },
                 progress=task.progress_percentage,
             )
@@ -374,19 +370,19 @@ class TestTableService:
             )
 
             # 统一使用beeline模式生成数据
-            files_created, files_failed, failure_samples = await self._generate_data_files_hive_insert(
-                task,
-                task_id,
-                db,
-                hive_conn,
-                config_dict,
-                total_files,
+            files_created, files_failed, failure_samples = (
+                await self._generate_data_files_hive_insert(
+                    task,
+                    task_id,
+                    db,
+                    hive_conn,
+                    config_dict,
+                    total_files,
+                )
             )
 
             if total_files > 0:
-                task.current_operation = (
-                    f"写入完成 {files_created}/{total_files}"
-                )
+                task.current_operation = f"写入完成 {files_created}/{total_files}"
             if task.progress_percentage < 90.0:
                 task.progress_percentage = 90.0
             db.commit()
@@ -498,18 +494,22 @@ class TestTableService:
 
                 # 在后台线程中调用扫描API,不阻塞任务完成
                 import threading
-                import urllib.request
                 import urllib.error
+                import urllib.request
 
                 def _trigger_scan():
                     try:
                         url = f"http://localhost:8000/api/v1/tables/scan-table/{cluster.id}/{config_dict.get('database_name', 'test_db')}/{config_dict.get('table_name', 'test_table')}"
-                        req = urllib.request.Request(url, method='POST')
+                        req = urllib.request.Request(url, method="POST")
                         with urllib.request.urlopen(req, timeout=300) as response:
                             if response.status == 200:
-                                logger.info(f"Auto scan triggered successfully for {config_dict.get('database_name')}.{config_dict.get('table_name')}")
+                                logger.info(
+                                    f"Auto scan triggered successfully for {config_dict.get('database_name')}.{config_dict.get('table_name')}"
+                                )
                             else:
-                                logger.warning(f"Auto scan returned status {response.status}")
+                                logger.warning(
+                                    f"Auto scan returned status {response.status}"
+                                )
                     except urllib.error.HTTPError as e:
                         logger.warning(f"Auto scan HTTP error: {e.code} - {e.reason}")
                     except Exception as e:
@@ -567,9 +567,11 @@ class TestTableService:
 
     async def _cleanup_existing_data(self, hive_conn, hdfs_client, config_dict):
         """清理已存在的表和数据"""
-        database_name = config_dict.get('database_name', 'test_db')
-        table_name = config_dict.get('table_name', 'test_table')
-        hdfs_base_path = config_dict.get('hdfs_base_path', '/user/test/small_files_test')
+        database_name = config_dict.get("database_name", "test_db")
+        table_name = config_dict.get("table_name", "test_table")
+        hdfs_base_path = config_dict.get(
+            "hdfs_base_path", "/user/test/small_files_test"
+        )
 
         summary: Dict[str, Any] = {
             "database": database_name,
@@ -600,8 +602,10 @@ class TestTableService:
 
     async def _create_hdfs_structure(self, hdfs_client, config_dict):
         """创建HDFS目录结构"""
-        hdfs_base_path = config_dict.get('hdfs_base_path', '/user/test/small_files_test')
-        partition_count = config_dict.get('partition_count', 10)
+        hdfs_base_path = config_dict.get(
+            "hdfs_base_path", "/user/test/small_files_test"
+        )
+        partition_count = config_dict.get("partition_count", 10)
 
         # 创建主目录
         hdfs_client.create_directory(hdfs_base_path)
@@ -626,14 +630,16 @@ class TestTableService:
     ) -> tuple[int, int, List[Dict[str, Any]]]:
         """生成数据文件，并返回成功/失败统计."""
 
-        hdfs_base_path = config_dict.get('hdfs_base_path', '/user/test/small_files_test')
-        partition_count = config_dict.get('partition_count', 10)
-        files_per_partition = config_dict.get('files_per_partition', 100)
-        file_size_kb = config_dict.get('file_size_kb', 50)
+        hdfs_base_path = config_dict.get(
+            "hdfs_base_path", "/user/test/small_files_test"
+        )
+        partition_count = config_dict.get("partition_count", 10)
+        files_per_partition = config_dict.get("files_per_partition", 100)
+        file_size_kb = config_dict.get("file_size_kb", 50)
 
         content_size_bytes = file_size_kb * 1024
         sample_line = "test_data_row_with_some_content_to_reach_target_size\n"
-        lines_needed = max(1, content_size_bytes // len(sample_line.encode('utf-8')))
+        lines_needed = max(1, content_size_bytes // len(sample_line.encode("utf-8")))
         file_content = sample_line * lines_needed
 
         files_created = 0
@@ -652,7 +658,7 @@ class TestTableService:
             for file_id in range(files_per_partition):
                 file_path = f"{partition_dir}/data_{file_id:06d}.txt"
                 try:
-                    hdfs_client.write_file(file_path, file_content.encode('utf-8'))
+                    hdfs_client.write_file(file_path, file_content.encode("utf-8"))
                     files_created += 1
                     created_in_partition += 1
                 except Exception as e:
@@ -668,10 +674,10 @@ class TestTableService:
                     task_id, "data_generation", interval_seconds=3.0
                 ):
                     phase_ratio = min(1.0, processed / max(1, total_files))
-                    task.progress_percentage = progress_start + phase_ratio * progress_span
-                    task.current_operation = (
-                        f"写入数据文件 {processed}/{total_files}"
+                    task.progress_percentage = (
+                        progress_start + phase_ratio * progress_span
                     )
+                    task.current_operation = f"写入数据文件 {processed}/{total_files}"
                     db.commit()
                     await self._broadcast_task_update_from_db(task)
                     self._log_task_event(
@@ -707,9 +713,11 @@ class TestTableService:
 
     async def _create_hive_table(self, hive_conn, config_dict):
         """创建Hive表"""
-        database_name = config_dict.get('database_name', 'test_db')
-        table_name = config_dict.get('table_name', 'test_table')
-        hdfs_base_path = config_dict.get('hdfs_base_path', '/user/test/small_files_test')
+        database_name = config_dict.get("database_name", "test_db")
+        table_name = config_dict.get("table_name", "test_table")
+        hdfs_base_path = config_dict.get(
+            "hdfs_base_path", "/user/test/small_files_test"
+        )
 
         cursor = hive_conn.cursor()
 
@@ -741,8 +749,8 @@ class TestTableService:
     ) -> tuple[int, List[Dict[str, Any]]]:
         """添加分区，并返回成功数量与失败详情."""
 
-        database_name = config_dict.get('database_name', 'test_db')
-        table_name = config_dict.get('table_name', 'test_table')
+        database_name = config_dict.get("database_name", "test_db")
+        table_name = config_dict.get("table_name", "test_table")
 
         cursor = hive_conn.cursor()
         partitions_added = 0
@@ -888,7 +896,9 @@ class TestTableService:
 
                     processed = files_created + files_failed
                     if total_files > 0 and self._should_emit_progress(
-                        task_id, "data_generation", interval_seconds=10.0  # 降低日志频率
+                        task_id,
+                        "data_generation",
+                        interval_seconds=10.0,  # 降低日志频率
                     ):
                         phase_ratio = min(1.0, processed / max(1, total_files))
                         task.progress_percentage = (
@@ -951,8 +961,8 @@ class TestTableService:
             db.query(TestTableTaskModel)
             .filter(TestTableTaskModel.status == "running")
             .filter(
-                (TestTableTaskModel.last_heartbeat < threshold) |
-                (TestTableTaskModel.last_heartbeat == None)
+                (TestTableTaskModel.last_heartbeat < threshold)
+                | (TestTableTaskModel.last_heartbeat == None)
             )
             .all()
         )
@@ -960,7 +970,11 @@ class TestTableService:
         marked_count = 0
         for task in timeout_tasks:
             # 额外检查: 确保任务启动超过超时时间 (避免误杀刚启动的任务)
-            if task.started_time and (datetime.utcnow() - task.started_time).total_seconds() < timeout_minutes * 60:
+            if (
+                task.started_time
+                and (datetime.utcnow() - task.started_time).total_seconds()
+                < timeout_minutes * 60
+            ):
                 continue
 
             task.status = "failed"
@@ -975,7 +989,9 @@ class TestTableService:
                 f"任务因心跳超时被系统终止 (阈值: {timeout_minutes}分钟)",
                 phase=task.current_phase or "unknown",
                 details={
-                    "last_heartbeat": str(task.last_heartbeat) if task.last_heartbeat else "NULL",
+                    "last_heartbeat": (
+                        str(task.last_heartbeat) if task.last_heartbeat else "NULL"
+                    ),
                     "timeout_threshold_minutes": timeout_minutes,
                     "started_time": str(task.started_time),
                 },
@@ -983,7 +999,9 @@ class TestTableService:
             )
 
             marked_count += 1
-            logger.warning(f"Marked timeout task {task.id} as failed (last_heartbeat: {task.last_heartbeat})")
+            logger.warning(
+                f"Marked timeout task {task.id} as failed (last_heartbeat: {task.last_heartbeat})"
+            )
 
         if marked_count > 0:
             db.commit()
@@ -994,14 +1012,16 @@ class TestTableService:
     async def _broadcast_task_update_from_db(self, task):
         """从数据库任务记录广播更新"""
         try:
-            await websocket_manager.broadcast_task_update({
-                "id": task.id,
-                "status": task.status,
-                "progress": task.progress_percentage,
-                "current_phase": task.current_phase,
-                "current_operation": task.current_operation,
-                "error_message": task.error_message
-            })
+            await websocket_manager.broadcast_task_update(
+                {
+                    "id": task.id,
+                    "status": task.status,
+                    "progress": task.progress_percentage,
+                    "current_phase": task.current_phase,
+                    "current_operation": task.current_operation,
+                    "error_message": task.error_message,
+                }
+            )
         except Exception as e:
             logger.warning(f"Failed to broadcast task update: {e}")
 
@@ -1027,9 +1047,7 @@ class TestTableService:
         return None
 
     async def delete_test_table(
-        self,
-        request: TestTableDeleteRequest,
-        db: Session
+        self, request: TestTableDeleteRequest, db: Session
     ) -> Dict[str, str]:
         """删除测试表"""
         try:
@@ -1037,25 +1055,30 @@ class TestTableService:
             cluster = db.query(Cluster).filter(Cluster.id == request.cluster_id).first()
             if not cluster:
                 return {"message": "错误", "error": f"集群 {request.cluster_id} 不存在"}
-            
+
             # 建立连接
             from app.engines.connection_manager import HiveConnectionManager
+
             connection_manager = HiveConnectionManager(cluster)
             hive_conn = connection_manager.get_hive_connection()
             hdfs_client = connection_manager.webhdfs_client
-            
+
             results = []
-            
+
             # 删除Hive表
             try:
                 cursor = hive_conn.cursor()
-                drop_sql = f"DROP TABLE IF EXISTS {request.database_name}.{request.table_name}"
+                drop_sql = (
+                    f"DROP TABLE IF EXISTS {request.database_name}.{request.table_name}"
+                )
                 cursor.execute(drop_sql)
                 cursor.close()
-                results.append(f"成功删除Hive表 {request.database_name}.{request.table_name}")
+                results.append(
+                    f"成功删除Hive表 {request.database_name}.{request.table_name}"
+                )
             except Exception as e:
                 results.append(f"删除Hive表失败: {str(e)}")
-            
+
             # 删除HDFS数据
             if request.delete_hdfs_data:
                 try:
@@ -1063,7 +1086,9 @@ class TestTableService:
                     task = (
                         db.query(TestTableTaskModel)
                         .filter(TestTableTaskModel.cluster_id == request.cluster_id)
-                        .filter(TestTableTaskModel.database_name == request.database_name)
+                        .filter(
+                            TestTableTaskModel.database_name == request.database_name
+                        )
                         .filter(TestTableTaskModel.table_name == request.table_name)
                         .order_by(TestTableTaskModel.created_time.desc())
                         .first()
@@ -1071,50 +1096,59 @@ class TestTableService:
 
                     if task:
                         config_dict = task.get_config_dict()
-                        table_path = config_dict.get('hdfs_base_path', f'/user/test/small_files_test/{request.table_name}')
+                        table_path = config_dict.get(
+                            "hdfs_base_path",
+                            f"/user/test/small_files_test/{request.table_name}",
+                        )
                     else:
                         # 回退方案: 尝试从Hive表元数据获取LOCATION,或使用默认路径
                         try:
                             cursor = hive_conn.cursor()
-                            cursor.execute(f"DESCRIBE FORMATTED {request.database_name}.{request.table_name}")
+                            cursor.execute(
+                                f"DESCRIBE FORMATTED {request.database_name}.{request.table_name}"
+                            )
                             rows = cursor.fetchall()
                             cursor.close()
 
                             location = None
                             for row in rows:
-                                if len(row) >= 2 and str(row[0]).strip().lower() == 'location:':
+                                if (
+                                    len(row) >= 2
+                                    and str(row[0]).strip().lower() == "location:"
+                                ):
                                     location = str(row[1]).strip()
                                     break
 
-                            if location and location.startswith('hdfs://'):
+                            if location and location.startswith("hdfs://"):
                                 # 提取HDFS路径部分 (去除hdfs://nameservice/部分)
                                 from urllib.parse import urlparse
+
                                 parsed = urlparse(location)
                                 table_path = parsed.path
                             else:
-                                table_path = location or f'/user/test/small_files_test/{request.table_name}'
+                                table_path = (
+                                    location
+                                    or f"/user/test/small_files_test/{request.table_name}"
+                                )
                         except Exception:
-                            table_path = f'/user/test/small_files_test/{request.table_name}'
+                            table_path = (
+                                f"/user/test/small_files_test/{request.table_name}"
+                            )
 
                     # 尝试删除HDFS目录
                     hdfs_client.delete(table_path, recursive=True)
                     results.append(f"成功删除HDFS数据目录: {table_path}")
                 except Exception as e:
                     results.append(f"删除HDFS数据失败: {str(e)}")
-            
-            return {
-                "message": "删除操作完成",
-                "details": results
-            }
-            
+
+            return {"message": "删除操作完成", "details": results}
+
         except Exception as e:
             logger.error(f"删除测试表失败: {str(e)}")
             return {"message": "错误", "error": str(e)}
 
     async def verify_test_table(
-        self,
-        request: TestTableVerifyRequest,
-        db: Session
+        self, request: TestTableVerifyRequest, db: Session
     ) -> TestTableVerifyResult:
         """验证测试表"""
         try:
@@ -1127,62 +1161,71 @@ class TestTableService:
                     hdfs_files_count=0,
                     total_size_mb=0.0,
                     verification_passed=False,
-                    issues=[f"集群 {request.cluster_id} 不存在"]
+                    issues=[f"集群 {request.cluster_id} 不存在"],
                 )
-            
+
             # 建立连接
             from app.engines.connection_manager import HiveConnectionManager
+
             connection_manager = HiveConnectionManager(cluster)
             hive_conn = connection_manager.get_hive_connection()
             hdfs_client = connection_manager.webhdfs_client
-            
+
             issues = []
             table_exists = False
             partitions_count = 0
             hdfs_files_count = 0
             total_size_mb = 0.0
             data_rows_count = None
-            
+
             # 检查表是否存在
             try:
                 cursor = hive_conn.cursor()
-                cursor.execute(f"SHOW TABLES IN {request.database_name} LIKE '{request.table_name}'")
+                cursor.execute(
+                    f"SHOW TABLES IN {request.database_name} LIKE '{request.table_name}'"
+                )
                 tables = cursor.fetchall()
                 table_exists = len(tables) > 0
                 cursor.close()
-                
+
                 if not table_exists:
-                    issues.append(f"表 {request.database_name}.{request.table_name} 不存在")
-                
+                    issues.append(
+                        f"表 {request.database_name}.{request.table_name} 不存在"
+                    )
+
             except Exception as e:
                 issues.append(f"检查表存在性失败: {str(e)}")
-            
+
             # 如果表存在，检查分区
             if table_exists:
                 try:
                     cursor = hive_conn.cursor()
-                    cursor.execute(f"SHOW PARTITIONS {request.database_name}.{request.table_name}")
+                    cursor.execute(
+                        f"SHOW PARTITIONS {request.database_name}.{request.table_name}"
+                    )
                     partitions = cursor.fetchall()
                     partitions_count = len(partitions)
                     cursor.close()
-                    
+
                     if partitions_count == 0:
                         issues.append("表没有分区")
-                        
+
                 except Exception as e:
                     issues.append(f"检查分区失败: {str(e)}")
-                
+
                 # 检查数据行数
                 try:
                     cursor = hive_conn.cursor()
-                    cursor.execute(f"SELECT COUNT(*) FROM {request.database_name}.{request.table_name}")
+                    cursor.execute(
+                        f"SELECT COUNT(*) FROM {request.database_name}.{request.table_name}"
+                    )
                     result = cursor.fetchone()
                     data_rows_count = result[0] if result else 0
                     cursor.close()
-                    
+
                 except Exception as e:
                     issues.append(f"检查数据行数失败: {str(e)}")
-            
+
             # 检查HDFS文件
             try:
                 table_path = f"/user/test/small_files_test/{request.table_name}"
@@ -1191,31 +1234,33 @@ class TestTableService:
                     files = hdfs_client.list(table_path, status=True)
                     hdfs_files_count = 0
                     total_size_bytes = 0
-                    
+
                     for file_info in files:
-                        if file_info['type'] == 'FILE' and file_info['pathSuffix'].endswith('.txt'):
+                        if file_info["type"] == "FILE" and file_info[
+                            "pathSuffix"
+                        ].endswith(".txt"):
                             hdfs_files_count += 1
-                            total_size_bytes += file_info['length']
-                    
+                            total_size_bytes += file_info["length"]
+
                     total_size_mb = total_size_bytes / (1024 * 1024)
-                    
+
                     if hdfs_files_count == 0:
                         issues.append("HDFS中没有找到数据文件")
-                        
+
                 except Exception as e:
                     issues.append(f"检查HDFS文件失败: {str(e)}")
-                    
+
             except Exception as e:
                 issues.append(f"HDFS路径访问失败: {str(e)}")
-            
+
             # 判断验证是否通过
             verification_passed = (
-                table_exists and 
-                partitions_count > 0 and 
-                hdfs_files_count > 0 and
-                len(issues) == 0
+                table_exists
+                and partitions_count > 0
+                and hdfs_files_count > 0
+                and len(issues) == 0
             )
-            
+
             return TestTableVerifyResult(
                 table_exists=table_exists,
                 partitions_count=partitions_count,
@@ -1223,9 +1268,9 @@ class TestTableService:
                 total_size_mb=total_size_mb,
                 data_rows_count=data_rows_count,
                 verification_passed=verification_passed,
-                issues=issues
+                issues=issues,
             )
-            
+
         except Exception as e:
             logger.error(f"验证测试表失败: {str(e)}")
             return TestTableVerifyResult(
@@ -1234,7 +1279,7 @@ class TestTableService:
                 hdfs_files_count=0,
                 total_size_mb=0.0,
                 verification_passed=False,
-                issues=[f"验证过程出错: {str(e)}"]
+                issues=[f"验证过程出错: {str(e)}"],
             )
 
 

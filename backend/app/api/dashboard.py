@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 # Remove import as we'll implement validation inline
 from pydantic import BaseModel
-from sqlalchemy import and_, desc, func
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.config.database import get_db
@@ -32,6 +32,8 @@ class DashboardSummary(BaseModel):
     small_file_ratio: float
     total_size_gb: float
     small_file_size_gb: float
+    files_reduced: int
+    size_saved_gb: float
 
 
 class TrendPoint(BaseModel):
@@ -67,7 +69,10 @@ class RecentTask(BaseModel):
     status: str
     created_time: datetime
     updated_time: Optional[datetime]
-    small_files_merged: Optional[int]
+    files_before: Optional[int]
+    files_after: Optional[int]
+    files_reduced: Optional[int]
+    size_saved: Optional[int]
 
 
 class TableFileCountPoint(BaseModel):
@@ -152,14 +157,20 @@ async def get_dashboard_summary(
 
     unique_tables: Dict[tuple[int, str, str], TableMetric] = {}
     for table_metric in table_query:
-        table_key = (table_metric.cluster_id, table_metric.database_name, table_metric.table_name)
+        table_key = (
+            table_metric.cluster_id,
+            table_metric.database_name,
+            table_metric.table_name,
+        )
         if table_key not in unique_tables:
             unique_tables[table_key] = table_metric
 
     latest_metrics = list(unique_tables.values())
 
     total_tables = len(latest_metrics)
-    monitored_tables = sum(1 for metric in latest_metrics if metric.scan_time is not None)
+    monitored_tables = sum(
+        1 for metric in latest_metrics if metric.scan_time is not None
+    )
 
     # File statistics aggregation（基于去重后的最新指标）
     total_files = sum(metric.total_files or 0 for metric in latest_metrics)
@@ -172,6 +183,22 @@ async def get_dashboard_summary(
     total_size_gb = total_size_bytes / (1024**3)
     small_file_size_gb = small_file_size_bytes / (1024**3)
 
+    # 修复：查询completed状态的任务（而不是success）
+    merge_query = db.query(MergeTask).filter(MergeTask.status == "completed")
+    if cluster_id:
+        merge_query = merge_query.filter(MergeTask.cluster_id == cluster_id)
+    merge_tasks = merge_query.all()
+
+    files_reduced = 0
+    size_saved_bytes = 0
+    for task in merge_tasks:
+        if task.files_before is not None and task.files_after is not None:
+            files_reduced += max(task.files_before - task.files_after, 0)
+        if task.size_saved:
+            size_saved_bytes += max(task.size_saved, 0)
+
+    size_saved_gb = size_saved_bytes / (1024**3)
+
     return DashboardSummary(
         total_clusters=total_clusters,
         active_clusters=active_clusters,
@@ -182,6 +209,8 @@ async def get_dashboard_summary(
         small_file_ratio=round(small_file_ratio, 2),
         total_size_gb=round(total_size_gb, 2),
         small_file_size_gb=round(small_file_size_gb, 2),
+        files_reduced=files_reduced,
+        size_saved_gb=round(size_saved_gb, 2),
     )
 
 
@@ -380,6 +409,13 @@ async def get_recent_tasks(
 
     result = []
     for task, cluster_name in recent_tasks:
+        files_before = task.files_before
+        files_after = task.files_after
+        files_reduced = None
+        if files_before is not None and files_after is not None:
+            delta = files_before - files_after
+            files_reduced = delta if delta > 0 else 0
+
         result.append(
             RecentTask(
                 id=task.id,
@@ -389,7 +425,12 @@ async def get_recent_tasks(
                 status=task.status,
                 created_time=task.created_time,
                 updated_time=task.completed_time,
-                small_files_merged=task.files_before,
+                files_before=files_before,
+                files_after=files_after,
+                files_reduced=files_reduced,
+                size_saved=(
+                    task.size_saved if task.size_saved and task.size_saved > 0 else None
+                ),
             )
         )
 
@@ -799,7 +840,9 @@ async def get_enhanced_coldness_distribution(
             TableMetric.cluster_id == cluster_id_filter
         )
 
-    partitions = partition_query.all()  # Include all partitions, not just those with access time
+    partitions = (
+        partition_query.all()
+    )  # Include all partitions, not just those with access time
 
     # Process table data - include ALL tables
     table_query = db.query(TableMetric)
@@ -811,7 +854,7 @@ async def get_enhanced_coldness_distribution(
         TableMetric.cluster_id,
         TableMetric.database_name,
         TableMetric.table_name,
-        desc(TableMetric.scan_time)
+        desc(TableMetric.scan_time),
     ).all()
 
     # Get latest metric for each unique table
@@ -838,7 +881,7 @@ async def get_enhanced_coldness_distribution(
         if partition.days_since_last_access is not None:
             # Use actual access time if available
             days = partition.days_since_last_access
-        elif hasattr(partition, 'scan_time') and partition.scan_time:
+        elif hasattr(partition, "scan_time") and partition.scan_time:
             # Fall back to scan time
             days = (current_time - partition.scan_time).days
         else:
@@ -1091,32 +1134,36 @@ async def get_storage_format_distribution(
 
         if format_name not in format_stats:
             format_stats[format_name] = {
-                'table_count': 0,
-                'total_size': 0,
-                'small_files': 0,
-                'total_files': 0
+                "table_count": 0,
+                "total_size": 0,
+                "small_files": 0,
+                "total_files": 0,
             }
 
         # Accumulate stats
-        format_stats[format_name]['table_count'] += 1
-        format_stats[format_name]['total_size'] += table.total_size or 0
-        format_stats[format_name]['small_files'] += table.small_files or 0
-        format_stats[format_name]['total_files'] += table.total_files or 0
+        format_stats[format_name]["table_count"] += 1
+        format_stats[format_name]["total_size"] += table.total_size or 0
+        format_stats[format_name]["small_files"] += table.small_files or 0
+        format_stats[format_name]["total_files"] += table.total_files or 0
 
     # Convert to response format
     result = []
     for format_name, stats in format_stats.items():
-        total_size_gb = stats['total_size'] / (1024**3)
-        percentage = (stats['table_count'] / total_tables * 100) if total_tables > 0 else 0
+        total_size_gb = stats["total_size"] / (1024**3)
+        percentage = (
+            (stats["table_count"] / total_tables * 100) if total_tables > 0 else 0
+        )
 
-        result.append(StorageFormatItem(
-            format_name=format_name,
-            table_count=stats['table_count'],
-            total_size_gb=round(total_size_gb, 2),
-            small_files=stats['small_files'],
-            total_files=stats['total_files'],
-            percentage=round(percentage, 1)
-        ))
+        result.append(
+            StorageFormatItem(
+                format_name=format_name,
+                table_count=stats["table_count"],
+                total_size_gb=round(total_size_gb, 2),
+                small_files=stats["small_files"],
+                total_files=stats["total_files"],
+                percentage=round(percentage, 1),
+            )
+        )
 
     # Sort by table count descending
     result.sort(key=lambda x: x.table_count, reverse=True)
@@ -1124,7 +1171,9 @@ async def get_storage_format_distribution(
     return result
 
 
-@router.get("/format-compression-distribution", response_model=List[FormatCompressionItem])
+@router.get(
+    "/format-compression-distribution", response_model=List[FormatCompressionItem]
+)
 async def get_format_compression_distribution(
     cluster_id: Optional[int] = Query(None, description="Filter by cluster ID"),
     db: Session = Depends(get_db),
@@ -1145,7 +1194,11 @@ async def get_format_compression_distribution(
         serde_lib = (table.serde_lib or "").lower()
 
         if storage_format == "UNKNOWN" or not storage_format:
-            if "parquet" in input_fmt or "parquet" in output_fmt or "parquet" in serde_lib:
+            if (
+                "parquet" in input_fmt
+                or "parquet" in output_fmt
+                or "parquet" in serde_lib
+            ):
                 storage_format = "PARQUET"
             elif "orc" in input_fmt or "orc" in output_fmt or "orc" in serde_lib:
                 storage_format = "ORC"
@@ -1160,9 +1213,9 @@ async def get_format_compression_distribution(
         if storage_format == "PARQUET":
             compression_format = "SNAPPY"  # Parquet默认使用Snappy压缩
         elif storage_format == "ORC":
-            compression_format = "ZLIB"    # ORC默认使用ZLIB压缩
+            compression_format = "ZLIB"  # ORC默认使用ZLIB压缩
         elif storage_format == "TEXT":
-            compression_format = "NONE"    # Text格式通常无压缩
+            compression_format = "NONE"  # Text格式通常无压缩
         elif "gzip" in input_fmt or "gzip" in output_fmt or "gz" in input_fmt:
             compression_format = "GZIP"
         elif "lz4" in input_fmt or "lz4" in output_fmt:
@@ -1185,7 +1238,7 @@ async def get_format_compression_distribution(
         TableMetric.cluster_id,
         TableMetric.database_name,
         TableMetric.table_name,
-        desc(TableMetric.scan_time)
+        desc(TableMetric.scan_time),
     ).all()
 
     # 表去重
@@ -1196,19 +1249,16 @@ async def get_format_compression_distribution(
             table_metrics[table_key] = table
 
     # 2. 查询分区级数据
-    partition_query = (
-        db.query(
-            PartitionMetric,
-            TableMetric.storage_format,
-            TableMetric.input_format,
-            TableMetric.output_format,
-            TableMetric.serde_lib,
-            TableMetric.cluster_id,
-            TableMetric.database_name,
-            TableMetric.table_name
-        )
-        .join(TableMetric, PartitionMetric.table_metric_id == TableMetric.id)
-    )
+    partition_query = db.query(
+        PartitionMetric,
+        TableMetric.storage_format,
+        TableMetric.input_format,
+        TableMetric.output_format,
+        TableMetric.serde_lib,
+        TableMetric.cluster_id,
+        TableMetric.database_name,
+        TableMetric.table_name,
+    ).join(TableMetric, PartitionMetric.table_metric_id == TableMetric.id)
 
     if cluster_id:
         partition_query = partition_query.filter(TableMetric.cluster_id == cluster_id)
@@ -1231,34 +1281,46 @@ async def get_format_compression_distribution(
 
         if format_combination not in combination_stats:
             combination_stats[format_combination] = {
-                'storage_format': storage_format,
-                'compression_format': compression_format,
-                'table_count': 0,
-                'table_total_size': 0,
-                'table_small_files': 0,
-                'table_total_files': 0,
-                'partition_total_size': 0,
-                'partition_small_files': 0,
-                'partition_total_files': 0,
+                "storage_format": storage_format,
+                "compression_format": compression_format,
+                "table_count": 0,
+                "table_total_size": 0,
+                "table_small_files": 0,
+                "table_total_files": 0,
+                "partition_total_size": 0,
+                "partition_small_files": 0,
+                "partition_total_files": 0,
             }
 
         stats = combination_stats[format_combination]
-        stats['table_count'] += 1
-        stats['table_total_size'] += table.total_size or 0
-        stats['table_small_files'] += table.small_files or 0
-        stats['table_total_files'] += table.total_files or 0
+        stats["table_count"] += 1
+        stats["table_total_size"] += table.total_size or 0
+        stats["table_small_files"] += table.small_files or 0
+        stats["table_total_files"] += table.total_files or 0
 
     # 处理分区级数据（分区继承表的格式信息）
-    for (partition, storage_format_raw, input_format, output_format, serde_lib,
-         cluster_id_val, database_name, table_name) in partitions:
+    for (
+        partition,
+        storage_format_raw,
+        input_format,
+        output_format,
+        serde_lib,
+        cluster_id_val,
+        database_name,
+        table_name,
+    ) in partitions:
 
         # 创建临时表对象用于格式推断
-        temp_table = type('obj', (object,), {
-            'storage_format': storage_format_raw,
-            'input_format': input_format,
-            'output_format': output_format,
-            'serde_lib': serde_lib
-        })()
+        temp_table = type(
+            "obj",
+            (object,),
+            {
+                "storage_format": storage_format_raw,
+                "input_format": input_format,
+                "output_format": output_format,
+                "serde_lib": serde_lib,
+            },
+        )()
 
         storage_format, compression_format = get_format_info(temp_table)
 
@@ -1270,51 +1332,63 @@ async def get_format_compression_distribution(
 
         if format_combination not in combination_stats:
             combination_stats[format_combination] = {
-                'storage_format': storage_format,
-                'compression_format': compression_format,
-                'table_count': 0,
-                'table_total_size': 0,
-                'table_small_files': 0,
-                'table_total_files': 0,
-                'partition_total_size': 0,
-                'partition_small_files': 0,
-                'partition_total_files': 0,
+                "storage_format": storage_format,
+                "compression_format": compression_format,
+                "table_count": 0,
+                "table_total_size": 0,
+                "table_small_files": 0,
+                "table_total_files": 0,
+                "partition_total_size": 0,
+                "partition_small_files": 0,
+                "partition_total_files": 0,
             }
 
         stats = combination_stats[format_combination]
         # 分区数据累加到对应格式组合中
-        stats['partition_total_size'] += partition.total_size or 0
-        stats['partition_small_files'] += partition.small_file_count or 0
-        stats['partition_total_files'] += partition.file_count or 0
+        stats["partition_total_size"] += partition.total_size or 0
+        stats["partition_small_files"] += partition.small_file_count or 0
+        stats["partition_total_files"] += partition.file_count or 0
 
     # 4. Convert to response format
     result = []
     for format_combination, stats in combination_stats.items():
-        table_total_size = stats['table_total_size']
-        partition_total_size = stats['partition_total_size']
-        total_size_bytes = table_total_size if table_total_size > 0 else partition_total_size
+        table_total_size = stats["table_total_size"]
+        partition_total_size = stats["partition_total_size"]
+        total_size_bytes = (
+            table_total_size if table_total_size > 0 else partition_total_size
+        )
 
-        table_small_files = stats['table_small_files']
-        partition_small_files = stats['partition_small_files']
-        small_files = table_small_files if table_small_files > 0 else partition_small_files
+        table_small_files = stats["table_small_files"]
+        partition_small_files = stats["partition_small_files"]
+        small_files = (
+            table_small_files if table_small_files > 0 else partition_small_files
+        )
 
-        table_total_files = stats['table_total_files']
-        partition_total_files = stats['partition_total_files']
-        total_files = table_total_files if table_total_files > 0 else partition_total_files
+        table_total_files = stats["table_total_files"]
+        partition_total_files = stats["partition_total_files"]
+        total_files = (
+            table_total_files if table_total_files > 0 else partition_total_files
+        )
 
         total_size_gb = total_size_bytes / (1024**3)
-        percentage = (stats['table_count'] / total_table_count * 100) if total_table_count > 0 else 0
+        percentage = (
+            (stats["table_count"] / total_table_count * 100)
+            if total_table_count > 0
+            else 0
+        )
 
-        result.append(FormatCompressionItem(
-            format_combination=format_combination,
-            storage_format=stats['storage_format'],
-            compression_format=stats['compression_format'],
-            table_count=stats['table_count'],
-            total_size_gb=round(total_size_gb, 2),
-            small_files=small_files,
-            total_files=total_files,
-            percentage=round(percentage, 1)
-        ))
+        result.append(
+            FormatCompressionItem(
+                format_combination=format_combination,
+                storage_format=stats["storage_format"],
+                compression_format=stats["compression_format"],
+                table_count=stats["table_count"],
+                total_size_gb=round(total_size_gb, 2),
+                small_files=small_files,
+                total_files=total_files,
+                percentage=round(percentage, 1),
+            )
+        )
 
     # Sort by total size (descending)
     result.sort(key=lambda x: x.total_size_gb, reverse=True)
@@ -1322,7 +1396,9 @@ async def get_format_compression_distribution(
     return result
 
 
-@router.get("/compression-format-distribution", response_model=List[CompressionFormatItem])
+@router.get(
+    "/compression-format-distribution", response_model=List[CompressionFormatItem]
+)
 async def get_compression_format_distribution(
     cluster_id: Optional[int] = Query(None, description="Filter by cluster ID"),
     db: Session = Depends(get_db),
@@ -1361,7 +1437,7 @@ async def get_compression_format_distribution(
         if "parquet" in input_fmt or "parquet" in output_fmt or "parquet" in serde_lib:
             compression_name = "SNAPPY"  # Parquet默认使用Snappy压缩
         elif "orc" in input_fmt or "orc" in output_fmt or "orc" in serde_lib:
-            compression_name = "ZLIB"    # ORC默认使用ZLIB压缩
+            compression_name = "ZLIB"  # ORC默认使用ZLIB压缩
         elif "gzip" in input_fmt or "gzip" in output_fmt or "gz" in input_fmt:
             compression_name = "GZIP"
         elif "lz4" in input_fmt or "lz4" in output_fmt:
@@ -1369,38 +1445,42 @@ async def get_compression_format_distribution(
         elif "bzip2" in input_fmt or "bzip2" in output_fmt:
             compression_name = "BZIP2"
         elif "text" in input_fmt or "text" in output_fmt:
-            compression_name = "NONE"    # Text格式通常无压缩
+            compression_name = "NONE"  # Text格式通常无压缩
 
         # 注意：current_compression字段目前在模型中不存在，先跳过
 
         if compression_name not in compression_stats:
             compression_stats[compression_name] = {
-                'table_count': 0,
-                'total_size': 0,
-                'small_files': 0,
-                'total_files': 0
+                "table_count": 0,
+                "total_size": 0,
+                "small_files": 0,
+                "total_files": 0,
             }
 
         # Accumulate stats
-        compression_stats[compression_name]['table_count'] += 1
-        compression_stats[compression_name]['total_size'] += table.total_size or 0
-        compression_stats[compression_name]['small_files'] += table.small_files or 0
-        compression_stats[compression_name]['total_files'] += table.total_files or 0
+        compression_stats[compression_name]["table_count"] += 1
+        compression_stats[compression_name]["total_size"] += table.total_size or 0
+        compression_stats[compression_name]["small_files"] += table.small_files or 0
+        compression_stats[compression_name]["total_files"] += table.total_files or 0
 
     # Convert to response format
     result = []
     for compression_name, stats in compression_stats.items():
-        total_size_gb = stats['total_size'] / (1024**3)
-        percentage = (stats['table_count'] / total_tables * 100) if total_tables > 0 else 0
+        total_size_gb = stats["total_size"] / (1024**3)
+        percentage = (
+            (stats["table_count"] / total_tables * 100) if total_tables > 0 else 0
+        )
 
-        result.append(CompressionFormatItem(
-            compression_name=compression_name,
-            table_count=stats['table_count'],
-            total_size_gb=round(total_size_gb, 2),
-            small_files=stats['small_files'],
-            total_files=stats['total_files'],
-            percentage=round(percentage, 1)
-        ))
+        result.append(
+            CompressionFormatItem(
+                compression_name=compression_name,
+                table_count=stats["table_count"],
+                total_size_gb=round(total_size_gb, 2),
+                small_files=stats["small_files"],
+                total_files=stats["total_files"],
+                percentage=round(percentage, 1),
+            )
+        )
 
     # Sort by table count descending
     result.sort(key=lambda x: x.table_count, reverse=True)

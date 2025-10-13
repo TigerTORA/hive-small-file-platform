@@ -47,8 +47,19 @@
                   <span class="nav-text">表管理</span>
                 </router-link>
               </div>
-              <!-- 任务管理 moved to global section below -->
-              
+              <!-- 任务管理 -->
+              <div class="nav-item">
+                <router-link
+                  to="/tasks"
+                  class="nav-link"
+                  :class="{ active: $route.path === '/tasks' }"
+                >
+                  <div class="nav-icon">
+                    <el-icon><List /></el-icon>
+                  </div>
+                  <span class="nav-text">任务管理</span>
+                </router-link>
+              </div>
             </div>
 
             <div class="nav-section">
@@ -77,19 +88,6 @@
                     <el-icon><Tools /></el-icon>
                   </div>
                   <span class="nav-text">测试表生成器</span>
-                </router-link>
-              </div>
-              <!-- 任务管理（统一：扫描/合并/归档） → 全局可见 -->
-              <div class="nav-item">
-                <router-link
-                  to="/tasks"
-                  class="nav-link"
-                  :class="{ active: $route.path === '/tasks' }"
-                >
-                  <div class="nav-icon">
-                    <el-icon><List /></el-icon>
-                  </div>
-                  <span class="nav-text">任务管理</span>
                 </router-link>
               </div>
               <!-- 集群管理 - 总是显示 -->
@@ -223,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed } from 'vue'
+  import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import {
     User,
@@ -245,6 +243,8 @@
   } from '@element-plus/icons-vue'
   import FeatureFlagProvider from '@/components/FeatureFlagProvider.vue'
   import { useMonitoringStore } from '@/stores/monitoring'
+  import { emitGlobalRefresh } from '@/composables/useGlobalRefresh'
+  import { ElMessage } from 'element-plus'
 
   const route = useRoute()
   const router = useRouter()
@@ -255,7 +255,7 @@
 
   // 全屏状态
   const isFullscreen = ref(false)
-  const isDarkTheme = ref(false)
+  const isDarkTheme = ref(monitoringStore.settings.theme === 'dark')
 
   // 检查是否在集群管理页面
   const isInClusterManagement = computed(() => route.path.startsWith('/clusters'))
@@ -287,29 +287,45 @@
 
   // 刷新页面
   const refreshPage = () => {
-    window.location.reload()
+    emitGlobalRefresh()
+    ElMessage.success('已触发全局刷新')
   }
 
   // 全屏切换
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen()
-      isFullscreen.value = true
     } else {
       document.exitFullscreen()
-      isFullscreen.value = false
     }
   }
 
   // 主题切换
   const toggleTheme = (isDark: boolean) => {
     isDarkTheme.value = isDark
-    document.documentElement.classList.toggle('dark', isDark)
+    monitoringStore.setTheme(isDark ? 'dark' : 'light')
   }
 
   // 监听全屏状态变化
-  document.addEventListener('fullscreenchange', () => {
+  const handleFullscreenChange = () => {
     isFullscreen.value = !!document.fullscreenElement
+  }
+
+  watch(
+    () => monitoringStore.settings.theme,
+    theme => {
+      isDarkTheme.value = theme === 'dark'
+      document.documentElement.classList.toggle('dark', theme === 'dark')
+    },
+    { immediate: true }
+  )
+
+  onMounted(() => {
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+  })
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('fullscreenchange', handleFullscreenChange)
   })
 </script>
 
@@ -320,26 +336,29 @@
 
   /* 应用全局样式 */
   .cloudera-app {
-    height: 100vh;
-    overflow: hidden; /* 由内部 page-content 承担滚动，避免整页超长 */
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: transparent;
+    position: relative;
+    display: flex;
   }
 
   /* 页面内容区域 */
   /* 让主区域（含 header + content）占满视窗，并把滚动限制在内容区 */
-  .cloudera-main {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-  }
+.cloudera-main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
   .page-content {
-    padding: var(--space-4);
+    padding: var(--space-6) clamp(1rem, 4vw, 3rem);
     flex: 1 1 auto;
-    min-height: 0;        /* 配合 flex 容器，允许内部正确收缩 */
-    overflow-y: auto;     /* 内容区滚动，避免整页溢出 */
-    background: var(--bg-app);
+    min-height: 0;
+    overflow-y: auto;
+    background: transparent;
+    position: relative;
   }
   .page-fallback { padding: var(--space-6); }
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from typing import Optional, Tuple
+from typing import Optional
 
 from sqlalchemy.orm import Session
 

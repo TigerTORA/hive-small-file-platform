@@ -1,9 +1,4 @@
-/**
- * Dashboard 数据管理 Composable
- * 提取自 Dashboard.vue L544-724
- */
-
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMonitoringStore } from '@/stores/monitoring'
 import {
@@ -13,16 +8,15 @@ import {
   type TopTable,
   type ColdDataItem,
   type DashboardSummary,
-  type RecentTask,
-  type FileDistributionItem,
-  type TrendPoint,
   type FormatCompressionItem
 } from '@/api/dashboard'
 
 export function useDashboardData() {
   const monitoringStore = useMonitoringStore()
-  const selectedClusterId = ref<number | null>(monitoringStore.settings.selectedCluster)
+  const selectedClusterId = computed(() => monitoringStore.settings.selectedCluster)
   const isLoadingCharts = ref(false)
+  const renderError = ref<string | null>(null)
+  let activeRequestId = 0
 
   // 原始数据状态
   const fileClassificationItems = ref<FileClassificationItem[]>([])
@@ -31,9 +25,6 @@ export function useDashboardData() {
   const topTables = ref<TopTable[]>([])
   const coldestData = ref<ColdDataItem[]>([])
   const dashboardSummary = ref<DashboardSummary | null>(null)
-  const recentTasks = ref<RecentTask[]>([])
-  const fileDistribution = ref<FileDistributionItem[]>([])
-  const trendData = ref<TrendPoint[]>([])
 
   // 文件分类数据转换为饼状图数据
   const fileClassificationData = computed(() => {
@@ -159,33 +150,31 @@ export function useDashboardData() {
   })
 
   // 加载图表数据
-  const loadChartData = async () => {
+  const loadChartData = async (clusterIdOverride?: number | null) => {
+    const requestId = ++activeRequestId
+    const clusterId = clusterIdOverride ?? selectedClusterId.value ?? undefined
     isLoadingCharts.value = true
+    renderError.value = null
     try {
-      const clusterId = selectedClusterId.value
-
-      // 并行加载所有API的数据
       const [
         fileClassificationResult,
         coldnessResult,
         formatCompressionResult,
         topTablesResult,
         coldestDataResult,
-        summaryResult,
-        recentTasksResult,
-        fileDistributionResult,
-        trendsResult
+        summaryResult
       ] = await Promise.all([
-        dashboardApi.getFileClassification(clusterId || undefined),
-        dashboardApi.getEnhancedColdnessDistribution(clusterId || undefined),
-        dashboardApi.getFormatCompressionDistribution(clusterId || undefined),
-        dashboardApi.getTopTables(clusterId || undefined, 10),
+        dashboardApi.getFileClassification(clusterId),
+        dashboardApi.getEnhancedColdnessDistribution(clusterId),
+        dashboardApi.getFormatCompressionDistribution(clusterId),
+        dashboardApi.getTopTables(clusterId, 10),
         dashboardApi.getColdestData(10),
-        dashboardApi.getSummary(clusterId || undefined),
-        dashboardApi.getRecentTasks(5),
-        dashboardApi.getFileDistribution(clusterId || undefined),
-        dashboardApi.getTrends(clusterId || undefined, 30)
+        dashboardApi.getSummary(clusterId)
       ])
+
+      if (requestId !== activeRequestId) {
+        return
+      }
 
       fileClassificationItems.value = fileClassificationResult
       coldnessDistribution.value = coldnessResult
@@ -193,49 +182,39 @@ export function useDashboardData() {
       topTables.value = topTablesResult
       coldestData.value = coldestDataResult
       dashboardSummary.value = summaryResult
-      recentTasks.value = recentTasksResult
-      fileDistribution.value = fileDistributionResult
-      trendData.value = trendsResult
-
-      console.log('图表数据加载完成:', {
-        fileClassification: fileClassificationResult,
-        coldness: coldnessResult,
-        formatCompression: formatCompressionResult
-      })
-    } catch (error) {
-      console.error('加载图表数据失败:', error)
-      ElMessage.error('加载图表数据失败')
+    } catch (error: any) {
+      if (requestId === activeRequestId) {
+        renderError.value = error?.message || '加载图表数据失败'
+        ElMessage.error(renderError.value)
+      }
       throw error
     } finally {
-      isLoadingCharts.value = false
+      if (requestId === activeRequestId) {
+        isLoadingCharts.value = false
+      }
     }
   }
 
   // 刷新图表数据
   const refreshChartData = async () => {
-    await loadChartData()
+    await loadChartData(selectedClusterId.value ?? undefined)
     ElMessage.success('图表数据已刷新')
   }
 
   // 监听集群变化
-  watch(selectedClusterId, async (newClusterId) => {
-    console.log('集群选择变化:', newClusterId)
-    await loadChartData()
-  })
-
   watch(
     () => monitoringStore.settings.selectedCluster,
     async (cid) => {
-      selectedClusterId.value = cid
-      await loadChartData()
-    }
+      await loadChartData(cid ?? undefined)
+    },
+    { immediate: true }
   )
 
   return {
     // 状态
     selectedClusterId,
     isLoadingCharts,
-    renderError: ref<string | null>(null),
+    renderError,
 
     // 原始数据
     fileClassificationItems,
@@ -244,9 +223,6 @@ export function useDashboardData() {
     topTables,
     coldestData,
     dashboardSummary,
-    recentTasks,
-    fileDistribution,
-    trendData,
 
     // 计算数据
     fileClassificationData,

@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import { tablesApi } from '@/api/tables'
 import { tasksApi, type MergeTaskCreate } from '@/api/tasks'
 import { storageApi } from '@/api/storage'
+import { FeatureManager } from '@/utils/feature-flags'
 
 export const useTableActions = (
   clusterId: Ref<number>,
@@ -13,7 +14,13 @@ export const useTableActions = (
   const scanningTableStrict = ref(false)
   const creating = ref(false)
 
+  const demoMode = FeatureManager.isEnabled('demoMode')
+
   const scanCurrentTable = async (strictReal: boolean, onSuccess?: () => void) => {
+    if (demoMode) {
+      ElMessage.warning('演示模式已禁用实时扫描')
+      return
+    }
     if (scanningTableStrict.value) return
     scanningTableStrict.value = true
     try {
@@ -48,6 +55,10 @@ export const useTableActions = (
     selectedPartitions: string[],
     specToFilter: (spec: string) => string
   ): Promise<{ taskId: string; additionalTasks: string[] }> => {
+    if (demoMode) {
+      ElMessage.warning('演示模式已禁用治理/合并操作')
+      return { taskId: '', additionalTasks: [] }
+    }
     creating.value = true
     try {
       if (mergeScope === 'partition') {

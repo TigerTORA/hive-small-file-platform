@@ -9,6 +9,7 @@ from app.config.database import get_db
 from app.models.cluster import Cluster
 from app.models.table_metric import TableMetric
 from app.monitor.hybrid_table_scanner import HybridTableScanner
+from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.schemas.cluster import ClusterCreate, ClusterResponse, ClusterUpdate
 from app.services.cluster_status_service import cluster_status_service
 from app.services.enhanced_connection_service import enhanced_connection_service
@@ -693,7 +694,6 @@ async def scan_all_cluster_tables(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     try:
-        import time
         from datetime import datetime
 
         scan_start_time = datetime.now()

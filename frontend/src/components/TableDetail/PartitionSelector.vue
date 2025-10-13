@@ -1,10 +1,10 @@
 <template>
   <div class="partition-selector">
-    <el-tabs v-model="selectMode" @tab-change="onModeChange">
+    <el-tabs :model-value="selectMode" @update:model-value="onModeChange">
       <el-tab-pane label="智能选择" name="smart">
         <div class="smart-selector">
           <div class="range-selector" style="margin-bottom: 16px;">
-            <el-radio-group v-model="rangeMode" @change="emit('time-range-mode-change')">
+            <el-radio-group :model-value="rangeMode" @update:model-value="(val) => { emit('update:rangeMode', val); emit('time-range-mode-change'); }">
               <el-radio label="recent">最近</el-radio>
               <el-radio label="range">指定范围</el-radio>
               <el-radio label="pattern">模式匹配</el-radio>

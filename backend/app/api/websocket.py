@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.services.websocket_service import (
     WebSocketMessage,

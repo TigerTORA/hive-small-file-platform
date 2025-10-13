@@ -1,5 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const devPort = process.env.DEV_SERVER_PORT || '3000'
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${devPort}`
+const devCommand =
+  process.platform === 'win32'
+    ? `set "VITE_DEV_PORT=${devPort}" && npm run dev`
+    : `VITE_DEV_PORT=${devPort} npm run dev`
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -18,7 +25,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -68,8 +75,8 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:3000',
+    command: devCommand,
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 120000
   }

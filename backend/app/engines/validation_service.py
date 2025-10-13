@@ -4,8 +4,7 @@
 """
 
 import logging
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.engines.connection_manager import HiveConnectionManager
 from app.models.merge_task import MergeTask

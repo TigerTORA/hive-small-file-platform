@@ -1,6 +1,5 @@
 import logging
 import time
-from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from impala.dbapi import connect as impala_connect
@@ -858,8 +857,6 @@ class RealHiveMergeEngine(BaseMergeEngine):
                     cur_op = f"{op_desc} (已等待{waited}s)"
                     yarn_id = None
                     if self.yarn_monitor is not None:
-                        from app.utils.yarn_monitor import YarnApplicationState
-
                         try:
                             apps = self.yarn_monitor.get_applications(limit=20)
                             apps = [

@@ -3,7 +3,7 @@
 负责基础的表查询、数据库列表、表指标等功能
 """
 
-from typing import Dict, List, Any
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -187,6 +187,77 @@ async def get_table_detail(
     }
 
 
+@router.get("/{cluster_id}/{database_name}/{table_name}/info")
+async def get_table_info(
+    cluster_id: int,
+    database_name: str,
+    table_name: str,
+    db: Session = Depends(get_db),
+):
+    """获取无需 Hive 连接的表缓存信息（基于最新扫描记录）。"""
+
+    cluster: Optional[Cluster] = (
+        db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    )
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    latest_metric: Optional[TableMetric] = (
+        db.query(TableMetric)
+        .filter(
+            TableMetric.cluster_id == cluster_id,
+            TableMetric.database_name == database_name,
+            TableMetric.table_name == table_name,
+        )
+        .order_by(TableMetric.scan_time.desc(), TableMetric.id.desc())
+        .first()
+    )
+
+    if not latest_metric:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Table {database_name}.{table_name} not found or not scanned",
+        )
+
+    def _iso(dt):
+        if dt is None:
+            return None
+        return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+
+    return {
+        "cluster_id": latest_metric.cluster_id,
+        "cluster_name": cluster.name,
+        "database_name": latest_metric.database_name,
+        "table_name": latest_metric.table_name,
+        "table_type": latest_metric.table_type,
+        "storage_format": latest_metric.storage_format,
+        "input_format": latest_metric.input_format,
+        "output_format": latest_metric.output_format,
+        "serde_lib": latest_metric.serde_lib,
+        "table_path": latest_metric.table_path,
+        "table_owner": latest_metric.table_owner,
+        "table_create_time": _iso(latest_metric.table_create_time),
+        "is_partitioned": bool(latest_metric.is_partitioned),
+        "partition_count": latest_metric.partition_count,
+        "partition_columns": getattr(latest_metric, "partition_columns", None),
+        "total_files": latest_metric.total_files,
+        "small_files": latest_metric.small_files,
+        "avg_file_size": latest_metric.avg_file_size,
+        "total_size": latest_metric.total_size,
+        "scan_time": _iso(latest_metric.scan_time),
+        "scan_duration": latest_metric.scan_duration,
+        "is_cold_data": bool(latest_metric.is_cold_data),
+        "last_access_time": _iso(latest_metric.last_access_time),
+        "days_since_last_access": latest_metric.days_since_last_access,
+        "archive_status": getattr(latest_metric, "archive_status", None),
+        "archive_location": getattr(latest_metric, "archive_location", None),
+        "archived_at": _iso(getattr(latest_metric, "archived_at", None)),
+        "current_compression": getattr(latest_metric, "current_compression", None),
+        "merge_supported": True,
+        "unsupported_reason": None,
+    }
+
+
 @router.get("/table-history/{cluster_id}/{database_name}/{table_name}")
 async def get_table_scan_history(
     cluster_id: int,
@@ -234,17 +305,20 @@ async def get_table_partitions(
         raise HTTPException(status_code=404, detail="Cluster not found")
 
     try:
-        from app.engines.safe_hive_engine import SafeHiveMergeEngine
         import logging
-        
+
+        from app.engines.safe_hive_engine import SafeHiveMergeEngine
+
         logger = logging.getLogger(__name__)
-        logger.info(f"Getting partitions for {database_name}.{table_name} on cluster {cluster_id}")
+        logger.info(
+            f"Getting partitions for {database_name}.{table_name} on cluster {cluster_id}"
+        )
 
         engine = SafeHiveMergeEngine(cluster)
 
         # 检查实际表结构，确定是否为真正的分区表
         logger.info(f"Checking real partition status for {database_name}.{table_name}")
-        
+
         try:
             # 尝试检查表是否真的是分区表
             table_exists = engine._table_exists(database_name, table_name)
@@ -252,7 +326,9 @@ async def get_table_partitions(
                 is_partitioned = engine._is_partitioned_table(database_name, table_name)
                 if is_partitioned:
                     # 如果是真的分区表，获取实际分区
-                    real_partitions = engine._get_table_partitions(database_name, table_name)
+                    real_partitions = engine._get_table_partitions(
+                        database_name, table_name
+                    )
                     return {
                         "table_name": table_name,
                         "is_partitioned": True,
@@ -263,7 +339,7 @@ async def get_table_partitions(
                     }
         except Exception as e:
             logger.warning(f"Failed to check real partition status: {str(e)}")
-        
+
         # 如果表不存在或不是分区表，返回明确的非分区状态
         return {
             "table_name": table_name,
@@ -271,7 +347,7 @@ async def get_table_partitions(
             "partitions": [],
             "partition_count": 0,
             "message": "该表不是分区表或不存在",
-            "error_detail": "表结构检查：非分区表"
+            "error_detail": "表结构检查：非分区表",
         }
 
         # 获取分区列表
@@ -322,6 +398,7 @@ async def get_table_partitions(
         raise
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.error(f"Unexpected error in get_table_partitions: {str(e)}")
         raise HTTPException(

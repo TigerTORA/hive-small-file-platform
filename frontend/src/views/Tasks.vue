@@ -1,75 +1,98 @@
 <template>
   <div class="tasks-management">
-    <!-- 页面头部 -->
-    <TasksHeader :loading="loading" @refresh="handleRefresh" @create="showCreateDialog = true" />
+    <div v-if="hasSelectedCluster" class="tasks-content">
+      <!-- 页面头部 -->
+      <TasksHeader :loading="loading" @refresh="handleRefresh" @create="showCreateDialog = true" />
 
-    <!-- 主体：筛选器 + 内容 -->
-    <div class="main-layout">
-      <!-- 筛选器（左侧） -->
-      <TasksFiltersPane
-        v-model:globalSearch="filters.globalSearch.value"
-        :selectedStatuses="filters.selectedStatuses.value"
-        :selectedTypes="filters.selectedTypes.value"
-        :selectedArchiveSubtypes="filters.selectedArchiveSubtypes.value"
-        :statusOptions="filters.statusOptions"
-        :typeOptions="filters.typeOptions"
-        :archiveSubtypeOptions="filters.archiveSubtypeOptions"
-        :statusCounts="filters.statusCounts.value"
-        :typeCounts="filters.typeCounts.value"
-        :archiveSubtypeCounts="filters.archiveSubtypeCounts.value"
-        @toggleStatus="filters.toggleStatus"
-        @toggleType="filters.toggleType"
-        @toggleArchiveSubtype="filters.toggleArchiveSubtype"
-        @reset="filters.resetFilters"
+      <!-- 主体：筛选器 + 内容 -->
+      <div class="main-layout">
+        <!-- 筛选器（左侧） -->
+        <TasksFiltersPane
+          v-model:globalSearch="filters.globalSearch.value"
+          v-model:selectedCluster="filters.selectedCluster"
+          v-model:selectedTimeframe="filters.selectedTimeframe"
+          :selectedStatuses="filters.selectedStatuses.value"
+          :selectedTypes="filters.selectedTypes.value"
+          :selectedArchiveSubtypes="filters.selectedArchiveSubtypes.value"
+          :statusOptions="filters.statusOptions.value"
+          :typeOptions="filters.typeOptions.value"
+          :archiveSubtypeOptions="filters.archiveSubtypeOptions.value"
+          :statusCounts="filters.statusCounts.value"
+          :typeCounts="filters.typeCounts.value"
+          :archiveSubtypeCounts="filters.archiveSubtypeCounts.value"
+          :clusterOptions="filters.clusterOptions.value"
+          :timeframeOptions="filters.timeframeOptions"
+          @toggleStatus="filters.toggleStatus"
+          @toggleType="filters.toggleType"
+          @toggleArchiveSubtype="filters.toggleArchiveSubtype"
+          @reset="filters.resetFilters"
+        />
+
+        <!-- 内容（右侧） -->
+        <div class="content-pane">
+          <div v-if="filters.activeSummary.value.length" class="filter-summary">
+            <el-tag
+              v-for="item in filters.activeSummary.value"
+              :key="item"
+              type="info"
+              effect="light"
+              class="summary-chip"
+            >
+              {{ item }}
+            </el-tag>
+            <el-button text size="small" @click="filters.resetFilters()">清除筛选</el-button>
+          </div>
+          <TasksTable
+            :tasks="filters.filteredAllTasks.value"
+            :archiveSummaries="tasksData.archiveSummaries.value"
+            :showArchiveSummary="true"
+            @viewLogs="handleViewLogs"
+            @retry="handleRetry"
+            @restore="handleRestore"
+          />
+        </div>
+      </div>
+      <!-- 创建任务对话框 -->
+      <TaskCreateDialog
+        v-model="showCreateDialog"
+        v-model:formRef="taskFormRef"
+        :taskForm="taskForm.taskForm.value"
+        :taskRules="taskForm.taskRules"
+        :clusters="tasksData.clusters.value"
+        :tableInfo="taskForm.tableInfo.value"
+        :partitions="taskForm.partitions.value"
+        :selectedPartitions="taskForm.selectedPartitions.value"
+        :partitionsLoading="taskForm.partitionsLoading.value"
+        :storageFormatOptions="taskForm.storageFormatOptions"
+        :compressionOptions="taskForm.compressionOptions"
+        :disableFormatSelection="taskForm.disableFormatSelection.value"
+        :disableCompressionSelection="taskForm.disableCompressionSelection.value"
+        :tableFormatLabel="taskForm.tableFormatLabel.value"
+        :tableCompressionLabel="taskForm.tableCompressionLabel.value"
+        @checkPartitions="taskForm.checkTablePartitions"
+        @loadPartitions="taskForm.loadPartitions"
+        @create="handleCreateTask"
       />
 
-      <!-- 内容（右侧） -->
-      <div class="content-pane">
-        <TasksTable
-          :tasks="filters.filteredAllTasks.value"
-          :archiveSummaries="tasksData.archiveSummaries.value"
-          :showArchiveSummary="true"
-          @viewLogs="handleViewLogs"
-          @retry="handleRetry"
-          @restore="handleRestore"
-        />
-      </div>
+      <!-- 任务运行对话框 -->
+      <TaskRunDialog
+        v-model="showRunDialog"
+        :type="runDialogType"
+        :scan-task-id="runScanTaskId || undefined"
+        :merge-task-id="runMergeTaskId || undefined"
+      />
     </div>
-
-    <!-- 创建任务对话框 -->
-    <TaskCreateDialog
-      v-model="showCreateDialog"
-      v-model:formRef="taskFormRef"
-      :taskForm="taskForm.taskForm.value"
-      :taskRules="taskForm.taskRules"
-      :clusters="tasksData.clusters.value"
-      :tableInfo="taskForm.tableInfo.value"
-      :partitions="taskForm.partitions.value"
-      :selectedPartitions="taskForm.selectedPartitions.value"
-      :partitionsLoading="taskForm.partitionsLoading.value"
-      :storageFormatOptions="taskForm.storageFormatOptions"
-      :compressionOptions="taskForm.compressionOptions"
-      :disableFormatSelection="taskForm.disableFormatSelection.value"
-      :disableCompressionSelection="taskForm.disableCompressionSelection.value"
-      :tableFormatLabel="taskForm.tableFormatLabel.value"
-      :tableCompressionLabel="taskForm.tableCompressionLabel.value"
-      @checkPartitions="taskForm.checkTablePartitions"
-      @loadPartitions="taskForm.loadPartitions"
-      @create="handleCreateTask"
-    />
-
-    <!-- 任务运行对话框 -->
-    <TaskRunDialog
-      v-model="showRunDialog"
-      :type="runDialogType"
-      :scan-task-id="runScanTaskId || undefined"
-      :merge-task-id="runMergeTaskId || undefined"
-    />
+    <div v-else class="cluster-required">
+      <el-empty description="请选择集群后查看任务管理数据">
+        <el-button type="primary" @click="goToClusterManagement">前往集群管理</el-button>
+      </el-empty>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tasksApi } from '@/api/tasks'
 import { tablesApi } from '@/api/tables'
@@ -84,8 +107,10 @@ import { useTaskFilters } from '@/composables/tasks/useTaskFilters'
 import { useTaskPolling, useScanAutoRefresh } from '@/composables/tasks/useTaskPolling'
 import { useTaskForm } from '@/composables/tasks/useTaskForm'
 
+const router = useRouter()
 const monitoringStore = useMonitoringStore()
 const selectedClusterId = computed(() => monitoringStore.settings.selectedCluster)
+const hasSelectedCluster = computed(() => Boolean(selectedClusterId.value))
 
 // 使用组合式函数
 const tasksData = useTasksData()
@@ -93,9 +118,10 @@ const filters = useTaskFilters(
   tasksData.tasks,
   tasksData.testTableTasks,
   tasksData.scanTasks,
-  tasksData.archiveTasks
+  tasksData.archiveTasks,
+  tasksData.clusters
 )
-const polling = useTaskPolling(tasksData.tasks, tasksData.loadTasks)
+const polling = useTaskPolling(tasksData.tasks, () => tasksData.loadTasks(selectedClusterId.value))
 const taskForm = useTaskForm()
 
 // 扫描任务筛选和自动刷新
@@ -104,7 +130,10 @@ const scanStatusFilter = ref<string>('')
 const scanAutoRefresh = ref<number>(0)
 
 const scanRefresh = useScanAutoRefresh(scanAutoRefresh, async () => {
-  await tasksData.loadScanTasks(scanClusterFilter.value, scanStatusFilter.value)
+  await tasksData.loadScanTasks(
+    scanClusterFilter.value ?? selectedClusterId.value ?? null,
+    scanStatusFilter.value
+  )
   await tasksData.refreshArchiveSummaries()
 })
 
@@ -118,13 +147,37 @@ const runMergeTaskId = ref<number | string | null>(null)
 // 解构数据
 const { loading, showCreateDialog } = taskForm
 
+const goToClusterManagement = () => {
+  router.push('/clusters')
+}
+
+const updateDataForCluster = async (clusterId: number | null) => {
+  if (!clusterId) {
+    await tasksData.loadTasks(null)
+    await tasksData.loadScanTasks(null, scanStatusFilter.value)
+    tasksData.archiveTasks.value = []
+    tasksData.archiveSummaries.value = {}
+    return
+  }
+
+  await tasksData.loadTasks(clusterId)
+  await tasksData.loadArchiveTasks()
+  await tasksData.refreshArchiveSummaries()
+}
+
 /**
  * 刷新所有数据
  */
 const handleRefresh = async () => {
-  await tasksData.loadTasks()
-  await tasksData.loadScanTasks(scanClusterFilter.value, scanStatusFilter.value)
-  await tasksData.refreshArchiveSummaries()
+  await tasksData.loadClusters()
+  await updateDataForCluster(selectedClusterId.value ?? null)
+  if (selectedClusterId.value) {
+    await tasksData.loadScanTasks(
+      scanClusterFilter.value ?? selectedClusterId.value,
+      scanStatusFilter.value
+    )
+    await tasksData.refreshArchiveSummaries()
+  }
 }
 
 /**
@@ -164,7 +217,7 @@ const handleRetry = async (row: any) => {
     runMergeTaskId.value = id
     runScanTaskId.value = null
     showRunDialog.value = true
-    await tasksData.loadTasks()
+    await tasksData.loadTasks(selectedClusterId.value)
   } catch (e: any) {
     console.error('Retry failed', e)
     ElMessage.error(e?.message || '重试失败')
@@ -218,16 +271,19 @@ const handleRestore = async (row: any) => {
  * 创建任务
  */
 const handleCreateTask = async () => {
-  await taskForm.createTask(tasksData.loadTasks)
+  await taskForm.createTask(() => tasksData.loadTasks(selectedClusterId.value))
 }
 
 // 初始化
 onMounted(async () => {
-  await tasksData.loadTasks()
   await tasksData.loadClusters()
-  await tasksData.loadScanTasks(scanClusterFilter.value, scanStatusFilter.value)
-  await tasksData.loadArchiveTasks()
-  await tasksData.refreshArchiveSummaries()
+
+  if (selectedClusterId.value) {
+    filters.selectedCluster.value = selectedClusterId.value
+    scanClusterFilter.value = selectedClusterId.value
+  }
+
+  await updateDataForCluster(selectedClusterId.value ?? null)
 
   if (polling.hasRunningTasks.value) {
     polling.startPolling()
@@ -236,10 +292,26 @@ onMounted(async () => {
   scanRefresh.setupScanAutoRefresh()
 })
 
-// 监听集群变化
-watch(selectedClusterId, () => {
-  tasksData.loadArchiveTasks()
+// 监听全局集群选择
+watch(selectedClusterId, async cid => {
+  if (cid) {
+    filters.selectedCluster.value = cid
+    scanClusterFilter.value = cid
+  } else {
+    filters.selectedCluster.value = 'all'
+    scanClusterFilter.value = null
+  }
+  await updateDataForCluster(cid ?? null)
 })
+
+// 监听筛选器集群变化
+watch(
+  () => filters.selectedCluster.value,
+  (cluster) => {
+    const effective = cluster === 'all' ? selectedClusterId.value ?? null : (cluster as number)
+    scanClusterFilter.value = effective
+  }
+)
 
 // 监听扫描任务筛选器变化
 watch([scanClusterFilter, scanStatusFilter], async () => {
@@ -259,6 +331,20 @@ watch([scanClusterFilter, scanStatusFilter], async () => {
   background: var(--bg-app);
 }
 
+.tasks-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cluster-required {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .main-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -273,6 +359,18 @@ watch([scanClusterFilter, scanStatusFilter], async () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: var(--space-3);
+}
+
+.summary-chip {
+  border-radius: var(--radius-lg);
 }
 
 @media (max-width: 1280px) {

@@ -10,15 +10,15 @@ import os
 import random
 import sys
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import List
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
-from app.models.base import Base
+from app.config.database import Base
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
 from app.models.scan_task import ScanTask
@@ -87,17 +87,15 @@ class DemoDataGenerator:
             "ml-cluster",
         ]
 
-        environments = ["production", "staging", "development", "testing", "analytics"]
-
         for i in range(self.preset_config["clusters"]):
             cluster = Cluster(
                 name=cluster_names[i % len(cluster_names)],
-                description=f"演示集群 {i+1} - {environments[i % len(environments)]}环境",
+                description=f"演示集群 {i+1}",
+                hive_host=f"hive-{i+1}",
                 hive_metastore_url=f"mysql://hive:hive@metastore-{i+1}:3306/hive_metastore",
                 hdfs_namenode_url=f"http://namenode-{i+1}:9870/webhdfs/v1",
                 hdfs_user="hdfs",
                 status="active",
-                environment=environments[i % len(environments)],
                 created_time=datetime.utcnow()
                 - timedelta(days=random.randint(30, 365)),
             )
@@ -180,18 +178,27 @@ class DemoDataGenerator:
                         cluster_id=cluster.id,
                         database_name=database_name,
                         table_name=table_name,
+                        table_path=f"hdfs://{cluster.hive_host}/warehouse/{database_name}.db/{table_name}",
                         table_type=random.choice(["MANAGED_TABLE", "EXTERNAL_TABLE"]),
-                        file_count=total_files,
-                        small_file_count=small_files,
+                        storage_format=random.choice(["PARQUET", "ORC", "TEXT"]),
+                        input_format="org.apache.hadoop.mapred.TextInputFormat",
+                        output_format="org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+                        serde_lib="org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe",
+                        table_owner="hive",
+                        total_files=total_files,
+                        small_files=small_files,
                         total_size=total_size,
-                        small_file_ratio=small_file_ratio * 100,
-                        avg_file_size=avg_file_size,
-                        is_partitioned=is_partitioned,
+                        avg_file_size=float(avg_file_size),
+                        is_partitioned=1 if is_partitioned else 0,
                         partition_count=partition_count,
-                        last_scan_time=datetime.utcnow()
+                        scan_time=datetime.utcnow()
                         - timedelta(hours=random.randint(1, 72)),
-                        created_time=datetime.utcnow()
-                        - timedelta(days=random.randint(1, 30)),
+                        scan_duration=random.uniform(5.0, 1800.0),
+                        last_access_time=datetime.utcnow()
+                        - timedelta(days=random.randint(0, 180)),
+                        days_since_last_access=random.randint(0, 180),
+                        is_cold_data=1 if small_files > total_files * 0.5 else 0,
+                        archive_status="active",
                     )
 
                     session.add(table_metric)
@@ -267,7 +274,8 @@ class DemoDataGenerator:
         """生成合并任务数据"""
         print("🔧 生成合并任务数据...")
 
-        merge_strategies = ["safe_merge", "concatenate", "insert_overwrite"]
+        target_formats = ["PARQUET", "ORC", "TEXT"]
+        target_compressions = ["SNAPPY", "ZSTD", "NONE"]
         statuses = ["completed", "failed", "running", "pending"]
         status_weights = [0.6, 0.15, 0.15, 0.1]
 
@@ -288,7 +296,6 @@ class DemoDataGenerator:
 
         for i in range(self.preset_config["merge_tasks"]):
             cluster = random.choice(clusters)
-            strategy = random.choice(merge_strategies)
             status = random.choices(statuses, weights=status_weights)[0]
 
             database_name = random.choice(database_names)
@@ -304,22 +311,67 @@ class DemoDataGenerator:
             else:
                 files_after = files_before if status in ["failed", "pending"] else None
 
+            started_time = (
+                created_time + timedelta(minutes=random.randint(1, 60))
+                if status in ["completed", "failed", "running"]
+                else None
+            )
+            completed_time = (
+                started_time + timedelta(minutes=random.randint(10, 180))
+                if status == "completed"
+                else None
+            )
+            progress = (
+                100.0
+                if status == "completed"
+                else (random.uniform(10.0, 90.0) if status == "running" else 0.0)
+            )
+
             merge_task = MergeTask(
                 cluster_id=cluster.id,
                 task_name=f"{table_name} 小文件合并 #{i+1}",
                 database_name=database_name,
                 table_name=table_name,
-                merge_strategy=strategy,
                 status=status,
                 files_before=files_before,
                 files_after=files_after,
-                target_file_size=random.choice([64, 128, 256, 512]) * 1024 * 1024,  # MB
+                target_file_size=random.choice([64, 128, 256, 512]) * 1024 * 1024,
+                target_storage_format=random.choice(target_formats),
+                target_compression=random.choice(target_compressions),
+                use_ec=random.choice([True, False]),
                 partition_filter=(
                     f"dt>='{(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')}'"
                     if random.choice([True, False])
                     else None
                 ),
+                progress=progress,
+                current_phase=(
+                    "validating"
+                    if status == "running"
+                    else ("completed" if status == "completed" else "queued")
+                ),
+                execution_phase=(
+                    "merging" if status in ["running", "completed"] else None
+                ),
+                progress_percentage=progress,
+                estimated_remaining_time=(
+                    random.randint(60, 600) if status == "running" else None
+                ),
+                processed_files_count=(
+                    random.randint(0, files_before) if status != "pending" else 0
+                ),
+                total_files_count=files_before,
+                size_saved=(
+                    (files_before - files_after) * random.randint(5, 20) * 1024 * 1024
+                    if files_after is not None
+                    else None
+                ),
                 created_time=created_time,
+                started_time=started_time,
+                completed_time=completed_time,
+                error_message=(
+                    "模拟合并失败：Spark 作业超时" if status == "failed" else None
+                ),
             )
 
             session.add(merge_task)
@@ -335,15 +387,14 @@ class DemoDataGenerator:
         total_clusters = session.query(Cluster).count()
         total_tables = session.query(TableMetric).count()
         total_small_files = (
-            session.query(TableMetric)
-            .with_entities(session.query(TableMetric.small_file_count).label("sum"))
-            .scalar()
-            or 0
+            session.query(func.sum(TableMetric.small_files)).scalar() or 0
         )
 
         # 计算问题表数量（小文件比例 > 50% 的表）
         problem_tables = (
-            session.query(TableMetric).filter(TableMetric.small_file_ratio > 50).count()
+            session.query(TableMetric)
+            .filter(TableMetric.small_files > TableMetric.total_files * 0.5)
+            .count()
         )
 
         summary_data = {

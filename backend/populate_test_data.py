@@ -3,7 +3,6 @@
 Populate test data for monitoring dashboard
 """
 
-import os
 import random
 import sys
 from datetime import datetime, timedelta
@@ -12,7 +11,6 @@ from datetime import datetime, timedelta
 sys.path.append("/Users/luohu/new_project/hive-small-file-platform/backend")
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
 
 from app.config.database import get_db
 from app.models.cluster import Cluster

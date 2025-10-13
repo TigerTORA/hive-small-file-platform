@@ -8,20 +8,14 @@ const router = createRouter({
       path: '/',
       name: 'Dashboard',
       component: () => import('@/views/Dashboard.vue'),
-      meta: { title: '监控中心', requiresCluster: true }
+      meta: { title: '监控中心', requiresCluster: true },
+      alias: '/dashboard'
     },
     {
       path: '/clusters',
       name: 'ClustersManagement',
       component: () => import('@/views/ClustersManagement.vue'),
       meta: { title: '集群管理' }
-    },
-    {
-      path: '/clusters/:id',
-      name: 'ClusterDetail',
-      component: () => import('@/views/ClusterDetail.vue'),
-      meta: { title: '集群详情' },
-      props: true
     },
     {
       path: '/tables',

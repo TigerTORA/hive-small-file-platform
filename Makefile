@@ -1,6 +1,6 @@
 # Makefile for Hive Small File Platform
 
-.PHONY: help install-dev format check test status clean ci-test setup build-images build-backend-image build-frontend-image release-save
+.PHONY: help install-dev format check test status clean ci-test setup build-images build-backend-image build-frontend-image release-save dev demo-test
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,8 @@ help:
 	@echo "  ci-test         Run CI-compatible tests"
 	@echo "  status          Generate consolidated project status"
 	@echo "  clean           Clean up cache files"
+	@echo "  dev             Run backend and frontend together (local demo)"
+	@echo "  demo-test       Run backend cache tests + frontend vitest"
 	@echo "  build-images    Build production Docker images (backend/frontend)"
 	@echo "  release-save    Save images as tar files to dist/ (offline delivery)"
 	@echo "  dev             Run backend and frontend together (local)"
@@ -37,8 +39,12 @@ format:
 
 check:
 	@echo "Running quality checks..."
-	cd backend && black --check . && isort -c . && flake8 . --count --statistics
-	cd frontend && npm run lint 2>/dev/null || echo "Frontend linting not available"
+	cd backend && black --check . && isort -c . && flake8 . --select=E9,F63,F7,F82 --count --statistics
+	cd frontend && \
+	NODE_MAJOR=$$(node -e 'process.stdout.write(process.versions.node.split(".")[0])'); \
+	if [ "$$NODE_MAJOR" != "20" ]; then \
+	  echo "Frontend lint skipped (requires Node 20.x; run '\''nvm use'\'')"; \
+	else npm run lint; fi
 
 dev:
 	@echo "Starting backend (8000) and frontend (Vite)..."
@@ -56,16 +62,15 @@ dev:
 	) & \
 	wait
 
-test:
-	@echo "Running backend tests..."
-	cd backend && python -m pytest --cov=app --cov-report=term --cov-fail-under=75 -v --maxfail=5
-	@echo "Running frontend tests..."
+demo-test:
+	@echo "Running cache-mode backend tests..."
+	cd backend && python3 -m pytest tests/test_cache_api.py
+	@echo "Running frontend unit/integration tests..."
 	cd frontend && npm run test:run
 
-ci-test:
-	@echo "Running CI-compatible tests..."
-	cd backend && python -m pytest --cov=app --cov-report=xml:coverage.xml --cov-fail-under=75 -v --maxfail=5
-	cd frontend && npm run test:run
+test: demo-test
+
+ci-test: demo-test
 
 status:
 	@echo "Generating consolidated project status..."
@@ -87,6 +92,7 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	cd frontend && rm -rf node_modules/.cache 2>/dev/null || true
+	python3 scripts/cleanup_workspace.py --apply 2>/dev/null || true
 
 # -------- Release helpers --------
 

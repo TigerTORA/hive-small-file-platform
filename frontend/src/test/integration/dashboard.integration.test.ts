@@ -46,6 +46,8 @@ describe('Dashboard Store Integration Tests', () => {
       expect(store.summary.small_file_ratio).toBe(0)
       expect(store.summary.total_size_gb).toBe(0)
       expect(store.summary.small_file_size_gb).toBe(0)
+      expect(store.summary.files_reduced).toBe(0)
+      expect(store.summary.size_saved_gb).toBe(0)
 
       expect(store.trends).toEqual([])
       expect(store.fileDistribution).toEqual([])
@@ -130,7 +132,9 @@ describe('Dashboard Store Integration Tests', () => {
         total_small_files: 15000,
         small_file_ratio: 30,
         total_size_gb: 1000,
-        small_file_size_gb: 50
+        small_file_size_gb: 50,
+        files_reduced: 20000,
+        size_saved_gb: 128.5
       }
 
       const { dashboardApi } = await import('@/api/dashboard')
@@ -337,11 +341,15 @@ describe('Dashboard Store Integration Tests', () => {
         { cluster_id: 1, cluster_name: 'test', table_count: 10, file_count: 1000 }
       ]
       store.errors.summary = 'Test error'
+      store.summary.files_reduced = 120
+      store.summary.size_saved_gb = 12.5
 
       store.reset()
 
       // 验证所有状态都被重置
       expect(store.summary.total_clusters).toBe(0)
+      expect(store.summary.files_reduced).toBe(0)
+      expect(store.summary.size_saved_gb).toBe(0)
       expect(store.trends).toEqual([])
       expect(store.fileDistribution).toEqual([])
       expect(store.topTables).toEqual([])
@@ -366,7 +374,9 @@ describe('Dashboard Store Integration Tests', () => {
           total_small_files: 3000,
           small_file_ratio: 30,
           total_size_gb: 500,
-          small_file_size_gb: 50
+          small_file_size_gb: 50,
+          files_reduced: 4200,
+          size_saved_gb: 64.5
         },
         trends: [{ date: '2023-12-01', small_files: 1000, total_size: 100 }],
         distribution: [{ range: '0-10MB', count: 5000, percentage: 50 }],
@@ -420,7 +430,9 @@ describe('Dashboard Store Integration Tests', () => {
         total_small_files: 3000,
         small_file_ratio: 30,
         total_size_gb: 500,
-        small_file_size_gb: 50
+        small_file_size_gb: 50,
+        files_reduced: 4200,
+        size_saved_gb: 64.5
       })
       ;(dashboardApi.getTrends as any).mockRejectedValue(new Error('Trends API failed'))
       ;(dashboardApi.getFileDistribution as any).mockResolvedValue([])

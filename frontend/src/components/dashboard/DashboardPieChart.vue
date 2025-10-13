@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { Component } from 'vue'
+import type { Component } from 'vue'
 import PieChart from '@/components/charts/PieChart.vue'
 
 defineProps<{

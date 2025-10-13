@@ -3,17 +3,17 @@ import re
 import socket
 import threading
 import time
-from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from pyhive import hive, exc as hive_exc
+from pyhive import exc as hive_exc
+from pyhive import hive
 from sqlalchemy.orm import Session
 
-from app.config.database import SessionLocal
 from app.engines.base_engine import BaseMergeEngine
+from app.engines.merge_progress_tracker import MergeProgressTracker
+from app.engines.safe_hive_metadata_manager import SafeHiveMetadataManager
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
-from app.models.table_metric import TableMetric
 from app.monitor.hive_connector import HiveMetastoreConnector
 from app.services.path_resolver import PathResolver
 from app.utils.encryption import decrypt_cluster_password
@@ -89,6 +89,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             if not self.hive_password:
                 self.hive_password = cluster.hive_password
 
+        # 初始化MetadataManager (Story 6.1 - Epic-6)
+        self.metadata_manager = SafeHiveMetadataManager(cluster, self.hive_password)
+
     def set_progress_callback(self, callback: Callable[[str, str], None]):
         """设置进度回调函数"""
         self.progress_callback = callback
@@ -139,7 +142,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             _extract_from_response(exc)
 
             if isinstance(exc, hive_exc.Error):
-                for arg in getattr(exc, "args", ()):  # OperationalError 将详细信息放在 args[1]
+                for arg in getattr(
+                    exc, "args", ()
+                ):  # OperationalError 将详细信息放在 args[1]
                     if hasattr(arg, "status"):
                         _extract_from_response(arg)
                         continue
@@ -154,9 +159,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             if messages:
                 detail = " | ".join(messages)
-                logger.info(
-                    "Extracted Hive error detail: %s", detail
-                )
+                logger.info("Extracted Hive error detail: %s", detail)
                 return detail
             logger.warning(
                 "extract_error_detail fallback: %s %s (%r)",
@@ -240,7 +243,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 return result
 
             # 检查表是否存在
-            if not self._table_exists(task.database_name, task.table_name):
+            if not self.metadata_manager._table_exists(task.database_name, task.table_name):
                 result["valid"] = False
                 result["message"] = (
                     f"Table {task.database_name}.{task.table_name} does not exist"
@@ -248,14 +251,14 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 return result
 
             # 存储/格式检查：禁止对不受支持的表进行合并（如 Hudi/Iceberg/Delta/ACID）
-            fmt = self._get_table_format_info(task.database_name, task.table_name)
-            if self._is_unsupported_table_type(fmt):
+            fmt = self.metadata_manager._get_table_format_info(task.database_name, task.table_name)
+            if self.metadata_manager._is_unsupported_table_type(fmt):
                 result["valid"] = False
-                result["message"] = self._unsupported_reason(fmt)
+                result["message"] = self.metadata_manager._unsupported_reason(fmt)
                 return result
 
             # 检查是否为分区表
-            is_partitioned = self._is_partitioned_table(
+            is_partitioned = self.metadata_manager._is_partitioned_table(
                 task.database_name, task.table_name
             )
 
@@ -276,7 +279,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             # 检查临时表名是否冲突
             temp_table_name = self._generate_temp_table_name(task.table_name)
-            if self._table_exists(task.database_name, temp_table_name):
+            if self.metadata_manager._table_exists(task.database_name, temp_table_name):
                 result["warnings"].append(
                     f"Temporary table {temp_table_name} already exists, will be dropped"
                 )
@@ -299,55 +302,32 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         # 初始化详尽日志记录器
         merge_logger = MergeTaskLogger(task, db_session)
 
-        result = {
-            "success": False,
-            "files_before": 0,
-            "files_after": 0,
-            "size_saved": 0,
-            "duration": 0.0,
-            "message": "",
-            "sql_executed": [],
-            "temp_table_created": "",
-            "backup_table_created": "",
-            "log_summary": {},
-            "detailed_logs": [],
-        }
+        result = self._init_merge_result_dict()
 
         temp_table_name = self._generate_temp_table_name(task.table_name)
         backup_table_name = self._generate_backup_table_name(task.table_name)
 
         # 运行期再次进行严格的表类型校验，避免误操作
-        fmt = self._get_table_format_info(task.database_name, task.table_name)
-        if self._is_unsupported_table_type(fmt):
-            msg = self._unsupported_reason(fmt)
+        fmt = self.metadata_manager._get_table_format_info(task.database_name, task.table_name)
+        if self.metadata_manager._is_unsupported_table_type(fmt):
+            msg = self.metadata_manager._unsupported_reason(fmt)
             self._report_progress("failed", msg)
             self.update_task_status(
                 task, "failed", error_message=msg, db_session=db_session
             )
-            return {
-                "success": False,
-                "files_before": 0,
-                "files_after": 0,
-                "size_saved": 0,
-                "duration": time.time() - start_time,
-                "message": msg,
-                "sql_executed": [],
-                "temp_table_created": "",
-                "backup_table_created": "",
-                "log_summary": {},
-                "detailed_logs": [],
-            }
+            result = self._init_merge_result_dict()
+            result["duration"] = time.time() - start_time
+            result["message"] = msg
+            return result
 
-        original_format = self._infer_storage_format_name(fmt)
-        original_compression = self._infer_table_compression(fmt, original_format)
-        target_format = (task.target_storage_format or original_format or "TEXTFILE").upper()
-        if target_format not in {"PARQUET", "ORC", "TEXTFILE", "RCFILE", "AVRO"}:
-            target_format = original_format or "TEXTFILE"
-        compression_pref = task.target_compression.upper() if task.target_compression else None
-        if compression_pref in {"", "DEFAULT"}:
-            compression_pref = None
+        original_format = self.metadata_manager._infer_storage_format_name(fmt)
+        original_compression = self.metadata_manager._infer_table_compression(fmt, original_format)
+        target_format = self._determine_target_format(original_format, task.target_storage_format)
+        compression_pref = self._normalize_compression_preference(task.target_compression)
 
-        if task.partition_filter and (task.target_storage_format or task.target_compression):
+        if task.partition_filter and (
+            task.target_storage_format or task.target_compression
+        ):
             merge_logger.log(
                 MergePhase.INITIALIZATION,
                 MergeLogLevel.WARNING,
@@ -370,56 +350,44 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 },
             )
 
-        base_compression = (original_compression or "").upper()
-        if base_compression in {"", "DEFAULT"}:
-            base_compression = None
-        job_compression = None
-        if compression_pref == "KEEP":
-            job_compression = base_compression
-        elif compression_pref:
-            job_compression = compression_pref
-        else:
-            job_compression = base_compression or "SNAPPY"
+        job_compression = self._calculate_job_compression(original_compression, compression_pref)
 
         # 【分区表整表合并自动转换】
         # 如果partition_filter为空,检测是否分区表,如果是则使用动态分区整表合并
-        if not task.partition_filter:
-            if self._is_partitioned_table(task.database_name, task.table_name):
-                merge_logger.log(
-                    MergePhase.INITIALIZATION,
-                    MergeLogLevel.INFO,
-                    "检测到分区表整表合并请求,使用动态分区方案"
-                )
+        if self._should_use_dynamic_partition_merge(task, task.database_name, task.table_name):
+            merge_logger.log(
+                MergePhase.INITIALIZATION,
+                MergeLogLevel.INFO,
+                "检测到分区表整表合并请求,使用动态分区方案",
+            )
 
-                # 直接调用动态分区合并方法并返回
-                return self._execute_full_table_dynamic_partition_merge(
-                    task=task,
-                    merge_logger=merge_logger,
-                    db_session=db_session
-                )
+            # 直接调用动态分区合并方法并返回
+            return self._execute_full_table_dynamic_partition_merge(
+                task=task, merge_logger=merge_logger, db_session=db_session
+            )
 
         # 如果指定了分区过滤器，优先按分区级别执行合并（不进行整表原子切换）
         if task.partition_filter:
             spec = None  # 初始化spec变量用于异常处理
             try:
                 # 初始化进度追踪器
-                from app.engines.merge_progress_tracker import MergeProgressTracker
                 from app.engines.connection_manager import HiveConnectionManager
+                from app.engines.merge_progress_tracker import MergeProgressTracker
 
                 connection_manager = HiveConnectionManager(self.cluster)
                 progress_tracker = MergeProgressTracker(connection_manager)
 
                 # 连接测试
                 merge_logger.log(
-                    MergePhase.CONNECTION_TEST,
-                    MergeLogLevel.INFO,
-                    "开始执行连接测试"
+                    MergePhase.CONNECTION_TEST, MergeLogLevel.INFO, "开始执行连接测试"
                 )
-                if not self._test_connections(merge_logger=merge_logger, task=task, db_session=db_session):
+                if not self._test_connections(
+                    merge_logger=merge_logger, task=task, db_session=db_session
+                ):
                     merge_logger.log(
                         MergePhase.CONNECTION_TEST,
                         MergeLogLevel.ERROR,
-                        "连接测试失败，无法连接到Hive或HDFS"
+                        "连接测试失败，无法连接到Hive或HDFS",
                     )
                     raise Exception("Failed to connect to Hive or HDFS")
 
@@ -442,13 +410,13 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.INFO,
-                    f"分区规格生成成功: {spec}"
+                    f"分区规格生成成功: {spec}",
                 )
                 if not spec:
                     merge_logger.log(
                         MergePhase.EXECUTION,
                         MergeLogLevel.ERROR,
-                        f"分区过滤器不支持: {task.partition_filter}"
+                        f"分区过滤器不支持: {task.partition_filter}",
                     )
                     raise Exception(
                         f"Unsupported partition_filter: {task.partition_filter}"
@@ -458,12 +426,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 merge_logger.start_phase(
                     MergePhase.TEMP_TABLE_CREATION, "分区级Hive原生合并"
                 )
-                
+
                 # 使用Hive原生临时分区进行安全的分区合并
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.INFO,
-                    f"开始调用Hive原生合并方法，spec={spec}"
+                    f"开始调用Hive原生合并方法，spec={spec}",
                 )
 
                 native_result = self._execute_partition_native_merge(
@@ -473,15 +441,15 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.INFO,
-                    f"Hive原生合并方法返回: {native_result}"
+                    f"Hive原生合并方法返回: {native_result}",
                 )
 
                 if not native_result["success"]:
-                    error_msg = native_result.get('message', '未知错误')
+                    error_msg = native_result.get("message", "未知错误")
                     merge_logger.log(
                         MergePhase.EXECUTION,
                         MergeLogLevel.ERROR,
-                        f"分区Hive原生合并详细错误: {error_msg}"
+                        f"分区Hive原生合并详细错误: {error_msg}",
                     )
                     raise Exception(f"分区Hive原生合并失败: {error_msg}")
 
@@ -546,6 +514,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             except Exception as e:
                 # 若分区级失败，直接失败（不做整表替代）
                 import traceback
+
                 error_detail = self._extract_error_detail(e)
                 full_traceback = traceback.format_exc()
 
@@ -556,16 +525,16 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.ERROR,
-                    f"分区合并异常: {detailed_message}"
+                    f"分区合并异常: {detailed_message}",
                 )
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.ERROR,
-                    f"完整堆栈:\n{full_traceback}"
+                    f"完整堆栈:\n{full_traceback}",
                 )
 
                 result["message"] = f"Partition-level merge failed: {detailed_message}"
-                
+
                 result["duration"] = time.time() - start_time
                 self._report_progress("failed", result["message"])
                 # 使用改进后的错误信息更新任务状态
@@ -779,22 +748,18 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             # 第三步：切换为新数据
             # 读取原表 External/Location 信息，用于决定切换策略
-            fmt_info_after = self._get_table_format_info(
+            fmt_info_after = self.metadata_manager._get_table_format_info(
                 task.database_name, task.table_name
             )
             table_type_after = str(fmt_info_after.get("table_type", "")).upper()
             is_external = "EXTERNAL" in table_type_after
             original_location = (
-                self._get_table_location(task.database_name, task.table_name) or ""
+                self.metadata_manager._get_table_location(task.database_name, task.table_name) or ""
             )
-            parent_dir = (
-                "/".join([p for p in original_location.rstrip("/").split("/")[:-1]])
-                if original_location
-                else ""
-            )
+            parent_dir = self._extract_parent_directory(original_location)
             # 直接读取临时表LOCATION，作为影子目录来源
             temp_location = (
-                self._get_table_location(task.database_name, temp_table_name) or ""
+                self.metadata_manager._get_table_location(task.database_name, temp_table_name) or ""
             )
             if is_external and original_location and temp_location:
                 merge_logger.start_phase(MergePhase.ATOMIC_SWAP, "外部表目录切换")
@@ -812,7 +777,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 hdfs: WebHDFSClient = self.webhdfs_client
                 ts_id = int(time.time())
                 # 首选：备份到 .merge_shadow 根
-                shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ""
+                shadow_root = self._build_shadow_root_path(parent_dir)
                 backup_dir = f"{shadow_root}/backup_{ts_id}"
                 ok1, msg1 = self._hdfs_rename_with_fallback(
                     src=original_location,
@@ -824,7 +789,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 )
                 if not ok1:
                     # 二级回退：退到父目录 .merge_backup_<ts>
-                    alt_backup_dir = f"{parent_dir}/.merge_backup_{ts_id}" if parent_dir else ""
+                    alt_backup_dir = (
+                        f"{parent_dir}/.merge_backup_{ts_id}" if parent_dir else ""
+                    )
                     if alt_backup_dir:
                         ok1b, msg1b = self._hdfs_rename_with_fallback(
                             src=original_location,
@@ -837,7 +804,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                         if ok1b:
                             backup_dir = alt_backup_dir
                         else:
-                            raise RuntimeError(f"备份原目录失败: {msg1} ; fallback: {msg1b}")
+                            raise RuntimeError(
+                                f"备份原目录失败: {msg1} ; fallback: {msg1b}"
+                            )
                     else:
                         raise RuntimeError(f"备份原目录失败: {msg1}")
 
@@ -918,18 +887,11 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             except Exception as _:
                 pass
 
-            base_compression = (original_compression or "").upper()
-            if base_compression in {"", "DEFAULT"}:
-                base_compression = None
-            effective_meta_compression = None
-            if job_compression == "KEEP":
-                effective_meta_compression = base_compression
-            elif job_compression:
-                effective_meta_compression = job_compression
+            effective_meta_compression = self._calculate_effective_meta_compression(
+                original_compression, job_compression
+            )
 
-            if (
-                effective_format := target_format
-            ) and (
+            if (effective_format := target_format) and (
                 effective_format != original_format
                 or effective_meta_compression is not None
             ):
@@ -1103,14 +1065,14 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 raise Exception("Failed to connect to Hive or HDFS")
 
             # 检查是否为分区表
-            is_partitioned = self._is_partitioned_table(
+            is_partitioned = self.metadata_manager._is_partitioned_table(
                 task.database_name, task.table_name
             )
             preview["is_partitioned"] = is_partitioned
 
             # 如果是分区表，获取分区列表
             if is_partitioned:
-                partitions = self._get_table_partitions(
+                partitions = self.metadata_manager._get_table_partitions(
                     task.database_name, task.table_name
                 )
                 preview["partitions"] = partitions[:10]  # 最多显示10个分区
@@ -1367,15 +1329,6 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             logger.error(f"Hive connection test failed: {e}")
             return False
 
-    def _get_table_location(self, database_name: str, table_name: str) -> Optional[str]:
-        """获取表的HDFS位置（优先MetaStore，其次HS2，最后默认路径）"""
-        try:
-            return PathResolver.get_table_location(
-                self.cluster, database_name, table_name
-            )
-        except Exception as e:
-            logger.error(f"Failed to resolve table location: {e}")
-            return None
 
     def _create_hive_connection(self, database_name: str = None):
         """创建Hive连接（支持LDAP认证）"""
@@ -1408,144 +1361,11 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         except Exception as e:
             logger.warning(f"Failed to cleanup connections: {e}")
 
-    def _table_exists(self, database_name: str, table_name: str) -> bool:
-        """检查表是否存在"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f'SHOW TABLES LIKE "{table_name}"')
-            result = cursor.fetchone()
-            cursor.close()
-            conn.close()
-            return result is not None
-        except Exception:
-            return False
 
-    def _is_partitioned_table(self, database_name: str, table_name: str) -> bool:
-        """检查表是否为分区表"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
 
-            rows = cursor.fetchall()
-            is_partitioned = False
 
-            for row in rows:
-                if len(row) >= 2 and row[0] and "Partition Information" in str(row[0]):
-                    is_partitioned = True
-                    break
 
-            cursor.close()
-            conn.close()
-            return is_partitioned
-        except Exception as e:
-            logger.error(f"Failed to check if table is partitioned: {e}")
-            return False
 
-    def _get_table_partitions(self, database_name: str, table_name: str) -> List[str]:
-        """获取表的分区列表"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"SHOW PARTITIONS {table_name}")
-            partitions = [row[0] for row in cursor.fetchall()]
-            cursor.close()
-            conn.close()
-            return partitions
-        except Exception as e:
-            logger.error(f"Failed to get table partitions: {e}")
-            return []
-
-    def _get_table_format_info(
-        self, database_name: str, table_name: str
-    ) -> Dict[str, Any]:
-        """获取表的格式/属性信息，用于安全校验。
-        返回：{'input_format': str, 'serde_lib': str, 'storage_handler': str, 'tblproperties': {k:v}}
-        """
-        info: Dict[str, Any] = {
-            "input_format": "",
-            "output_format": "",
-            "serde_lib": "",
-            "storage_handler": "",
-            "tblproperties": {},
-            "table_type": "",
-        }
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            # 读取格式信息
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
-            rows = cursor.fetchall()
-            for row in rows:
-                if not row or len(row) < 2:
-                    continue
-                k = str(row[0]).strip()
-                v = str(row[1]).strip() if row[1] is not None else ""
-                if "InputFormat" in k:
-                    info["input_format"] = v
-                elif "OutputFormat" in k:
-                    info["output_format"] = v
-                elif "SerDe Library" in k:
-                    info["serde_lib"] = v
-                elif "Storage Handler" in k:
-                    info["storage_handler"] = v
-                elif "Table Type" in k or k.lower().startswith("type"):
-                    # values like EXTERNAL_TABLE / MANAGED_TABLE
-                    info["table_type"] = v
-            # 读取表属性
-            try:
-                cursor.execute(f"SHOW TBLPROPERTIES {table_name}")
-                props = cursor.fetchall()
-                for pr in props:
-                    # 常见返回为 (key, value)
-                    if len(pr) >= 2:
-                        info["tblproperties"][str(pr[0]).strip()] = str(pr[1]).strip()
-            except Exception:
-                pass
-            cursor.close()
-            conn.close()
-        except Exception:
-            pass
-        return info
-
-    def _infer_storage_format_name(self, fmt: Dict[str, Any]) -> str:
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde = str(fmt.get("serde_lib", "")).lower()
-        for fmt_name, keywords in self._FORMAT_KEYWORDS.items():
-            if any(keyword in input_fmt for keyword in keywords):
-                return fmt_name
-            if any(keyword in serde for keyword in keywords):
-                return fmt_name
-        return "TEXTFILE"
-
-    def _infer_table_compression(
-        self, fmt: Dict[str, Any], storage_format: str
-    ) -> str:
-        props = {
-            str(k).lower(): str(v).upper()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
-        if storage_format == "ORC":
-            value = props.get("orc.compress") or props.get("orc.default.compress")
-            if value:
-                return value.upper()
-            return "ZLIB"
-        if storage_format == "PARQUET":
-            value = props.get("parquet.compression")
-            if value:
-                return value.upper()
-            return "SNAPPY"
-        if storage_format == "TEXTFILE":
-            value = props.get("compression") or props.get("fileoutputformat.compress")
-            if value:
-                return value.upper()
-            codec = props.get("mapreduce.output.fileoutputformat.compress.codec")
-            if codec:
-                codec = codec.rsplit('.', 1)[-1]
-                return codec.upper()
-            return "NONE"
-        return "DEFAULT"
 
     def _apply_output_settings(
         self,
@@ -1652,107 +1472,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 details={"code": "W902"},
             )
 
-    def _is_unsupported_table_type(self, fmt: Dict[str, Any]) -> bool:
-        """识别不受支持的表类型（Hudi/Iceberg/Delta/ACID等）"""
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde_lib = str(fmt.get("serde_lib", "")).lower()
-        storage_handler = str(fmt.get("storage_handler", "")).lower()
-        props = {
-            str(k).lower(): str(v).lower()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
 
-        # Hudi 检测：handler/serde/input 或 hoodie.* 属性
-        if (
-            "hudi" in input_fmt
-            or "hudi" in serde_lib
-            or "hudi" in storage_handler
-            or any(k.startswith("hoodie.") for k in props.keys())
-        ):
-            return True
-        # Iceberg 检测
-        if (
-            "iceberg" in input_fmt
-            or "iceberg" in storage_handler
-            or "iceberg" in serde_lib
-        ):
-            return True
-        # Delta 检测
-        if "delta" in input_fmt or "delta" in storage_handler or "delta" in serde_lib:
-            return True
-        # ACID 事务表：必须 transactional=true 或 storage handler 含 acid
-        if props.get("transactional") == "true" or "acid" in storage_handler:
-            return True
-        return False
 
-    def _unsupported_reason(self, fmt: Dict[str, Any]) -> str:
-        input_fmt = str(fmt.get("input_format", "")).lower()
-        serde_lib = str(fmt.get("serde_lib", "")).lower()
-        storage_handler = str(fmt.get("storage_handler", "")).lower()
-        props = {
-            str(k).lower(): str(v).lower()
-            for k, v in fmt.get("tblproperties", {}).items()
-        }
-
-        if (
-            "hudi" in input_fmt
-            or "hudi" in serde_lib
-            or "hudi" in storage_handler
-            or any(k.startswith("hoodie.") for k in props.keys())
-        ):
-            return "目标表为 Hudi 表，当前合并引擎不支持对 Hudi 表执行合并，请使用 Hudi 自带的压缩/合并机制（如 compaction/cluster）"
-        if (
-            "iceberg" in input_fmt
-            or "iceberg" in storage_handler
-            or "iceberg" in serde_lib
-        ):
-            return "目标表为 Iceberg 表，当前合并引擎不支持该表的合并操作"
-        if "delta" in input_fmt or "delta" in storage_handler or "delta" in serde_lib:
-            return "目标表为 Delta 表，当前合并引擎不支持该表的合并操作"
-        if props.get("transactional") == "true" or "acid" in storage_handler:
-            return "目标表为 ACID/事务表，当前合并引擎不支持该表的合并操作"
-        return "目标表类型不受支持，已阻止合并操作"
-
-    def _get_table_columns(
-        self, database_name: str, table_name: str
-    ) -> (List[str], List[str]):
-        """获取表的字段列表（非分区列、分区列）"""
-        try:
-            conn = self._create_hive_connection(database_name)
-            cursor = conn.cursor()
-            cursor.execute(f"DESCRIBE FORMATTED {table_name}")
-            rows = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            nonpart: List[str] = []
-            parts: List[str] = []
-            in_part = False
-            for row in rows:
-                if not row or len(row) < 1:
-                    continue
-                first = str(row[0]).strip()
-                if not first:
-                    continue
-                if first.startswith("#"):
-                    if "Partition Information" in first:
-                        in_part = True
-                    continue
-                if first.lower() == "col_name" or first.lower().startswith("name"):
-                    continue
-                # 过滤非字段行（如详细信息）
-                if ":" in first:
-                    # 进入详细信息部分
-                    break
-                if in_part:
-                    parts.append(first)
-                else:
-                    nonpart.append(first)
-            # 去掉可能的空白/无效项
-            nonpart = [c for c in nonpart if c and c != "col_name"]
-            parts = [c for c in parts if c and c != "col_name"]
-            return nonpart, parts
-        except Exception:
-            return [], []
 
     def _partition_filter_to_spec(self, partition_filter: str) -> Optional[str]:
         """将 WHERE 风格的分区过滤转换为 PARTITION 规范，例如:
@@ -1787,16 +1508,16 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         将包含OR条件的partition_filter拆分成多个单分区条件
         例如: (partition_id='p1' OR partition_id='p2') -> ['partition_id=\'p1\'', 'partition_id=\'p2\'']
         """
-        if not partition_filter or 'or' not in partition_filter.lower():
+        if not partition_filter or "or" not in partition_filter.lower():
             return [partition_filter] if partition_filter else []
 
         # 移除外层括号
         cleaned = partition_filter.strip()
-        if cleaned.startswith('(') and cleaned.endswith(')'):
+        if cleaned.startswith("(") and cleaned.endswith(")"):
             cleaned = cleaned[1:-1].strip()
 
         # 使用正则分割OR (忽略大小写)
-        parts = re.split(r'\s+or\s+', cleaned, flags=re.IGNORECASE)
+        parts = re.split(r"\s+or\s+", cleaned, flags=re.IGNORECASE)
         return [part.strip() for part in parts if part.strip()]
 
     def _get_partition_hdfs_path(
@@ -1819,7 +1540,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             partition_value = match.group(1)  # 例如: partition_0000
 
             # 2. 获取表的HDFS根路径
-            root_location = self._get_table_location(database_name, table_name)
+            root_location = self.metadata_manager._get_table_location(database_name, table_name)
             if not root_location:
                 return None
 
@@ -1845,12 +1566,16 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 # 移除可能的括号
                 partition_key = partition_filter.split("=")[0].strip().strip("()")
                 standard_format = f"{partition_key}={partition_value}"
-                logger.info(f"查找分区目录: partition_key={partition_key}, partition_value={partition_value}, standard_format={standard_format}")
+                logger.info(
+                    f"查找分区目录: partition_key={partition_key}, partition_value={partition_value}, standard_format={standard_format}"
+                )
 
                 # 首先查找标准格式的分区目录
                 for file_info in file_statuses:
                     if file_info.is_directory and standard_format in file_info.path:
-                        logger.info(f"通过WebHDFS找到分区路径(标准格式): {file_info.path}")
+                        logger.info(
+                            f"通过WebHDFS找到分区路径(标准格式): {file_info.path}"
+                        )
                         return file_info.path
 
                 # 如果没找到标准格式,尝试匹配只包含分区值的目录(非标准格式)
@@ -1858,16 +1583,21 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     # 确保不会误匹配到标准格式的一部分
                     path_suffix = file_info.path.split("/")[-1]
                     if file_info.is_directory and path_suffix == partition_value:
-                        logger.info(f"通过WebHDFS找到分区路径(非标准格式): {file_info.path}")
+                        logger.info(
+                            f"通过WebHDFS找到分区路径(非标准格式): {file_info.path}"
+                        )
                         return file_info.path
 
-                logger.warning(f"未找到匹配分区值 '{partition_value}' 的目录(标准格式:{standard_format})")
+                logger.warning(
+                    f"未找到匹配分区值 '{partition_value}' 的目录(标准格式:{standard_format})"
+                )
                 return self._resolve_partition_path_fallback(
                     database_name, table_name, partition_filter
                 )
 
             except Exception as hdfs_e:
                 import traceback
+
                 logger.warning(f"WebHDFS查询分区目录失败: {hdfs_e}")
                 logger.warning(f"异常堆栈: {traceback.format_exc()}")
                 return self._resolve_partition_path_fallback(
@@ -1876,6 +1606,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
         except Exception as e:
             import traceback
+
             logger.warning(f"Failed to get partition HDFS path via WebHDFS: {e}")
             logger.warning(f"外层异常堆栈: {traceback.format_exc()}")
             # 回退到简单拼接方法
@@ -1888,7 +1619,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     ) -> Optional[str]:
         """根据分区过滤器解析分区在 HDFS 的路径（在表根路径下拼接spec）- 回退方法"""
         try:
-            root = self._get_table_location(database_name, table_name)
+            root = self.metadata_manager._get_table_location(database_name, table_name)
             if not root:
                 return None
 
@@ -1912,7 +1643,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             if not normalized:
                 return None
 
-            logger.info(f"_resolve_partition_path_fallback: root={root}, normalized={normalized}")
+            logger.info(
+                f"_resolve_partition_path_fallback: root={root}, normalized={normalized}"
+            )
             return root.rstrip("/") + "/" + normalized
         except Exception as e:
             logger.error(f"_resolve_partition_path_fallback failed: {e}")
@@ -1922,8 +1655,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         self, database_name: str, table_name: str, partition_filter: str
     ) -> Optional[str]:
         """根据分区过滤器解析分区在 HDFS 的路径 - 兼容方法,调用新实现"""
-        logger.info(f"_resolve_partition_path被调用: database={database_name}, table={table_name}, filter={partition_filter}")
-        result = self._get_partition_hdfs_path(database_name, table_name, partition_filter)
+        logger.info(
+            f"_resolve_partition_path被调用: database={database_name}, table={table_name}, filter={partition_filter}"
+        )
+        result = self._get_partition_hdfs_path(
+            database_name, table_name, partition_filter
+        )
         logger.info(f"_resolve_partition_path返回: {result}")
         return result
 
@@ -1932,7 +1669,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     ) -> bool:
         """验证分区过滤器"""
         try:
-            partitions = self._get_table_partitions(database_name, table_name)
+            partitions = self.metadata_manager._get_table_partitions(database_name, table_name)
 
             # 简单匹配验证：检查是否有分区包含过滤条件的内容
             for partition in partitions:
@@ -1952,6 +1689,194 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         """生成备份表名"""
         timestamp = int(time.time())
         return f"{table_name}_backup_{timestamp}"
+
+    def _init_merge_result_dict(self) -> Dict[str, Any]:
+        """初始化合并结果字典.
+
+        Returns:
+            Dict[str, Any]: 包含所有默认字段的结果字典
+        """
+        return {
+            "success": False,
+            "files_before": 0,
+            "files_after": 0,
+            "size_saved": 0,
+            "duration": 0.0,
+            "message": "",
+            "sql_executed": [],
+            "temp_table_created": "",
+            "backup_table_created": "",
+            "log_summary": {},
+            "detailed_logs": [],
+        }
+
+    def _determine_target_format(
+        self, original_format: Optional[str], task_target_format: Optional[str]
+    ) -> str:
+        """确定目标存储格式.
+
+        Args:
+            original_format: 原始表格式
+            task_target_format: 任务指定的目标格式
+
+        Returns:
+            str: 最终确定的目标格式 (大写)
+        """
+        target_format = (task_target_format or original_format or "TEXTFILE").upper()
+        if target_format not in {"PARQUET", "ORC", "TEXTFILE", "RCFILE", "AVRO"}:
+            target_format = original_format or "TEXTFILE"
+        return target_format
+
+    def _normalize_compression_preference(
+        self, compression_preference: Optional[str]
+    ) -> Optional[str]:
+        """规范化压缩偏好设置.
+
+        将用户指定的压缩偏好转换为规范格式:
+        - None/空字符串/"DEFAULT" → None
+        - 其他 → 大写
+
+        Args:
+            compression_preference: 用户指定的压缩偏好
+
+        Returns:
+            Optional[str]: 规范化后的压缩偏好,或None
+        """
+        if not compression_preference:
+            return None
+
+        normalized = compression_preference.upper()
+        if normalized in {"", "DEFAULT"}:
+            return None
+
+        return normalized
+
+    def _should_use_dynamic_partition_merge(
+        self, task, database_name: str, table_name: str
+    ) -> bool:
+        """判断是否应该使用动态分区合并.
+
+        当满足以下条件时返回True:
+        1. 未指定partition_filter (整表合并)
+        2. 目标表是分区表
+
+        Args:
+            task: 合并任务对象
+            database_name: 数据库名
+            table_name: 表名
+
+        Returns:
+            bool: True表示应使用动态分区合并,False表示使用常规合并
+        """
+        if task.partition_filter:
+            return False
+        return self.metadata_manager._is_partitioned_table(database_name, table_name)
+
+    def _extract_parent_directory(self, hdfs_path: Optional[str]) -> str:
+        """从HDFS路径中提取父目录.
+
+        将完整的HDFS路径提取为父目录路径,用于创建备份或影子目录.
+
+        Args:
+            hdfs_path: HDFS路径,例如 "hdfs://namenode/user/hive/warehouse/db.db/table"
+
+        Returns:
+            str: 父目录路径,例如 "hdfs://namenode/user/hive/warehouse/db.db"
+                 如果输入为空或None,返回空字符串
+
+        Examples:
+            >>> _extract_parent_directory("hdfs://nn/user/hive/warehouse/db.db/table")
+            "hdfs://nn/user/hive/warehouse/db.db"
+            >>> _extract_parent_directory("hdfs://nn/user/hive/warehouse/db.db/table/")
+            "hdfs://nn/user/hive/warehouse/db.db"
+            >>> _extract_parent_directory("")
+            ""
+            >>> _extract_parent_directory(None)
+            ""
+        """
+        if not hdfs_path:
+            return ""
+        # 移除尾部斜杠,分割路径,去掉最后一个部分(表名),重新组合
+        return "/".join([p for p in hdfs_path.rstrip("/").split("/")[:-1]])
+
+    def _build_shadow_root_path(self, parent_dir: str) -> str:
+        """构建影子目录根路径.
+
+        在父目录下创建.merge_shadow根目录,用于存放合并过程中的临时数据.
+
+        Args:
+            parent_dir: 父目录路径
+
+        Returns:
+            str: 影子目录根路径,格式为 "{parent_dir}/.merge_shadow"
+                 如果parent_dir为空,返回空字符串
+
+        Examples:
+            >>> _build_shadow_root_path("hdfs://nn/user/hive/warehouse/db.db")
+            "hdfs://nn/user/hive/warehouse/db.db/.merge_shadow"
+            >>> _build_shadow_root_path("")
+            ""
+        """
+        return f"{parent_dir}/.merge_shadow" if parent_dir else ""
+
+    def _calculate_effective_meta_compression(
+        self, original_compression: Optional[str], job_compression: Optional[str]
+    ) -> Optional[str]:
+        """计算最终的元数据压缩设置.
+
+        根据原始压缩和作业压缩设置,计算应该写入元数据的有效压缩设置.
+
+        Args:
+            original_compression: 原始表的压缩设置
+            job_compression: 合并作业的压缩设置(可以是KEEP或具体压缩算法)
+
+        Returns:
+            Optional[str]: 有效的元数据压缩设置
+                          - None: 无需更新元数据
+                          - "SNAPPY/GZIP/etc": 具体的压缩算法
+
+        Logic:
+            1. 规范化original_compression (移除空字符串和DEFAULT)
+            2. 如果job_compression是KEEP,使用原始压缩
+            3. 否则使用job_compression
+        """
+        # 规范化原始压缩设置
+        base_compression = (original_compression or "").upper()
+        if base_compression in {"", "DEFAULT"}:
+            base_compression = None
+
+        # 计算有效压缩
+        if job_compression == "KEEP":
+            return base_compression
+        elif job_compression:
+            return job_compression
+        else:
+            return None
+
+    def _calculate_job_compression(
+        self,
+        original_compression: Optional[str],
+        compression_preference: Optional[str],
+    ) -> str:
+        """计算最终的作业压缩设置.
+
+        Args:
+            original_compression: 原始表的压缩设置
+            compression_preference: 用户指定的压缩偏好 (可能是KEEP/SNAPPY/GZIP等)
+
+        Returns:
+            str: 最终的压缩设置
+        """
+        base_compression = (original_compression or "").upper()
+        if base_compression in {"", "DEFAULT"}:
+            base_compression = None
+
+        if compression_preference == "KEEP":
+            return base_compression
+        elif compression_preference:
+            return compression_preference
+        else:
+            return base_compression or "SNAPPY"
 
     def _create_temp_table(self, task: MergeTask, temp_table_name: str) -> List[str]:
         """创建临时表并执行合并"""
@@ -2132,7 +2057,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             cur = conn.cursor()
             cur.execute(f"dfs -mv {src} {dst}")
             try:
-                cur.close(); conn.close()
+                cur.close()
+                conn.close()
             except Exception:
                 pass
             merge_logger.log_hdfs_operation(
@@ -2173,7 +2099,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             cursor = conn.cursor()
 
             # 检查备份表是否存在，如果存在则恢复
-            if self._table_exists(task.database_name, backup_table_name):
+            if self.metadata_manager._table_exists(task.database_name, backup_table_name):
                 # 删除可能存在的损坏的原表
                 drop_damaged_sql = f"DROP TABLE IF EXISTS {task.table_name}"
                 cursor.execute(drop_damaged_sql)
@@ -2211,7 +2137,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         """获取表的文件数量（使用WebHDFS精确统计）"""
         try:
             # 获取表的HDFS路径
-            table_location = self._get_table_location(database_name, table_name)
+            table_location = self.metadata_manager._get_table_location(database_name, table_name)
             if not table_location:
                 logger.error(
                     f"Could not get table location for {database_name}.{table_name}"
@@ -2256,7 +2182,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         """获取临时表的文件数量（使用WebHDFS精确统计）"""
         try:
             # 获取临时表的HDFS路径
-            table_location = self._get_table_location(database_name, temp_table_name)
+            table_location = self.metadata_manager._get_table_location(database_name, temp_table_name)
             if not table_location:
                 logger.error(
                     f"Could not get temp table location for {database_name}.{temp_table_name}"
@@ -2314,7 +2240,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
     ) -> int:
         """带日志记录的文件数量获取"""
         try:
-            table_location = self._get_table_location(database_name, table_name)
+            table_location = self.metadata_manager._get_table_location(database_name, table_name)
             if not table_location:
                 merge_logger.log(
                     MergePhase.FILE_ANALYSIS,
@@ -2433,22 +2359,18 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             # 创建临时表并执行合并
             # 读取原表是否为 EXTERNAL（用于保持表类型与路径）
-            fmt_info = self._get_table_format_info(task.database_name, task.table_name)
+            fmt_info = self.metadata_manager._get_table_format_info(task.database_name, task.table_name)
             table_type = str(fmt_info.get("table_type", "")).upper()
             is_external = "EXTERNAL" in table_type
             original_location = (
-                self._get_table_location(task.database_name, task.table_name) or ""
+                self.metadata_manager._get_table_location(task.database_name, task.table_name) or ""
             )
             # 影子目录：在原父目录下使用固定根 ".merge_shadow"，并在其下创建按时间戳命名的子目录
             # 例如：hdfs://.../parent/.merge_shadow/<ts>
             ts_id = int(time.time())
             # 将影子目录切回原父目录，避免 /warehouse 路径的 HttpFS 限制
-            parent_dir = (
-                "/".join([p for p in original_location.rstrip("/").split("/")[:-1]])
-                if original_location
-                else ""
-            )
-            shadow_root = f"{parent_dir}/.merge_shadow" if parent_dir else ""
+            parent_dir = self._extract_parent_directory(original_location)
+            shadow_root = self._build_shadow_root_path(parent_dir)
             shadow_dir = f"{shadow_root}/{ts_id}" if shadow_root else ""
 
             # 外部表：预创建影子目标目录，优先通过 HS2 执行 dfs，失败再回退 WebHDFS
@@ -2547,9 +2469,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 cursor.execute(create_like_sql)
                 sql_statements.append(create_like_sql)
                 if effective_format and effective_format != original_format:
-                    alter_temp_fmt = (
-                        f"ALTER TABLE {temp_table_name} SET FILEFORMAT {effective_format}"
-                    )
+                    alter_temp_fmt = f"ALTER TABLE {temp_table_name} SET FILEFORMAT {effective_format}"
                     merge_logger.log_sql_execution(
                         alter_temp_fmt, MergePhase.TEMP_TABLE_CREATION
                     )
@@ -2562,9 +2482,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                             job_compression, self._ORC_COMPRESSION.get("NONE")
                         )
                         if mapped_prop:
-                            tbl_sql = (
-                                f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('orc.compress'='{mapped_prop}')"
-                            )
+                            tbl_sql = f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('orc.compress'='{mapped_prop}')"
                             cursor.execute(tbl_sql)
                             merge_logger.log_sql_execution(
                                 tbl_sql, MergePhase.TEMP_TABLE_CREATION
@@ -2575,9 +2493,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                             job_compression, self._PARQUET_COMPRESSION.get("NONE")
                         )
                         if mapped_prop:
-                            tbl_sql = (
-                                f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('parquet.compression'='{mapped_prop}')"
-                            )
+                            tbl_sql = f"ALTER TABLE {temp_table_name} SET TBLPROPERTIES('parquet.compression'='{mapped_prop}')"
                             cursor.execute(tbl_sql)
                             merge_logger.log_sql_execution(
                                 tbl_sql, MergePhase.TEMP_TABLE_CREATION
@@ -2603,7 +2519,8 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                             properties.append(f"'orc.compress'='{mapped}'")
                     elif effective_format == "PARQUET":
                         mapped = self._PARQUET_COMPRESSION.get(
-                            effective_compression, self._PARQUET_COMPRESSION.get("SNAPPY")
+                            effective_compression,
+                            self._PARQUET_COMPRESSION.get("SNAPPY"),
                         )
                         if mapped:
                             properties.append(f"'parquet.compression'='{mapped}'")
@@ -2618,9 +2535,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     if task.partition_filter
                     else f"SELECT * FROM {task.table_name} DISTRIBUTE BY 1"
                 )
-                create_sql = (
-                    f"CREATE TABLE {temp_table_name}{storage_clause}{props_clause} AS {select_sql}"
-                )
+                create_sql = f"CREATE TABLE {temp_table_name}{storage_clause}{props_clause} AS {select_sql}"
                 # 长时 SQL：增加心跳日志
                 self._execute_sql_with_heartbeat(
                     cursor=cursor,
@@ -2765,10 +2680,10 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         hb = threading.Thread(target=_heartbeat, daemon=True)
         hb.start()
         try:
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] cursor.execute(sql) started...\n")
             cursor.execute(sql)
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] cursor.execute(sql) completed\n")
             stop.set()
             hb.join(timeout=0.2)
@@ -2861,37 +2776,6 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
     # ========== Hive原生分区合并辅助方法 ==========
 
-    def _is_partitioned_table(self, database: str, table: str) -> bool:
-        """
-        检测表是否为分区表
-
-        Args:
-            database: 数据库名
-            table: 表名
-
-        Returns:
-            True if table is partitioned, False otherwise
-        """
-        try:
-            conn = self._create_hive_connection(database)
-            cursor = conn.cursor()
-
-            # 使用SHOW PARTITIONS检测(如果表是分区表会返回分区列表,否则报错)
-            try:
-                cursor.execute(f"SHOW PARTITIONS {database}.{table}")
-                # 如果执行成功,说明是分区表
-                cursor.close()
-                conn.close()
-                return True
-            except Exception:
-                # 如果报错(Table is not a partitioned table),说明不是分区表
-                cursor.close()
-                conn.close()
-                return False
-
-        except Exception as e:
-            logger.error(f"Failed to check if table is partitioned: {e}")
-            return False
 
     def _get_partition_columns(self, database: str, table: str) -> list[str]:
         """
@@ -2925,19 +2809,19 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 col_name = str(row[0]).strip()
 
                 # 检测分区信息部分开始
-                if col_name.startswith('# Partition Information'):
+                if col_name.startswith("# Partition Information"):
                     in_partition_section = True
                     continue
 
                 # 在分区信息部分,跳过标题行
                 if in_partition_section:
-                    if col_name.startswith('# col_name'):
+                    if col_name.startswith("# col_name"):
                         continue
                     # 遇到空行或其他section,结束
-                    if col_name == '' or col_name.startswith('#'):
+                    if col_name == "" or col_name.startswith("#"):
                         break
                     # 提取分区列名(第一列)
-                    if col_name and not col_name.startswith('#'):
+                    if col_name and not col_name.startswith("#"):
                         partition_cols.append(col_name)
 
             return partition_cols
@@ -2974,12 +2858,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     raw_spec = partition_tuple[0]
                     # 分割key=value对
                     parts = []
-                    for part in raw_spec.split('/'):
-                        if '=' in part:
-                            key, value = part.split('=', 1)
+                    for part in raw_spec.split("/"):
+                        if "=" in part:
+                            key, value = part.split("=", 1)
                             parts.append(f"{key}='{value}'")
                     if parts:
-                        partition_specs.append(', '.join(parts))
+                        partition_specs.append(", ".join(parts))
 
             return partition_specs
 
@@ -2996,6 +2880,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             dt='2024-01-01' AND hour='12' -> {'dt': '2024-01-01', 'hour': '12'}
         """
         import re
+
         result = {}
         # 匹配 key='value' 或 key="value"
         pattern = r"(\w+)\s*=\s*['\"]([^'\"]+)['\"]"
@@ -3004,7 +2889,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             result[key] = value
         return result
 
-    def _parse_table_schema_from_show_create(self, database: str, table: str) -> Dict[str, Any]:
+    def _parse_table_schema_from_show_create(
+        self, database: str, table: str
+    ) -> Dict[str, Any]:
         """
         通过SHOW CREATE TABLE解析表结构,避免继承ACID属性
 
@@ -3035,14 +2922,18 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             # 拼接所有行为完整DDL
             ddl_lines = [row[0] for row in result if row and row[0]]
-            ddl = '\n'.join(ddl_lines)
+            ddl = "\n".join(ddl_lines)
 
             # 解析列定义(非分区列)
             columns = []
-            col_pattern = r'`(\w+)`\s+(\w+(?:\([^)]+\))?)'
+            col_pattern = r"`(\w+)`\s+(\w+(?:\([^)]+\))?)"
 
             # 提取CREATE TABLE 和 PARTITIONED BY之间的列
-            create_section_match = re.search(r'CREATE.*?TABLE.*?\((.*?)(?:PARTITIONED BY|\))', ddl, re.DOTALL | re.IGNORECASE)
+            create_section_match = re.search(
+                r"CREATE.*?TABLE.*?\((.*?)(?:PARTITIONED BY|\))",
+                ddl,
+                re.DOTALL | re.IGNORECASE,
+            )
             if create_section_match:
                 col_section = create_section_match.group(1)
                 for match in re.finditer(col_pattern, col_section):
@@ -3051,7 +2942,9 @@ class SafeHiveMergeEngine(BaseMergeEngine):
 
             # 解析分区列
             partition_columns = []
-            part_match = re.search(r'PARTITIONED BY\s*\((.*?)\)', ddl, re.DOTALL | re.IGNORECASE)
+            part_match = re.search(
+                r"PARTITIONED BY\s*\((.*?)\)", ddl, re.DOTALL | re.IGNORECASE
+            )
             if part_match:
                 part_section = part_match.group(1)
                 for match in re.finditer(col_pattern, part_section):
@@ -3059,16 +2952,18 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                     partition_columns.append((col_name, col_type))
 
             # 提取SERDE
-            serde = 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'  # 默认值
+            serde = "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"  # 默认值
             serde_match = re.search(r"ROW FORMAT SERDE\s+'([^']+)'", ddl, re.IGNORECASE)
             if serde_match:
                 serde = serde_match.group(1)
 
             # 提取INPUTFORMAT和OUTPUTFORMAT
-            input_format = 'org.apache.hadoop.mapred.TextInputFormat'
-            output_format = 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+            input_format = "org.apache.hadoop.mapred.TextInputFormat"
+            output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
 
-            input_match = re.search(r"STORED AS INPUTFORMAT\s+'([^']+)'", ddl, re.IGNORECASE)
+            input_match = re.search(
+                r"STORED AS INPUTFORMAT\s+'([^']+)'", ddl, re.IGNORECASE
+            )
             if input_match:
                 input_format = input_match.group(1)
 
@@ -3083,12 +2978,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 location = loc_match.group(1)
 
             return {
-                'columns': columns,
-                'partition_columns': partition_columns,
-                'serde': serde,
-                'input_format': input_format,
-                'output_format': output_format,
-                'location': location
+                "columns": columns,
+                "partition_columns": partition_columns,
+                "serde": serde,
+                "input_format": input_format,
+                "output_format": output_format,
+                "location": location,
             }
 
         except Exception as e:
@@ -3106,49 +3001,48 @@ class SafeHiveMergeEngine(BaseMergeEngine):
             (input_format, output_format, serde)元组
         """
         format_mapping = {
-            'TEXTFILE': (
-                'org.apache.hadoop.mapred.TextInputFormat',
-                'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat',
-                'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
+            "TEXTFILE": (
+                "org.apache.hadoop.mapred.TextInputFormat",
+                "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+                "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe",
             ),
-            'PARQUET': (
-                'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
-                'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
-                'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+            "PARQUET": (
+                "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",
+                "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat",
+                "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe",
             ),
-            'ORC': (
-                'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat',
-                'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat',
-                'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
+            "ORC": (
+                "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat",
+                "org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat",
+                "org.apache.hadoop.hive.ql.io.orc.OrcSerde",
             ),
-            'RCFILE': (
-                'org.apache.hadoop.hive.ql.io.RCFileInputFormat',
-                'org.apache.hadoop.hive.ql.io.RCFileOutputFormat',
-                'org.apache.hadoop.hive.serde2.columnar.LazyBinaryColumnarSerDe'
+            "RCFILE": (
+                "org.apache.hadoop.hive.ql.io.RCFileInputFormat",
+                "org.apache.hadoop.hive.ql.io.RCFileOutputFormat",
+                "org.apache.hadoop.hive.serde2.columnar.LazyBinaryColumnarSerDe",
             ),
-            'SEQUENCEFILE': (
-                'org.apache.hadoop.mapred.SequenceFileInputFormat',
-                'org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat',
-                'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
+            "SEQUENCEFILE": (
+                "org.apache.hadoop.mapred.SequenceFileInputFormat",
+                "org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat",
+                "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe",
             ),
-            'AVRO': (
-                'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat',
-                'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat',
-                'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
-            )
+            "AVRO": (
+                "org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat",
+                "org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat",
+                "org.apache.hadoop.hive.serde2.avro.AvroSerDe",
+            ),
         }
 
         fmt = storage_format.upper()
         if fmt not in format_mapping:
-            raise ValueError(f"不支持的存储格式: {storage_format}。支持的格式: {', '.join(format_mapping.keys())}")
+            raise ValueError(
+                f"不支持的存储格式: {storage_format}。支持的格式: {', '.join(format_mapping.keys())}"
+            )
 
         return format_mapping[fmt]
 
     def _execute_full_table_dynamic_partition_merge(
-        self,
-        task: MergeTask,
-        merge_logger: MergeTaskLogger,
-        db_session: Session
+        self, task: MergeTask, merge_logger: MergeTaskLogger, db_session: Session
     ) -> Dict[str, Any]:
         """
         分区表整表合并: 使用Hive动态分区一次性INSERT所有分区
@@ -3159,9 +3053,12 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         - 支持格式转换
         """
         import sys
+
         # 写入日志文件
-        with open('/tmp/merge_debug.log', 'a') as f:
-            f.write(f"\n[{time.time()}] _execute_full_table_dynamic_partition_merge started for task {task.id}\n")
+        with open("/tmp/merge_debug.log", "a") as f:
+            f.write(
+                f"\n[{time.time()}] _execute_full_table_dynamic_partition_merge started for task {task.id}\n"
+            )
         print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Method started")
         sys.stdout.flush()
         database = task.database_name
@@ -3170,100 +3067,132 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         temp_table = f"{table}_merge_temp_{ts}"
         backup_table = f"{table}_backup_{ts}"
 
-        print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization...")
+        print(
+            f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization..."
+        )
         sys.stdout.flush()
         merge_logger.log(
             MergePhase.INITIALIZATION,
             MergeLogLevel.INFO,
-            f"开始初始化: 分区表整表合并(动态分区模式) - {database}.{table}"
+            f"开始初始化: 分区表整表合并(动态分区模式) - {database}.{table}",
         )
 
         try:
             # 1. 获取分区列
-            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling _get_partition_columns...")
+            print(
+                f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling _get_partition_columns..."
+            )
             sys.stdout.flush()
             partition_cols = self._get_partition_columns(database, table)
-            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] _get_partition_columns returned: {partition_cols}")
+            print(
+                f"[DEBUG _execute_full_table_dynamic_partition_merge] _get_partition_columns returned: {partition_cols}"
+            )
             sys.stdout.flush()
             if not partition_cols:
                 raise Exception("无法获取分区列定义")
 
-            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging partition columns...")
+            print(
+                f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging partition columns..."
+            )
             sys.stdout.flush()
             merge_logger.log(
                 MergePhase.INITIALIZATION,
                 MergeLogLevel.INFO,
-                f"分区列获取成功: {', '.join(partition_cols)}"
+                f"分区列获取成功: {', '.join(partition_cols)}",
             )
 
             # 2. 获取统计信息
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Getting table location...\n")
-            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Getting table location...")
+            print(
+                f"[DEBUG _execute_full_table_dynamic_partition_merge] Getting table location..."
+            )
             sys.stdout.flush()
             files_before = None
             try:
-                table_location = self._get_table_location(database, table)
-                with open('/tmp/merge_debug.log', 'a') as f:
+                table_location = self.metadata_manager._get_table_location(database, table)
+                with open("/tmp/merge_debug.log", "a") as f:
                     f.write(f"[{time.time()}] Table location: {table_location}\n")
-                print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Table location: {table_location}")
+                print(
+                    f"[DEBUG _execute_full_table_dynamic_partition_merge] Table location: {table_location}"
+                )
                 sys.stdout.flush()
                 if table_location:
-                    with open('/tmp/merge_debug.log', 'a') as f:
+                    with open("/tmp/merge_debug.log", "a") as f:
                         f.write(f"[{time.time()}] Calling scan_directory_stats...\n")
-                    print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling scan_directory_stats...")
+                    print(
+                        f"[DEBUG _execute_full_table_dynamic_partition_merge] Calling scan_directory_stats..."
+                    )
                     sys.stdout.flush()
                     stats = self.webhdfs_client.scan_directory_stats(
                         table_location, self.cluster.small_file_threshold or 134217728
                     )
-                    with open('/tmp/merge_debug.log', 'a') as f:
-                        f.write(f"[{time.time()}] scan_directory_stats returned, files={stats.total_files}\n")
-                    print(f"[DEBUG _execute_full_table_dynamic_partition_merge] scan_directory_stats returned")
+                    with open("/tmp/merge_debug.log", "a") as f:
+                        f.write(
+                            f"[{time.time()}] scan_directory_stats returned, files={stats.total_files}\n"
+                        )
+                    print(
+                        f"[DEBUG _execute_full_table_dynamic_partition_merge] scan_directory_stats returned"
+                    )
                     sys.stdout.flush()
                     files_before = stats.total_files
             except Exception as e:
                 logger.warning(f"Failed to get file stats: {e}")
-                with open('/tmp/merge_debug.log', 'a') as f:
+                with open("/tmp/merge_debug.log", "a") as f:
                     f.write(f"[{time.time()}] Exception getting stats: {e}\n")
-                print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Exception getting stats: {e}")
+                print(
+                    f"[DEBUG _execute_full_table_dynamic_partition_merge] Exception getting stats: {e}"
+                )
                 sys.stdout.flush()
 
-            with open('/tmp/merge_debug.log', 'a') as f:
-                f.write(f"[{time.time()}] Logging initialization complete, files_before={files_before}\n")
-            print(f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization complete...")
+            with open("/tmp/merge_debug.log", "a") as f:
+                f.write(
+                    f"[{time.time()}] Logging initialization complete, files_before={files_before}\n"
+                )
+            print(
+                f"[DEBUG _execute_full_table_dynamic_partition_merge] Logging initialization complete..."
+            )
             sys.stdout.flush()
             merge_logger.log(
                 MergePhase.INITIALIZATION,
                 MergeLogLevel.INFO,
-                f"初始化完成: 合并前文件数={files_before}"
+                f"初始化完成: 合并前文件数={files_before}",
             )
 
             # 3. 创建临时表(保留分区定义)
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Creating temp table...\n")
             merge_logger.log(
                 MergePhase.TEMP_TABLE_CREATION,
                 MergeLogLevel.INFO,
-                f"开始临时表创建: {temp_table}"
+                f"开始临时表创建: {temp_table}",
             )
 
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Creating hive connection...\n")
             conn = self._create_hive_connection(database)
             cursor = conn.cursor()
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Hive connection created\n")
 
             # 解析原表结构(不继承ACID属性)
-            with open('/tmp/merge_debug.log', 'a') as f:
-                f.write(f"[{time.time()}] Calling _parse_table_schema_from_show_create...\n")
+            with open("/tmp/merge_debug.log", "a") as f:
+                f.write(
+                    f"[{time.time()}] Calling _parse_table_schema_from_show_create...\n"
+                )
             schema_info = self._parse_table_schema_from_show_create(database, table)
-            with open('/tmp/merge_debug.log', 'a') as f:
-                f.write(f"[{time.time()}] _parse_table_schema_from_show_create returned\n")
+            with open("/tmp/merge_debug.log", "a") as f:
+                f.write(
+                    f"[{time.time()}] _parse_table_schema_from_show_create returned\n"
+                )
 
             # 手动构建CREATE TABLE语句
-            columns_ddl = ',\n  '.join([f"`{col}` {typ}" for col, typ in schema_info['columns']])
-            partition_ddl = ',\n  '.join([f"`{col}` {typ}" for col, typ in schema_info['partition_columns']])
+            columns_ddl = ",\n  ".join(
+                [f"`{col}` {typ}" for col, typ in schema_info["columns"]]
+            )
+            partition_ddl = ",\n  ".join(
+                [f"`{col}` {typ}" for col, typ in schema_info["partition_columns"]]
+            )
 
             # 决定临时表的存储格式: 优先使用任务指定的格式,否则使用原表格式
             if task.target_storage_format:
@@ -3272,17 +3201,17 @@ class SafeHiveMergeEngine(BaseMergeEngine):
                 merge_logger.log(
                     MergePhase.TEMP_TABLE_CREATION,
                     MergeLogLevel.INFO,
-                    f"使用用户指定的存储格式: {target_format}"
+                    f"使用用户指定的存储格式: {target_format}",
                 )
             else:
                 # 使用原表格式
-                input_fmt = schema_info['input_format']
-                output_fmt = schema_info['output_format']
-                serde = schema_info['serde']
+                input_fmt = schema_info["input_format"]
+                output_fmt = schema_info["output_format"]
+                serde = schema_info["serde"]
                 merge_logger.log(
                     MergePhase.TEMP_TABLE_CREATION,
                     MergeLogLevel.INFO,
-                    f"使用原表存储格式: {input_fmt}"
+                    f"使用原表存储格式: {input_fmt}",
                 )
 
             create_temp_sql = f"""
@@ -3304,27 +3233,27 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.TEMP_TABLE_CREATION,
                 MergeLogLevel.INFO,
-                f"执行临时表DDL: 列数={len(schema_info['columns'])}, 分区列数={len(schema_info['partition_columns'])}, 格式={input_fmt}"
+                f"执行临时表DDL: 列数={len(schema_info['columns'])}, 分区列数={len(schema_info['partition_columns'])}, 格式={input_fmt}",
             )
 
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Executing CREATE TABLE SQL...\n")
                 f.write(f"SQL: {create_temp_sql[:200]}...\n")
             cursor.execute(create_temp_sql)
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] CREATE TABLE executed successfully\n")
 
             merge_logger.log(
                 MergePhase.TEMP_TABLE_CREATION,
                 MergeLogLevel.INFO,
-                f"临时表创建完成: {temp_table}"
+                f"临时表创建完成: {temp_table}",
             )
 
             # 4. 设置动态分区参数和合并参数
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                "开始执行合并: 配置动态分区参数"
+                "开始执行合并: 配置动态分区参数",
             )
 
             dynamic_partition_settings = [
@@ -3333,25 +3262,20 @@ TBLPROPERTIES (
                 "SET hive.exec.dynamic.partition.mode=nonstrict",
                 "SET hive.exec.max.dynamic.partitions=100000",
                 "SET hive.exec.max.dynamic.partitions.pernode=100000",
-
                 # ⭐ 关键: 强制小文件合并
-                "SET hive.merge.mapfiles=true",           # Map端合并
-                "SET hive.merge.mapredfiles=true",        # Reduce端合并
-                "SET hive.merge.size.per.task=268435456", # 目标文件大小256MB
+                "SET hive.merge.mapfiles=true",  # Map端合并
+                "SET hive.merge.mapredfiles=true",  # Reduce端合并
+                "SET hive.merge.size.per.task=268435456",  # 目标文件大小256MB
                 "SET hive.merge.smallfiles.avgsize=134217728",  # 小文件阈值128MB
-
                 # ⭐ 新增: 控制输出文件数量
                 "SET hive.exec.reducers.bytes.per.reducer=268435456",  # 每256MB数据1个Reducer
                 "SET hive.exec.reducers.max=999",  # 最大Reducer数量
-
                 # ⭐ 新增: 优化输入分片
                 "SET mapreduce.input.fileinputformat.split.maxsize=268435456",  # 256MB
                 "SET mapreduce.input.fileinputformat.split.minsize=134217728",  # 128MB
-
                 # ⭐ 新增: Tez/Spark引擎优化
                 "SET hive.merge.tezfiles=true",
                 "SET hive.merge.sparkfiles=true",
-
                 # ⭐ 新增: ORC/Parquet格式优化
                 "SET hive.merge.orcfile.stripe.level=true",
                 "SET parquet.block.size=268435456",
@@ -3363,38 +3287,46 @@ TBLPROPERTIES (
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.INFO,
-                    f"应用用户指定的压缩格式: {compression}"
+                    f"应用用户指定的压缩格式: {compression}",
                 )
 
                 # 根据存储格式设置对应的压缩参数
                 if task.target_storage_format:
                     target_fmt = task.target_storage_format.upper()
-                    if target_fmt == 'PARQUET':
-                        dynamic_partition_settings.append(f"SET parquet.compression={compression}")
-                    elif target_fmt == 'ORC':
-                        dynamic_partition_settings.append(f"SET orc.compress={compression}")
-                    elif target_fmt in ('TEXTFILE', 'SEQUENCEFILE'):
+                    if target_fmt == "PARQUET":
+                        dynamic_partition_settings.append(
+                            f"SET parquet.compression={compression}"
+                        )
+                    elif target_fmt == "ORC":
+                        dynamic_partition_settings.append(
+                            f"SET orc.compress={compression}"
+                        )
+                    elif target_fmt in ("TEXTFILE", "SEQUENCEFILE"):
                         # TextFile和SequenceFile使用通用压缩
-                        dynamic_partition_settings.extend([
-                            "SET hive.exec.compress.output=true",
-                            f"SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.{compression}Codec"
-                        ])
+                        dynamic_partition_settings.extend(
+                            [
+                                "SET hive.exec.compress.output=true",
+                                f"SET mapreduce.output.fileoutputformat.compress.codec=org.apache.hadoop.io.compress.{compression}Codec",
+                            ]
+                        )
 
-            with open('/tmp/merge_debug.log', 'a') as f:
-                f.write(f"[{time.time()}] Executing {len(dynamic_partition_settings)} Hive settings...\n")
+            with open("/tmp/merge_debug.log", "a") as f:
+                f.write(
+                    f"[{time.time()}] Executing {len(dynamic_partition_settings)} Hive settings...\n"
+                )
             for setting in dynamic_partition_settings:
                 cursor.execute(setting)
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Hive settings executed\n")
 
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                "参数配置完成,开始执行动态分区INSERT"
+                "参数配置完成,开始执行动态分区INSERT",
             )
 
             # 5. 一次性INSERT所有分区数据(动态分区)
-            partition_cols_str = ', '.join(partition_cols)
+            partition_cols_str = ", ".join(partition_cols)
             insert_sql = f"""
                 INSERT OVERWRITE TABLE {temp_table}
                 PARTITION ({partition_cols_str})
@@ -3402,8 +3334,10 @@ TBLPROPERTIES (
             """
 
             # 使用心跳机制执行长时SQL
-            with open('/tmp/merge_debug.log', 'a') as f:
-                f.write(f"[{time.time()}] Calling _execute_sql_with_heartbeat for INSERT...\n")
+            with open("/tmp/merge_debug.log", "a") as f:
+                f.write(
+                    f"[{time.time()}] Calling _execute_sql_with_heartbeat for INSERT...\n"
+                )
             self._execute_sql_with_heartbeat(
                 cursor=cursor,
                 sql=insert_sql,
@@ -3413,91 +3347,95 @@ TBLPROPERTIES (
                 db_session=db_session,
                 op_desc=f"动态分区INSERT: {temp_table}",
                 execution_phase_name="dynamic_partition_insert",
-                interval=15
+                interval=15,
             )
 
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] INSERT completed, logging...\n")
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                "执行合并完成: 动态分区INSERT已完成"
+                "执行合并完成: 动态分区INSERT已完成",
             )
 
             # 6. 原子交换HDFS位置
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Starting atomic swap...\n")
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
-                "开始原子交换: 准备替换HDFS目录"
+                "开始原子交换: 准备替换HDFS目录",
             )
 
             # 先关闭当前连接
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Closing cursor and connection...\n")
             cursor.close()
             conn.close()
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Connection closed\n")
 
             # 调用原子交换方法 (内部会创建和管理新连接)
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Calling _atomic_swap_table_location...\n")
             swap_result = self._atomic_swap_table_location(
                 database=database,
                 original_table=table,
                 temp_table=temp_table,
-                merge_logger=merge_logger
+                merge_logger=merge_logger,
             )
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] _atomic_swap_table_location returned\n")
 
             # 8. 获取合并后文件数
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Getting files_after count...\n")
             files_after = None
             try:
-                table_location = self._get_table_location(database, table)
-                with open('/tmp/merge_debug.log', 'a') as f:
-                    f.write(f"[{time.time()}] Table location for files_after: {table_location}\n")
+                table_location = self.metadata_manager._get_table_location(database, table)
+                with open("/tmp/merge_debug.log", "a") as f:
+                    f.write(
+                        f"[{time.time()}] Table location for files_after: {table_location}\n"
+                    )
                 if table_location:
-                    with open('/tmp/merge_debug.log', 'a') as f:
-                        f.write(f"[{time.time()}] Calling scan_directory_stats for files_after...\n")
+                    with open("/tmp/merge_debug.log", "a") as f:
+                        f.write(
+                            f"[{time.time()}] Calling scan_directory_stats for files_after...\n"
+                        )
                     stats = self.webhdfs_client.scan_directory_stats(
                         table_location, self.cluster.small_file_threshold or 134217728
                     )
                     files_after = stats.total_files
-                    with open('/tmp/merge_debug.log', 'a') as f:
-                        f.write(f"[{time.time()}] scan_directory_stats completed, files_after={files_after}\n")
+                    with open("/tmp/merge_debug.log", "a") as f:
+                        f.write(
+                            f"[{time.time()}] scan_directory_stats completed, files_after={files_after}\n"
+                        )
             except Exception as e:
-                with open('/tmp/merge_debug.log', 'a') as f:
+                with open("/tmp/merge_debug.log", "a") as f:
                     f.write(f"[{time.time()}] Exception getting files_after: {e}\n")
                 pass
 
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Logging completion...\n")
             merge_logger.log(
                 MergePhase.COMPLETION,
                 MergeLogLevel.INFO,
-                f"动态分区整表合并完成: 文件数 {files_before} → {files_after}"
+                f"动态分区整表合并完成: 文件数 {files_before} → {files_after}",
             )
 
-            with open('/tmp/merge_debug.log', 'a') as f:
+            with open("/tmp/merge_debug.log", "a") as f:
                 f.write(f"[{time.time()}] Returning result...\n")
             return {
                 "success": True,
                 "message": "Full table merge completed using dynamic partitions",
                 "files_before": files_before,
                 "files_after": files_after,
-                "method": "dynamic_partition"
+                "method": "dynamic_partition",
             }
 
         except Exception as e:
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.ERROR,
-                f"动态分区合并失败: {e}"
+                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"动态分区合并失败: {e}"
             )
 
             # 清理临时表
@@ -3517,7 +3455,7 @@ TBLPROPERTIES (
         database: str,
         original_table: str,
         temp_table: str,
-        merge_logger: MergeTaskLogger
+        merge_logger: MergeTaskLogger,
     ) -> Dict[str, Any]:
         """
         原子交换表的HDFS位置
@@ -3542,8 +3480,8 @@ TBLPROPERTIES (
 
         try:
             # Step 1: 获取LOCATION
-            original_location = self._get_table_location(database, original_table)
-            temp_location = self._get_table_location(database, temp_table)
+            original_location = self.metadata_manager._get_table_location(database, original_table)
+            temp_location = self.metadata_manager._get_table_location(database, temp_table)
 
             if not original_location or not temp_location:
                 raise Exception("无法获取表的HDFS路径")
@@ -3556,7 +3494,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
-                f"原表路径: {original_path}, 临时表路径: {temp_path}"
+                f"原表路径: {original_path}, 临时表路径: {temp_path}",
             )
 
             # Step 2: 备份原表目录
@@ -3564,7 +3502,7 @@ TBLPROPERTIES (
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.INFO,
-                    f"备份原表数据: {original_path} -> {backup_path}"
+                    f"备份原表数据: {original_path} -> {backup_path}",
                 )
 
                 success, msg = self.webhdfs_client.move_file(original_path, backup_path)
@@ -3575,7 +3513,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.ATOMIC_SWAP,
                 MergeLogLevel.INFO,
-                f"移动合并后数据: {temp_path} -> {original_path}"
+                f"移动合并后数据: {temp_path} -> {original_path}",
             )
 
             success, msg = self.webhdfs_client.move_file(temp_path, original_path)
@@ -3584,7 +3522,7 @@ TBLPROPERTIES (
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.ERROR,
-                    f"移动失败,回滚备份: {msg}"
+                    f"移动失败,回滚备份: {msg}",
                 )
                 if self.webhdfs_client.exists(backup_path):
                     self.webhdfs_client.move_file(backup_path, original_path)
@@ -3592,9 +3530,7 @@ TBLPROPERTIES (
 
             # Step 4: 刷新元数据
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "刷新Hive元数据"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "刷新Hive元数据"
             )
 
             conn = self._create_hive_connection(database)
@@ -3611,7 +3547,7 @@ TBLPROPERTIES (
                 merge_logger.log(
                     MergePhase.ATOMIC_SWAP,
                     MergeLogLevel.INFO,
-                    "元数据刷新完成,表验证通过"
+                    "元数据刷新完成,表验证通过",
                 )
 
             finally:
@@ -3620,9 +3556,7 @@ TBLPROPERTIES (
 
             # Step 5: 清理
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "清理备份和临时表"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "清理备份和临时表"
             )
 
             # 删除备份
@@ -3636,27 +3570,23 @@ TBLPROPERTIES (
             cursor.close()
             conn.close()
 
-            merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.INFO,
-                "原子交换完成"
-            )
+            merge_logger.log(MergePhase.ATOMIC_SWAP, MergeLogLevel.INFO, "原子交换完成")
 
             return {
                 "success": True,
                 "original_location": original_path,
-                "backup_location": backup_path
+                "backup_location": backup_path,
             }
 
         except Exception as e:
             merge_logger.log(
-                MergePhase.ATOMIC_SWAP,
-                MergeLogLevel.ERROR,
-                f"原子交换失败: {e}"
+                MergePhase.ATOMIC_SWAP, MergeLogLevel.ERROR, f"原子交换失败: {e}"
             )
             raise
 
-    def _generate_temp_partition_kv(self, partition_kv: Dict[str, str], ts: int) -> Dict[str, str]:
+    def _generate_temp_partition_kv(
+        self, partition_kv: Dict[str, str], ts: int
+    ) -> Dict[str, str]:
         """
         生成临时分区键值对
 
@@ -3667,7 +3597,9 @@ TBLPROPERTIES (
         temp_kv = {}
         for key, value in partition_kv.items():
             # 提取原始分区值(移除可能的前缀和特殊字符)
-            clean_value = value.replace("partition_", "").replace("-", "").replace(":", "")
+            clean_value = (
+                value.replace("partition_", "").replace("-", "").replace(":", "")
+            )
             temp_value = f"temp_{clean_value}_{ts}"
             temp_kv[key] = temp_value
         return temp_kv
@@ -3701,11 +3633,7 @@ TBLPROPERTIES (
             return 0
 
     def _wait_for_partition_data(
-        self,
-        database: str,
-        table: str,
-        partition_spec: str,
-        timeout: int = 3600
+        self, database: str, table: str, partition_spec: str, timeout: int = 3600
     ):
         """
         轮询检查分区数据是否生成完成
@@ -3720,6 +3648,7 @@ TBLPROPERTIES (
             Exception: 超时或检查失败
         """
         import time
+
         start = time.time()
         check_interval = 10  # 每10秒检查一次
 
@@ -3727,14 +3656,20 @@ TBLPROPERTIES (
 
         while time.time() - start < timeout:
             try:
-                partition_path = self._resolve_partition_path(database, table, partition_spec)
+                partition_path = self._resolve_partition_path(
+                    database, table, partition_spec
+                )
                 if partition_path:
                     file_count = self._count_partition_files(partition_path)
                     if file_count > 0:
-                        logger.info(f"临时分区数据已生成: {partition_path}, 文件数={file_count}")
+                        logger.info(
+                            f"临时分区数据已生成: {partition_path}, 文件数={file_count}"
+                        )
                         return
                     else:
-                        logger.debug(f"临时分区数据尚未生成,继续等待... ({int(time.time() - start)}秒)")
+                        logger.debug(
+                            f"临时分区数据尚未生成,继续等待... ({int(time.time() - start)}秒)"
+                        )
             except Exception as e:
                 logger.debug(f"检查分区数据时出错,继续等待: {e}")
 
@@ -3743,11 +3678,7 @@ TBLPROPERTIES (
         raise Exception(f"等待分区数据超时({timeout}秒): {partition_spec}")
 
     def _cleanup_temp_partition(
-        self,
-        database: str,
-        table: str,
-        temp_partition_spec: str,
-        merge_logger
+        self, database: str, table: str, temp_partition_spec: str, merge_logger
     ):
         """
         删除临时分区(失败时的清理操作)
@@ -3761,20 +3692,20 @@ TBLPROPERTIES (
         try:
             conn = self._create_hive_connection(database)
             cursor = conn.cursor()
-            drop_sql = f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({temp_partition_spec})"
+            drop_sql = (
+                f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({temp_partition_spec})"
+            )
             cursor.execute(drop_sql)
             cursor.close()
             conn.close()
             merge_logger.log(
                 MergePhase.ROLLBACK,
                 MergeLogLevel.INFO,
-                f"已清理临时分区: {temp_partition_spec}"
+                f"已清理临时分区: {temp_partition_spec}",
             )
         except Exception as e:
             merge_logger.log(
-                MergePhase.ROLLBACK,
-                MergeLogLevel.WARNING,
-                f"清理临时分区失败: {e}"
+                MergePhase.ROLLBACK, MergeLogLevel.WARNING, f"清理临时分区失败: {e}"
             )
 
     def _get_non_partition_columns(self, database: str, table: str) -> str:
@@ -3796,9 +3727,9 @@ TBLPROPERTIES (
             if partition_cols_result:
                 partition_spec = partition_cols_result[0]
                 # 解析 "partition_id='xxx'" 得到 "partition_id"
-                for part in partition_spec.split('/'):
-                    if '=' in part:
-                        col_name = part.split('=')[0].strip()
+                for part in partition_spec.split("/"):
+                    if "=" in part:
+                        col_name = part.split("=")[0].strip()
                         partition_col_names.add(col_name)
 
             # 获取所有列
@@ -3811,7 +3742,7 @@ TBLPROPERTIES (
                 col_name = row[0].strip()
 
                 # 跳过空行和注释行
-                if not col_name or col_name.startswith('#'):
+                if not col_name or col_name.startswith("#"):
                     break  # 到达分区信息部分,停止
 
                 # 排除分区列
@@ -3827,7 +3758,7 @@ TBLPROPERTIES (
         self,
         task: MergeTask,
         merge_logger: MergeTaskLogger,
-        progress_tracker: 'MergeProgressTracker'
+        progress_tracker: "MergeProgressTracker",
     ) -> Dict[str, Any]:
         """
         执行分区级Hive原生合并(使用临时分区+RENAME策略)
@@ -3847,7 +3778,7 @@ TBLPROPERTIES (
         merge_logger.log(
             MergePhase.EXECUTION,
             MergeLogLevel.INFO,
-            f"开始Hive原生分区合并: {task.database_name}.{task.table_name}"
+            f"开始Hive原生分区合并: {task.database_name}.{task.table_name}",
         )
 
         try:
@@ -3858,8 +3789,9 @@ TBLPROPERTIES (
             partition_filter = task.partition_filter.strip()
 
             # 检测OR格式并转换为逗号分隔
-            if ' OR ' in partition_filter.upper():
+            if " OR " in partition_filter.upper():
                 import re
+
                 # 提取所有 column='value' 模式
                 pattern = r"(\w+\s*=\s*['\"][^'\"]+['\"])"
                 matches = re.findall(pattern, partition_filter, re.IGNORECASE)
@@ -3869,14 +3801,12 @@ TBLPROPERTIES (
                 merge_logger.log(
                     MergePhase.EXECUTION,
                     MergeLogLevel.INFO,
-                    f"检测到OR格式分区过滤器,已转换为逗号分隔格式: {matches}"
+                    f"检测到OR格式分区过滤器,已转换为逗号分隔格式: {matches}",
                 )
             else:
                 # 逗号分隔格式
                 partition_list = [
-                    p.strip()
-                    for p in partition_filter.split(',')
-                    if p.strip()
+                    p.strip() for p in partition_filter.split(",") if p.strip()
                 ]
 
             if not partition_list:
@@ -3885,7 +3815,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"待合并分区数: {len(partition_list)}"
+                f"待合并分区数: {len(partition_list)}",
             )
 
             # 单分区直接合并
@@ -3894,7 +3824,7 @@ TBLPROPERTIES (
                     task=task,
                     partition_spec=partition_list[0],
                     merge_logger=merge_logger,
-                    progress_tracker=progress_tracker
+                    progress_tracker=progress_tracker,
                 )
 
             # 多分区顺序合并
@@ -3907,7 +3837,7 @@ TBLPROPERTIES (
                     merge_logger.log(
                         MergePhase.EXECUTION,
                         MergeLogLevel.INFO,
-                        f"合并分区 [{idx}/{total_partitions}]: {partition_spec}"
+                        f"合并分区 [{idx}/{total_partitions}]: {partition_spec}",
                     )
 
                     self._execute_single_partition_native_merge(
@@ -3915,7 +3845,7 @@ TBLPROPERTIES (
                         partition_spec=partition_spec,
                         merge_logger=merge_logger,
                         progress_tracker=progress_tracker,
-                        is_multi_partition=True
+                        is_multi_partition=True,
                     )
 
                     merged_count += 1
@@ -3923,14 +3853,14 @@ TBLPROPERTIES (
                     merge_logger.log(
                         MergePhase.EXECUTION,
                         MergeLogLevel.INFO,
-                        f"进度: 已合并 {merged_count}/{total_partitions} 个分区 ({progress_pct:.1f}%)"
+                        f"进度: 已合并 {merged_count}/{total_partitions} 个分区 ({progress_pct:.1f}%)",
                     )
 
                 except Exception as e:
                     merge_logger.log(
                         MergePhase.EXECUTION,
                         MergeLogLevel.ERROR,
-                        f"分区 {partition_spec} 合并失败: {e}"
+                        f"分区 {partition_spec} 合并失败: {e}",
                     )
                     failed_partitions.append(partition_spec)
                     continue
@@ -3941,29 +3871,27 @@ TBLPROPERTIES (
                 "success": success,
                 "merged_partitions": merged_count,
                 "total_partitions": total_partitions,
-                "failed_partitions": failed_partitions
+                "failed_partitions": failed_partitions,
             }
 
             if success:
                 merge_logger.log(
                     MergePhase.COMPLETION,
                     MergeLogLevel.INFO,
-                    f"所有分区合并成功: {merged_count}/{total_partitions}"
+                    f"所有分区合并成功: {merged_count}/{total_partitions}",
                 )
             else:
                 merge_logger.log(
                     MergePhase.COMPLETION,
                     MergeLogLevel.WARNING,
-                    f"部分分区合并失败: 成功 {merged_count}, 失败 {len(failed_partitions)}"
+                    f"部分分区合并失败: 成功 {merged_count}, 失败 {len(failed_partitions)}",
                 )
 
             return result
 
         except Exception as e:
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.ERROR,
-                f"Hive原生分区合并失败: {e}"
+                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"Hive原生分区合并失败: {e}"
             )
             raise
 
@@ -3972,8 +3900,8 @@ TBLPROPERTIES (
         task: MergeTask,
         partition_spec: str,
         merge_logger: MergeTaskLogger,
-        progress_tracker: 'MergeProgressTracker',
-        is_multi_partition: bool = False
+        progress_tracker: "MergeProgressTracker",
+        is_multi_partition: bool = False,
     ) -> Dict[str, Any]:
         """
         执行单个分区的Hive原生合并
@@ -3994,13 +3922,13 @@ TBLPROPERTIES (
         # 1. 解析分区规格
         partition_kv = self._parse_partition_spec(partition_spec)
         merge_logger.log(
-            MergePhase.EXECUTION,
-            MergeLogLevel.INFO,
-            f"解析分区规格: {partition_kv}"
+            MergePhase.EXECUTION, MergeLogLevel.INFO, f"解析分区规格: {partition_kv}"
         )
 
         # 2. 统计原分区文件数
-        original_partition_path = self._resolve_partition_path(database, table, partition_spec)
+        original_partition_path = self._resolve_partition_path(
+            database, table, partition_spec
+        )
         if not original_partition_path:
             raise Exception(f"无法解析分区路径: {partition_spec}")
 
@@ -4008,14 +3936,12 @@ TBLPROPERTIES (
         merge_logger.log(
             MergePhase.EXECUTION,
             MergeLogLevel.INFO,
-            f"原分区文件数: {original_file_count}"
+            f"原分区文件数: {original_file_count}",
         )
 
         if original_file_count == 0:
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.WARNING,
-                "原分区无文件,跳过合并"
+                MergePhase.EXECUTION, MergeLogLevel.WARNING, "原分区无文件,跳过合并"
             )
             return {"success": True, "skipped": True, "reason": "no_files"}
 
@@ -4027,7 +3953,7 @@ TBLPROPERTIES (
         merge_logger.log(
             MergePhase.EXECUTION,
             MergeLogLevel.INFO,
-            f"生成临时分区: {temp_partition_spec}"
+            f"生成临时分区: {temp_partition_spec}",
         )
 
         conn = None
@@ -4043,7 +3969,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"添加临时分区: {add_partition_sql}"
+                f"添加临时分区: {add_partition_sql}",
             )
             cursor.execute(add_partition_sql)
 
@@ -4052,7 +3978,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"非分区列: {non_partition_cols}"
+                f"非分区列: {non_partition_cols}",
             )
 
             # 7. 设置Hive参数以启用小文件合并
@@ -4063,15 +3989,13 @@ TBLPROPERTIES (
                 "SET hive.merge.smallfiles.avgsize=16000000",
                 "SET mapred.max.split.size=256000000",
                 "SET mapred.min.split.size.per.node=100000000",
-                "SET mapred.min.split.size.per.rack=100000000"
+                "SET mapred.min.split.size.per.rack=100000000",
             ]
 
             for param in merge_params:
                 cursor.execute(param)
                 merge_logger.log(
-                    MergePhase.EXECUTION,
-                    MergeLogLevel.INFO,
-                    f"设置合并参数: {param}"
+                    MergePhase.EXECUTION, MergeLogLevel.INFO, f"设置合并参数: {param}"
                 )
 
             # 8. INSERT OVERWRITE 到临时分区(Hive自动合并)
@@ -4084,7 +4008,7 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"执行INSERT OVERWRITE到临时分区..."
+                f"执行INSERT OVERWRITE到临时分区...",
             )
             cursor.execute(insert_sql)
 
@@ -4096,22 +4020,24 @@ TBLPROPERTIES (
 
             # 7. 等待临时分区数据写入完成
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.INFO,
-                "等待临时分区数据写入完成..."
+                MergePhase.EXECUTION, MergeLogLevel.INFO, "等待临时分区数据写入完成..."
             )
-            self._wait_for_partition_data(database, table, temp_partition_spec, timeout=3600)
+            self._wait_for_partition_data(
+                database, table, temp_partition_spec, timeout=3600
+            )
 
             # 8. 重新创建连接进行分区替换
             conn = self._create_hive_connection(database)
             cursor = conn.cursor()
 
             # 9. 删除原分区
-            drop_original_sql = f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({partition_spec})"
+            drop_original_sql = (
+                f"ALTER TABLE {table} DROP IF EXISTS PARTITION ({partition_spec})"
+            )
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"删除原分区: {drop_original_sql}"
+                f"删除原分区: {drop_original_sql}",
             )
             cursor.execute(drop_original_sql)
 
@@ -4120,37 +4046,39 @@ TBLPROPERTIES (
             merge_logger.log(
                 MergePhase.EXECUTION,
                 MergeLogLevel.INFO,
-                f"重命名临时分区: {rename_sql}"
+                f"重命名临时分区: {rename_sql}",
             )
             cursor.execute(rename_sql)
 
             # 11. 验证合并后文件数
-            merged_partition_path = self._resolve_partition_path(database, table, partition_spec)
+            merged_partition_path = self._resolve_partition_path(
+                database, table, partition_spec
+            )
             merged_file_count = self._count_partition_files(merged_partition_path)
 
             merge_logger.log(
                 MergePhase.COMPLETION,
                 MergeLogLevel.INFO,
-                f"分区合并完成: 原文件数={original_file_count}, 合并后文件数={merged_file_count}"
+                f"分区合并完成: 原文件数={original_file_count}, 合并后文件数={merged_file_count}",
             )
 
             return {
                 "success": True,
                 "partition_spec": partition_spec,
                 "original_file_count": original_file_count,
-                "merged_file_count": merged_file_count
+                "merged_file_count": merged_file_count,
             }
 
         except Exception as e:
             # 失败时清理临时分区
             merge_logger.log(
-                MergePhase.EXECUTION,
-                MergeLogLevel.ERROR,
-                f"单分区合并失败: {e}"
+                MergePhase.EXECUTION, MergeLogLevel.ERROR, f"单分区合并失败: {e}"
             )
 
             try:
-                self._cleanup_temp_partition(database, table, temp_partition_spec, merge_logger)
+                self._cleanup_temp_partition(
+                    database, table, temp_partition_spec, merge_logger
+                )
             except:
                 pass
 

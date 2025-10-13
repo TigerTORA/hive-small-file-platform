@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
 
 from celery import current_task
 from sqlalchemy.orm import sessionmaker
@@ -169,6 +168,7 @@ def execute_merge_task(self, task_id: int):
         # 更新任务状态为失败
         try:
             import traceback
+
             task = db.query(MergeTask).filter(MergeTask.id == task_id).first()
             if task:
                 task.status = "failed"
@@ -275,8 +275,6 @@ def batch_create_merge_tasks(cluster_id: int, small_file_threshold: int = 1000):
             raise ValueError(f"Cluster {cluster_id} not found")
 
         # 获取该集群最新的表扫描结果
-        from sqlalchemy import func
-
         from app.models.table_metric import TableMetric
 
         # 找出小文件数量超过阈值的表

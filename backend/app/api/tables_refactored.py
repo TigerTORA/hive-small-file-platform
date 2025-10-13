@@ -5,12 +5,7 @@
 
 from fastapi import APIRouter
 
-from app.api import (
-    table_management,
-    table_scanning,
-    tables_archive,
-    tables_cold_data,
-)
+from app.api import table_management, table_scanning, tables_archive, tables_cold_data
 
 # 创建主路由器
 router = APIRouter()

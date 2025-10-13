@@ -10,6 +10,8 @@ export interface DashboardSummary {
   small_file_ratio: number
   total_size_gb: number
   small_file_size_gb: number
+  files_reduced: number
+  size_saved_gb: number
 }
 
 export interface TrendPoint {
@@ -45,7 +47,10 @@ export interface RecentTask {
   status: string
   created_time: string
   updated_time?: string
-  small_files_merged?: number
+  files_before?: number | null
+  files_after?: number | null
+  files_reduced?: number | null
+  size_saved?: number | null
 }
 
 export interface ClusterStats {

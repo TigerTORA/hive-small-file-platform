@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,7 +23,6 @@ async def list_tasks(
 ):
     """List all types of tasks (merge, scan, archive, test-table-generation) with filtering"""
     from app.models.scan_task import ScanTask
-    from app.schemas.test_table import TestTableTask
 
     all_tasks = []
 
@@ -37,21 +35,26 @@ async def list_tasks(
 
     merge_tasks = merge_query.order_by(MergeTask.created_time.desc()).limit(limit).all()
     for task in merge_tasks:
-        all_tasks.append({
-            "id": task.id,
-            "type": "merge",
-            "task_name": task.task_name,
-            "database_name": task.database_name,
-            "table_name": task.table_name,
-            "cluster_id": task.cluster_id,
-            "status": task.status,
-            "created_time": task.created_time,
-            "started_time": task.started_time,
-            "completed_time": task.completed_time,
-            "error_message": task.error_message,
-            "progress": task.progress,
-            "current_phase": task.current_phase
-        })
+        all_tasks.append(
+            {
+                "id": task.id,
+                "type": "merge",
+                "task_name": task.task_name,
+                "database_name": task.database_name,
+                "table_name": task.table_name,
+                "cluster_id": task.cluster_id,
+                "status": task.status,
+                "created_time": task.created_time,
+                "started_time": task.started_time,
+                "completed_time": task.completed_time,
+                "error_message": task.error_message,
+                "progress": task.progress,
+                "current_phase": task.current_phase,
+                "files_before": task.files_before,
+                "files_after": task.files_after,
+                "size_saved": task.size_saved,
+            }
+        )
 
     # 获取扫描任务
     scan_query = db.query(ScanTask)
@@ -63,29 +66,35 @@ async def list_tasks(
     scan_tasks = scan_query.order_by(ScanTask.start_time.desc()).limit(limit).all()
     for task in scan_tasks:
         # 根据task_type确定显示类型
-        display_type = "archive" if task.task_type and task.task_type.startswith('archive') else "scan"
+        display_type = (
+            "archive"
+            if task.task_type and task.task_type.startswith("archive")
+            else "scan"
+        )
 
         # 计算进度
         progress = 0.0
         if task.total_items and task.total_items > 0:
             progress = (task.completed_items or 0) / task.total_items * 100
 
-        all_tasks.append({
-            "id": task.id,
-            "type": display_type,
-            "subtype": task.task_type,
-            "task_name": task.task_name,
-            "database_name": getattr(task, 'database_name', ''),
-            "table_name": getattr(task, 'table_name', ''),
-            "cluster_id": task.cluster_id,
-            "status": task.status,
-            "created_time": task.start_time,
-            "started_time": task.start_time,
-            "completed_time": task.end_time,
-            "error_message": task.error_message,
-            "progress": progress,
-            "current_phase": task.current_item or task.task_type
-        })
+        all_tasks.append(
+            {
+                "id": task.id,
+                "type": display_type,
+                "subtype": task.task_type,
+                "task_name": task.task_name,
+                "database_name": getattr(task, "database_name", ""),
+                "table_name": getattr(task, "table_name", ""),
+                "cluster_id": task.cluster_id,
+                "status": task.status,
+                "created_time": task.start_time,
+                "started_time": task.start_time,
+                "completed_time": task.end_time,
+                "error_message": task.error_message,
+                "progress": progress,
+                "current_phase": task.current_item or task.task_type,
+            }
+        )
 
     # 获取测试表生成任务
     try:
@@ -93,37 +102,48 @@ async def list_tasks(
 
         test_tasks_query = db.query(TestTableTaskModel)
         if cluster_id:
-            test_tasks_query = test_tasks_query.filter(TestTableTaskModel.cluster_id == cluster_id)
+            test_tasks_query = test_tasks_query.filter(
+                TestTableTaskModel.cluster_id == cluster_id
+            )
         if status:
-            test_tasks_query = test_tasks_query.filter(TestTableTaskModel.status == status)
+            test_tasks_query = test_tasks_query.filter(
+                TestTableTaskModel.status == status
+            )
 
-        test_tasks = test_tasks_query.order_by(TestTableTaskModel.created_time.desc()).limit(limit).all()
+        test_tasks = (
+            test_tasks_query.order_by(TestTableTaskModel.created_time.desc())
+            .limit(limit)
+            .all()
+        )
         for task in test_tasks:
-            all_tasks.append({
-                "id": task.id,
-                "type": "test-table-generation",
-                "task_name": task.task_name,
-                "database_name": task.database_name,
-                "table_name": task.table_name,
-                "cluster_id": task.cluster_id,
-                "status": task.status,
-                "created_time": task.created_time,
-                "started_time": task.started_time,
-                "completed_time": task.completed_time,
-                "error_message": task.error_message,
-                "progress": task.progress_percentage,
-                "current_phase": task.current_phase,
-                "current_operation": task.current_operation
-            })
+            all_tasks.append(
+                {
+                    "id": task.id,
+                    "type": "test-table-generation",
+                    "task_name": task.task_name,
+                    "database_name": task.database_name,
+                    "table_name": task.table_name,
+                    "cluster_id": task.cluster_id,
+                    "status": task.status,
+                    "created_time": task.created_time,
+                    "started_time": task.started_time,
+                    "completed_time": task.completed_time,
+                    "error_message": task.error_message,
+                    "progress": task.progress_percentage,
+                    "current_phase": task.current_phase,
+                    "current_operation": task.current_operation,
+                }
+            )
     except Exception as e:
         # 测试表任务表可能不存在，忽略错误
         print(f"Warning: Could not load test table tasks: {e}")
 
     # 按创建时间排序并限制数量
     from datetime import datetime
+
     all_tasks.sort(
         key=lambda x: x["created_time"] if x["created_time"] else datetime.min,
-        reverse=True
+        reverse=True,
     )
     return all_tasks[:limit]
 
@@ -182,13 +202,16 @@ async def get_task_stats(cluster_id: int = Query(None), db: Session = Depends(ge
     total_tasks = query.count()
     completed_tasks = query.filter(MergeTask.status == "success").all()
 
-    total_files_saved = sum(
-        (task.files_before or 0) - (task.files_after or 0)
-        for task in completed_tasks
-        if task.files_before and task.files_after
-    )
+    total_files_saved = 0
+    total_size_saved = 0
 
-    total_size_saved = sum(task.size_saved or 0 for task in completed_tasks)
+    for task in completed_tasks:
+        if task.files_before is not None and task.files_after is not None:
+            delta = task.files_before - task.files_after
+            if delta > 0:
+                total_files_saved += delta
+        if task.size_saved:
+            total_size_saved += max(task.size_saved, 0)
 
     return {
         "total_tasks": total_tasks,
@@ -243,37 +266,44 @@ async def execute_task(task_id: int, db: Session = Depends(get_db)):
 
             if settings.DEMO_MODE:
                 from app.engines.demo_merge_engine import DemoMergeEngine
+
                 engine = DemoMergeEngine(c)
             else:
                 from app.engines.engine_factory import MergeEngineFactory
+
                 engine = MergeEngineFactory.get_engine(c)
 
             result = engine.execute_merge(t, s)
 
             # 根据execute_merge的返回值更新任务状态
-            if result and result.get('success'):
-                t.status = 'completed'
+            if result and result.get("success"):
+                t.status = "completed"
                 t.progress_percentage = 100
                 t.completed_time = datetime.now()
                 # 映射result中的数据到MergeTask字段
-                if 'files_before' in result:
-                    t.files_before = result['files_before']
-                if 'files_after' in result:
-                    t.files_after = result['files_after']
-                if 'size_saved' in result:
-                    t.size_saved = result['size_saved']
+                if "files_before" in result:
+                    t.files_before = result["files_before"]
+                if "files_after" in result:
+                    t.files_after = result["files_after"]
+                if "size_saved" in result:
+                    t.size_saved = result["size_saved"]
             else:
-                t.status = 'failed'
-                t.error_message = result.get('message', '合并失败') if result else '合并失败:无返回值'
+                t.status = "failed"
+                t.error_message = (
+                    result.get("message", "合并失败") if result else "合并失败:无返回值"
+                )
             s.commit()
         except Exception as e:
             try:
                 import traceback
+
                 t = s.query(MergeTask).filter(MergeTask.id == tid).first()
                 if t:
                     t.status = "failed"
                     # 保存完整错误信息
-                    full_error = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                    full_error = (
+                        f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                    )
                     t.error_message = full_error[:5000]
                     t.execution_phase = "error"
                     t.current_operation = f"执行失败: {type(e).__name__}: {str(e)}"
@@ -324,7 +354,9 @@ async def get_task_logs(task_id: str, db: Session = Depends(get_db)):
     from app.models.test_table_task import TestTableTask as TestTableTaskModel
 
     # 尝试作为UUID查找测试表任务
-    test_task = db.query(TestTableTaskModel).filter(TestTableTaskModel.id == task_id).first()
+    test_task = (
+        db.query(TestTableTaskModel).filter(TestTableTaskModel.id == task_id).first()
+    )
     if test_task:
         # 读取持久化日志
         persisted_logs = (
@@ -353,39 +385,49 @@ async def get_task_logs(task_id: str, db: Session = Depends(get_db)):
         # 兼容老任务：没有持久化日志时返回基础信息
         fallback_logs = []
         if test_task.started_time:
-            fallback_logs.append({
-                "id": 1,
-                "log_level": "INFO",
-                "message": _sanitize_log_text(f"任务开始执行: {test_task.task_name}"),
-                "details": None,
-                "timestamp": test_task.started_time,
-                "phase": test_task.current_phase,
-                "progress_percentage": test_task.progress_percentage,
-            })
+            fallback_logs.append(
+                {
+                    "id": 1,
+                    "log_level": "INFO",
+                    "message": _sanitize_log_text(
+                        f"任务开始执行: {test_task.task_name}"
+                    ),
+                    "details": None,
+                    "timestamp": test_task.started_time,
+                    "phase": test_task.current_phase,
+                    "progress_percentage": test_task.progress_percentage,
+                }
+            )
 
         if test_task.error_message:
-            fallback_logs.append({
-                "id": 2,
-                "log_level": "ERROR",
-                "message": _sanitize_log_text(f"任务执行失败: {test_task.error_message}"),
-                "details": test_task.current_operation,
-                "timestamp": test_task.completed_time or test_task.started_time,
-                "phase": test_task.current_phase,
-                "progress_percentage": test_task.progress_percentage,
-            })
+            fallback_logs.append(
+                {
+                    "id": 2,
+                    "log_level": "ERROR",
+                    "message": _sanitize_log_text(
+                        f"任务执行失败: {test_task.error_message}"
+                    ),
+                    "details": test_task.current_operation,
+                    "timestamp": test_task.completed_time or test_task.started_time,
+                    "phase": test_task.current_phase,
+                    "progress_percentage": test_task.progress_percentage,
+                }
+            )
 
         if test_task.status == "success" and test_task.completed_time:
-            fallback_logs.append({
-                "id": 3,
-                "log_level": "INFO",
-                "message": _sanitize_log_text(
-                    f"任务执行成功 - 创建文件: {test_task.hdfs_files_created}, 分区: {test_task.hive_partitions_added}, 大小: {test_task.total_size_mb:.2f}MB"
-                ),
-                "details": test_task.current_operation,
-                "timestamp": test_task.completed_time,
-                "phase": test_task.current_phase,
-                "progress_percentage": test_task.progress_percentage,
-            })
+            fallback_logs.append(
+                {
+                    "id": 3,
+                    "log_level": "INFO",
+                    "message": _sanitize_log_text(
+                        f"任务执行成功 - 创建文件: {test_task.hdfs_files_created}, 分区: {test_task.hive_partitions_added}, 大小: {test_task.total_size_mb:.2f}MB"
+                    ),
+                    "details": test_task.current_operation,
+                    "timestamp": test_task.completed_time,
+                    "phase": test_task.current_phase,
+                    "progress_percentage": test_task.progress_percentage,
+                }
+            )
 
         return fallback_logs
 

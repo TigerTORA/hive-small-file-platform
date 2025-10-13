@@ -47,8 +47,8 @@ export interface MergeTaskCreate {
 
 export const tasksApi = {
   // 获取任务列表
-  list(): Promise<MergeTask[]> {
-    return api.get('/tasks/')
+  list(params?: { cluster_id?: number; status?: string; limit?: number }): Promise<any[]> {
+    return api.get('/tasks/', { params })
   },
 
   // 获取集群任务列表

@@ -2,8 +2,9 @@
 Hive合并引擎工具函数和常量定义
 包含格式关键字、压缩配置等常量
 """
+
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,9 @@ class HiveEngineUtils:
     @staticmethod
     def extract_error_detail(exc: Exception) -> str:
         """提取底层异常的可读信息,优先展示Hive返回的真实报错"""
-        from pyhive import exc as hive_exc
         from typing import List
+
+        from pyhive import exc as hive_exc
 
         try:
             logger.info(
@@ -88,7 +90,9 @@ class HiveEngineUtils:
             _extract_from_response(exc)
 
             if isinstance(exc, hive_exc.Error):
-                for arg in getattr(exc, "args", ()):  # OperationalError 将详细信息放在 args[1]
+                for arg in getattr(
+                    exc, "args", ()
+                ):  # OperationalError 将详细信息放在 args[1]
                     if hasattr(arg, "status"):
                         _extract_from_response(arg)
                         continue

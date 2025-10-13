@@ -4,13 +4,10 @@ Test script to verify bulk cluster scan endpoint functionality
 """
 
 import asyncio
-import os
 import sys
 
 # Add backend directory to path
 sys.path.append("/Users/luohu/new_project/hive-small-file-platform/backend")
-
-from sqlalchemy.orm import Session
 
 from app.api.clusters import scan_all_cluster_tables
 from app.config.database import get_db

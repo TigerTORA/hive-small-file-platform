@@ -4,21 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
+from app import models as models_module
 from app.api import clusters, dashboard, errors, partition_archiving
 from app.api import scan_tasks as scan_tasks_api
-from app.api import storage_admin, tables_archive, tables_cold_data, tables_refactored, tasks, test_tables, websocket
+from app.api import (
+    storage_admin,
+    tables_archive,
+    tables_cold_data,
+    tables_refactored,
+    tasks,
+    test_tables,
+    websocket,
+)
 from app.config.database import Base, engine
 from app.config.settings import settings
-from app.models import (
-    Cluster,
-    MergeTask,
-    PartitionMetric,
-    ScanTask,
-    ScanTaskLogDB,
-    TableMetric,
-    TaskLog,
-)
-from app.models.cluster_status_history import ClusterStatusHistory
 
 # Initialize Sentry
 if settings.SENTRY_DSN and settings.SENTRY_DSN.startswith("http"):
@@ -40,6 +39,9 @@ app = FastAPI(
     description="A platform for monitoring and managing small files in Hive/Impala clusters",
     version="1.0.0",
 )
+
+# Access __all__ to ensure SQLAlchemy models are imported for metadata registration
+_ = models_module.__all__
 
 # CORS configuration
 # Prefer explicit whitelist via env var ALLOWED_ORIGINS; default to local dev hosts
@@ -83,7 +85,9 @@ app.include_router(
     tags=["partition-archiving"],
 )
 app.include_router(storage_admin.router, prefix="/api/v1", tags=["storage-admin"])
-app.include_router(test_tables.router, prefix="/api/v1/test-tables", tags=["test-tables"])
+app.include_router(
+    test_tables.router, prefix="/api/v1/test-tables", tags=["test-tables"]
+)
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 
 

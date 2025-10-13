@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Hive小文件治理平台 - 统一管理和监控Hive集群小文件问题",
   "main": "index.js",
+  "engines": {
+    "node": ">=20 <21"
+  },
   "scripts": {
     "dev": "concurrently \"cd backend && uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev\" \"cd frontend && node test-dashboard-integration.js\"",
     "start": "npm run dev",
@@ -14,7 +17,10 @@
     "setup": "npm run setup:hooks && npm run dashboard",
     "setup:hooks": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit && chmod +x scripts/update-dashboard.sh",
     "validate": "npm run dashboard && echo '✅ 验证通过 - 测试仪表板已更新'",
-    "check": "curl -s http://localhost:8000/api/v1/dashboard/summary | jq '.'"
+    "check": "curl -s http://localhost:8000/api/v1/dashboard/summary | jq '.'",
+    "bmad:refresh": "bmad-method install -f -i codex",
+    "bmad:list": "bmad-method list:agents",
+    "bmad:validate": "bmad-method validate"
   },
   "husky": {
     "hooks": {

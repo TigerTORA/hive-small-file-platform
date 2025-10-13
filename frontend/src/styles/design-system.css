@@ -14,11 +14,11 @@
   --primary-200: #bfdbfe;
   --primary-300: #93c5fd;
   --primary-400: #60a5fa;
-  --primary-500: #3b82f6; /* 主色调 */
-  --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
-  --primary-800: #1e40af;
-  --primary-900: #1e3a8a;
+  --primary-500: #4f46e5; /* 主色调 */
+  --primary-600: #4338ca;
+  --primary-700: #3730a3;
+  --primary-800: #312e81;
+  --primary-900: #1e1b4b;
 
   /* ===== 中性色彩 ===== */
   --gray-50: #f9fafb;
@@ -61,16 +61,18 @@
   --info-600: #2563eb;
 
   /* ===== Cloudera风格背景系统 ===== */
-  --bg-primary: #ffffff; /* 纯白主背景 */
-  --bg-secondary: #f1f3f4; /* 中灰分区背景 */
-  --bg-tertiary: #e8ebef; /* 更深的灰色 */
-  --bg-app: #f5f6f7; /* 应用主背景 - 浅灰 */
+  --bg-gradient: linear-gradient(140deg, #0f172a 0%, #312e81 45%, #6d28d9 100%);
+  --bg-primary: rgba(255, 255, 255, 0.86); /* 轻玻璃白 */
+  --bg-secondary: rgba(255, 255, 255, 0.72);
+  --bg-tertiary: rgba(255, 255, 255, 0.6);
+  --bg-app: linear-gradient(160deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 250, 252, 0.88) 100%);
 
   /* ===== 玻璃效果 ===== */
-  --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.2);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-  --glass-backdrop: blur(8px);
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.35);
+  --glass-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+  --glass-backdrop: blur(18px);
+  --glass-highlight: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 -1px 0 rgba(15, 23, 42, 0.05) inset;
 
   /* ===== 阴影系统 ===== */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -157,6 +159,7 @@
 body {
   font-family: var(--font-sans);
   background: var(--bg-gradient);
+  background-attachment: fixed;
   color: var(--gray-800);
   line-height: var(--leading-normal);
   font-weight: var(--font-normal);
