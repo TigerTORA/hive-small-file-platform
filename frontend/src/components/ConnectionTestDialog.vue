@@ -98,6 +98,17 @@
                   <p v-if="testResult.tests.hdfs?.message">
                     <strong>消息:</strong> {{ testResult.tests.hdfs?.message }}
                   </p>
+                  <p v-if="testResult.tests.hdfs?.diagnostic_code">
+                    <strong>诊断码:</strong> {{ testResult.tests.hdfs?.diagnostic_code }}
+                  </p>
+                  <p v-if="testResult.tests.hdfs?.diagnostic_message">
+                    <strong>诊断信息:</strong>
+                    {{ testResult.tests.hdfs?.diagnostic_message }}
+                  </p>
+                  <p v-if="testResult.tests.hdfs?.recommended_action">
+                    <strong>建议操作:</strong>
+                    {{ testResult.tests.hdfs?.recommended_action }}
+                  </p>
                   <p v-if="testResult.tests.hdfs?.duration">
                     <strong>耗时:</strong> {{ testResult.tests.hdfs?.duration }}ms
                   </p>
@@ -130,6 +141,17 @@
                   </p>
                   <p v-if="testResult.tests.beeline.message">
                     <strong>消息:</strong> {{ testResult.tests.beeline.message }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.diagnostic_code">
+                    <strong>诊断码:</strong> {{ testResult.tests.beeline.diagnostic_code }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.diagnostic_message">
+                    <strong>诊断信息:</strong>
+                    {{ testResult.tests.beeline.diagnostic_message }}
+                  </p>
+                  <p v-if="testResult.tests.beeline.recommended_action">
+                    <strong>建议操作:</strong>
+                    {{ testResult.tests.beeline.recommended_action }}
                   </p>
                   <p
                     v-if="
@@ -186,6 +208,25 @@
                 >{{ log.level }}</el-tag
               >
               <span class="log-message">{{ log.message }}</span>
+              <div
+                v-if="log.diagnostic_code || log.diagnostic_message || log.recommended_action"
+                class="log-diagnostic"
+              >
+                <el-tag
+                  v-if="log.diagnostic_code"
+                  type="warning"
+                  size="small"
+                  class="diagnostic-tag"
+                >
+                  {{ log.diagnostic_code }}
+                </el-tag>
+                <span v-if="log.diagnostic_message" class="diagnostic-text">
+                  {{ log.diagnostic_message }}
+                </span>
+                <span v-if="log.recommended_action" class="diagnostic-action">
+                  建议: {{ log.recommended_action }}
+                </span>
+              </div>
               <span
                 class="log-timestamp"
                 v-if="log.timestamp"
@@ -267,18 +308,27 @@
         mode?: string
         message?: string
         duration?: number
+        diagnostic_code?: string
+        diagnostic_message?: string
+        recommended_action?: string
       }
       hdfs?: {
         status: string
         mode?: string
         message?: string
         duration?: number
+        diagnostic_code?: string
+        diagnostic_message?: string
+        recommended_action?: string
       }
       beeline?: {
         status: string
         connection_type?: string
         driver?: string
         message?: string
+        diagnostic_code?: string
+        diagnostic_message?: string
+        recommended_action?: string
         details?: {
           port_connectivity?: any
           jdbc_test?: any
@@ -295,6 +345,9 @@
       level: string
       message: string
       timestamp?: string
+      diagnostic_code?: string
+      diagnostic_message?: string
+      recommended_action?: string
     }>
     suggestions?: string[]
     warning?: string
@@ -500,6 +553,25 @@
   .log-message {
     flex: 1;
     word-break: break-word;
+  }
+
+  .log-diagnostic {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-left: 32px;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+
+  .diagnostic-tag {
+    margin-right: 4px;
+  }
+
+  .diagnostic-action {
+    font-weight: 500;
   }
 
   .log-timestamp {

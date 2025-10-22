@@ -389,6 +389,10 @@
               label="LDAP 认证"
               value="LDAP"
             />
+            <el-option
+              label="Kerberos 认证"
+              value="KERBEROS"
+            />
           </el-select>
         </el-form-item>
 
@@ -413,6 +417,45 @@
               show-password
             />
             <div style="font-size: 12px; color: #909399; margin-top: 4px">密码将被安全加密存储</div>
+          </el-form-item>
+        </template>
+
+        <template v-if="clusterForm.auth_type === 'KERBEROS'">
+          <el-form-item
+            label="Kerberos Principal"
+            prop="kerberos_principal"
+          >
+            <el-input
+              v-model="clusterForm.kerberos_principal"
+              placeholder="hive/_HOST@EXAMPLE.COM"
+            />
+          </el-form-item>
+          <el-form-item
+            label="Keytab 路径"
+            prop="kerberos_keytab_path"
+          >
+            <el-input
+              v-model="clusterForm.kerberos_keytab_path"
+              placeholder="/etc/security/keytabs/hive.keytab"
+            />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px">
+              <div>确保该路径在运行 HiveServer2 的主机上可访问</div>
+            </div>
+          </el-form-item>
+          <el-form-item label="Kerberos Realm (可选)">
+            <el-input
+              v-model="clusterForm.kerberos_realm"
+              placeholder="EXAMPLE.COM"
+            />
+          </el-form-item>
+          <el-form-item label="票据缓存路径 (可选)">
+            <el-input
+              v-model="clusterForm.kerberos_ticket_cache"
+              placeholder="/tmp/krb5cc_hive"
+            />
+            <div style="font-size: 12px; color: #909399; margin-top: 4px">
+              <div>如需自定义 KRB5CCNAME，请填写此项</div>
+            </div>
           </el-form-item>
         </template>
 
@@ -489,7 +532,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, onMounted, onUnmounted, computed } from 'vue'
+  import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { useRoute, useRouter } from 'vue-router'
   import {
@@ -508,6 +551,7 @@
     MoreFilled
   } from '@element-plus/icons-vue'
   import { clustersApi, type Cluster, type ClusterCreate } from '@/api/clusters'
+  import { normalizeClusterPayload } from '@/utils/clusterForm'
   import { useMonitoringStore } from '@/stores/monitoring'
   import ConnectionTestDialog from '@/components/ConnectionTestDialog.vue'
   import TaskRunDialog from '@/components/TaskRunDialog.vue'
@@ -587,6 +631,10 @@
     auth_type: 'NONE',
     hive_username: '',
     hive_password: '',
+    kerberos_principal: '',
+    kerberos_keytab_path: '',
+    kerberos_realm: '',
+    kerberos_ticket_cache: '',
     yarn_resource_manager_url: '',
     small_file_threshold: 128 * 1024 * 1024,
     scan_enabled: true
@@ -641,6 +689,32 @@
         validator: (rule: any, value: any, callback: any) => {
           if (clusterForm.value.auth_type === 'LDAP' && !value) {
             callback(new Error('使用 LDAP 认证时，密码不能为空'))
+          } else {
+            callback()
+          }
+        }
+      }
+    ],
+    kerberos_principal: [
+      {
+        required: true,
+        trigger: 'blur',
+        validator: (rule: any, value: any, callback: any) => {
+          if (clusterForm.value.auth_type === 'KERBEROS' && !value) {
+            callback(new Error('使用 Kerberos 时，Principal 不能为空'))
+          } else {
+            callback()
+          }
+        }
+      }
+    ],
+    kerberos_keytab_path: [
+      {
+        required: true,
+        trigger: 'blur',
+        validator: (rule: any, value: any, callback: any) => {
+          if (clusterForm.value.auth_type === 'KERBEROS' && !value) {
+            callback(new Error('使用 Kerberos 时，需要提供 Keytab 路径'))
           } else {
             callback()
           }
@@ -764,14 +838,26 @@
   }
 
   const onAuthTypeChange = (authType: string) => {
-    if (authType === 'NONE') {
-      // 清空LDAP认证相关字段
+    if (authType !== 'LDAP') {
       clusterForm.value.hive_username = ''
       clusterForm.value.hive_password = ''
     }
+    if (authType === 'KERBEROS') {
+      clusterForm.value.hive_username = ''
+      clusterForm.value.hive_password = ''
+    } else {
+      clusterForm.value.kerberos_principal = ''
+      clusterForm.value.kerberos_keytab_path = ''
+      clusterForm.value.kerberos_realm = ''
+      clusterForm.value.kerberos_ticket_cache = ''
+    }
 
-    // 触发表单验证
-    clusterFormRef.value?.clearValidate(['hive_username', 'hive_password'])
+    clusterFormRef.value?.clearValidate([
+      'hive_username',
+      'hive_password',
+      'kerberos_principal',
+      'kerberos_keytab_path'
+    ])
   }
 
   const enterCluster = (clusterId: number) => {
@@ -804,24 +890,74 @@
     return status === 'active' ? 'success' : 'danger'
   }
 
+  const normalizeClusterPayload = (form: any = clusterForm.value) => {
+    const payload: Record<string, any> = { ...form }
+    payload.auth_type = (payload.auth_type || 'NONE').toUpperCase()
+
+    const trimOrUndefined = (value: any) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        return trimmed === '' ? undefined : trimmed
+      }
+      return value ?? undefined
+    }
+
+    payload.name = trimOrUndefined(payload.name)
+    payload.description = trimOrUndefined(payload.description)
+    payload.hive_host = trimOrUndefined(payload.hive_host)
+    payload.hive_database = trimOrUndefined(payload.hive_database)
+    payload.hive_metastore_url = trimOrUndefined(payload.hive_metastore_url)
+    payload.hdfs_namenode_url = trimOrUndefined(payload.hdfs_namenode_url)
+    payload.hdfs_user = trimOrUndefined(payload.hdfs_user)
+    payload.yarn_resource_manager_url = trimOrUndefined(
+      payload.yarn_resource_manager_url
+    )
+
+    if (payload.auth_type !== 'LDAP') {
+      delete payload.hive_username
+      delete payload.hive_password
+    } else {
+      payload.hive_username = trimOrUndefined(payload.hive_username)
+      payload.hive_password = trimOrUndefined(payload.hive_password)
+    }
+
+    if (payload.auth_type === 'KERBEROS') {
+      payload.kerberos_principal = trimOrUndefined(payload.kerberos_principal)
+      payload.kerberos_keytab_path = trimOrUndefined(payload.kerberos_keytab_path)
+      payload.kerberos_realm = trimOrUndefined(payload.kerberos_realm)
+      payload.kerberos_ticket_cache = trimOrUndefined(
+        payload.kerberos_ticket_cache
+      )
+    } else {
+      delete payload.kerberos_principal
+      delete payload.kerberos_keytab_path
+      delete payload.kerberos_realm
+      delete payload.kerberos_ticket_cache
+    }
+
+    return payload
+  }
+
   const saveCluster = async () => {
     try {
       await clusterFormRef.value.validate()
 
+      const payload = normalizeClusterPayload()
+
       if (editingCluster.value) {
-        await clustersApi.update(editingCluster.value.id, clusterForm.value)
+        await clustersApi.update(editingCluster.value.id, payload)
         // 保存 HAR SSH 本地配置
         saveHarSsh(editingCluster.value.id)
         ElMessage.success('集群更新成功')
       } else {
         // 创建集群时选择是否验证连接
         if (validateConnection.value) {
-          const created = await clustersApi.createWithValidation(clusterForm.value)
+          const created = await clustersApi.createWithValidation(payload)
           // 保存 HAR SSH 本地配置
           if (created?.id) saveHarSsh(created.id)
           ElMessage.success('集群创建成功（已验证连接）')
         } else {
-          const created = await clustersApi.create(clusterForm.value)
+          const created = await clustersApi.create(payload)
           if ((created as any)?.id) saveHarSsh((created as any).id)
           ElMessage.success('集群创建成功')
         }
@@ -840,6 +976,11 @@
   const editCluster = (cluster: Cluster) => {
     editingCluster.value = cluster
     clusterForm.value = { ...cluster }
+    clusterForm.value.kerberos_principal = clusterForm.value.kerberos_principal || ''
+    clusterForm.value.kerberos_keytab_path = clusterForm.value.kerberos_keytab_path || ''
+    clusterForm.value.kerberos_realm = clusterForm.value.kerberos_realm || ''
+    clusterForm.value.kerberos_ticket_cache = clusterForm.value.kerberos_ticket_cache || ''
+    nextTick(() => onAuthTypeChange(clusterForm.value.auth_type))
     loadHarSsh(cluster.id)
     showCreateDialog.value = true
   }
@@ -1034,6 +1175,14 @@
     if (templateName && clusterTemplates[templateName as keyof typeof clusterTemplates]) {
       const template = clusterTemplates[templateName as keyof typeof clusterTemplates]
       clusterForm.value = { ...template }
+      clusterForm.value.auth_type = template.auth_type || 'NONE'
+      clusterForm.value.hive_username = template.hive_username || ''
+      clusterForm.value.hive_password = template.hive_password || ''
+      clusterForm.value.kerberos_principal = template.kerberos_principal || ''
+      clusterForm.value.kerberos_keytab_path = template.kerberos_keytab_path || ''
+      clusterForm.value.kerberos_realm = template.kerberos_realm || ''
+      clusterForm.value.kerberos_ticket_cache = template.kerberos_ticket_cache || ''
+      nextTick(() => onAuthTypeChange(clusterForm.value.auth_type))
       ElMessage.info(`已应用 ${templateName.toUpperCase()} 集群模板，请根据实际情况修改配置`)
     }
   }
@@ -1066,6 +1215,10 @@
       auth_type: 'NONE',
       hive_username: '',
       hive_password: '',
+      kerberos_principal: '',
+      kerberos_keytab_path: '',
+      kerberos_realm: '',
+      kerberos_ticket_cache: '',
       yarn_resource_manager_url: '',
       small_file_threshold: 128 * 1024 * 1024,
       scan_enabled: true
@@ -1253,12 +1406,13 @@
     try {
       await clusterFormRef.value.validate()
 
-      currentTestConfig.value = { ...clusterForm.value }
+      const payload = normalizeClusterPayload()
+      currentTestConfig.value = { ...payload }
       testResult.value = null
       testError.value = null
       testingConfig.value = true
 
-      const result = await clustersApi.testConnectionConfig(clusterForm.value)
+      const result = await clustersApi.testConnectionConfig(payload)
       testResult.value = result
       showTestDialog.value = true
     } catch (error: any) {
@@ -1288,7 +1442,9 @@
         result = await clustersApi.testConnection(clusterConfig.id, 'real')
       } else {
         // 配置测试
-        result = await clustersApi.testConnectionConfig(clusterConfig)
+        result = await clustersApi.testConnectionConfig(
+          normalizeClusterPayload(clusterConfig)
+        )
       }
       testResult.value = result
     } catch (error: any) {

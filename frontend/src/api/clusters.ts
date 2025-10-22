@@ -10,9 +10,14 @@ export interface Cluster {
   hive_metastore_url: string
   hdfs_namenode_url: string
   hdfs_user: string
+  hdfs_password?: string | null
   auth_type: string
   hive_username?: string
   hive_password?: string
+  kerberos_principal?: string | null
+  kerberos_keytab_path?: string | null
+  kerberos_realm?: string | null
+  kerberos_ticket_cache?: string | null
   yarn_resource_manager_url?: string
   small_file_threshold: number
   scan_enabled: boolean
@@ -33,6 +38,10 @@ export interface ClusterCreate {
   auth_type?: string
   hive_username?: string
   hive_password?: string
+  kerberos_principal?: string
+  kerberos_keytab_path?: string
+  kerberos_realm?: string
+  kerberos_ticket_cache?: string
   yarn_resource_manager_url?: string
   small_file_threshold?: number
   scan_enabled?: boolean
@@ -116,9 +125,19 @@ export const clustersApi = {
         error_message?: string
         attempt_count: number
         retry_count: number
+        diagnostic_code?: string | null
+        diagnostic_message?: string | null
+        recommended_action?: string | null
       }
     >
-    logs: Array<{ level: string; message: string }>
+    logs: Array<{
+      level: string
+      message: string
+      timestamp?: string
+      diagnostic_code?: string
+      diagnostic_message?: string
+      recommended_action?: string
+    }>
     suggestions: string[]
   }> {
     const params = new URLSearchParams()
@@ -167,6 +186,9 @@ export const clustersApi = {
       attempt_count: number
       retry_count: number
       timestamp: string
+      diagnostic_code?: string | null
+      diagnostic_message?: string | null
+      recommended_action?: string | null
     }>
   }> {
     return api.get(`/clusters/${id}/connection-history?limit=${limit}`)
@@ -198,6 +220,10 @@ export const clustersApi = {
     message: string
   }> {
     return api.delete(`/clusters/${id}/cache`)
+  },
+
+  getKerberosMetrics(): Promise<{ collected_at: string; metrics: Record<string, any> }> {
+    return api.get('/clusters/kerberos/metrics')
   }
 }
 
@@ -218,7 +244,8 @@ export const useClustersApi = () => {
     getConnectionStatistics: clustersApi.getConnectionStatistics.bind(clustersApi),
     getConnectionHistory: clustersApi.getConnectionHistory.bind(clustersApi),
     getStatus: clustersApi.getStatus.bind(clustersApi),
-    clearConnectionCache: clustersApi.clearConnectionCache.bind(clustersApi)
+    clearConnectionCache: clustersApi.clearConnectionCache.bind(clustersApi),
+    getKerberosMetrics: clustersApi.getKerberosMetrics.bind(clustersApi)
   }
 }
 

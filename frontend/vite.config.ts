@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
+      host: '192.168.0.105', // 绑定到指定IP地址
       port: parseInt(env.VITE_DEV_PORT || '3000'),
       proxy: {
         // 统一使用相对路径 /api/v1，开发态由 Vite 代理到本地后端 8000
