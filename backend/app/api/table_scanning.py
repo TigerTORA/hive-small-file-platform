@@ -248,9 +248,7 @@ async def get_partition_metrics(
 
         def scan_part(idx: int, name: str, path: str):
             try:
-                client = WebHDFSClient(
-                    cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
-                )
+                client = WebHDFSClient.from_cluster(cluster)
                 try:
                     stats = client.scan_directory_stats(
                         path,

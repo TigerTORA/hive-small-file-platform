@@ -18,11 +18,20 @@ router = APIRouter()
 
 @router.get("/metrics", response_model=list[TableMetricResponse])
 async def get_table_metrics(
-    cluster_id: int = Query(...),
-    database_name: str = Query(None),
+    cluster_id: int = Query(..., description="Cluster ID to filter tables"),
+    database_name: str = Query(None, description="Optional database name filter"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: Session = Depends(get_db),
 ):
-    """Get latest table metrics per table (deduplicated by database_name + table_name)."""
+    """Get latest table metrics per table (deduplicated by database_name + table_name).
+
+    Args:
+        cluster_id: Cluster ID to filter tables
+        database_name: Optional database name filter
+        skip: Number of records to skip (for pagination)
+        limit: Maximum number of records to return (default: 100, max: 1000)
+    """
     base = db.query(
         TableMetric.database_name,
         TableMetric.table_name,
@@ -33,11 +42,15 @@ async def get_table_metrics(
         base = base.filter(TableMetric.database_name == database_name)
 
     base = base.group_by(TableMetric.database_name, TableMetric.table_name)
-    latest_ids = [row.max_id for row in base.all()]
+
+    # Apply pagination to the aggregation query first
+    latest_ids_query = base.offset(skip).limit(limit)
+    latest_ids = [row.max_id for row in latest_ids_query.all()]
 
     if not latest_ids:
         return []
 
+    # Fetch full records for the paginated IDs
     metrics = (
         db.query(TableMetric)
         .filter(TableMetric.id.in_(latest_ids))

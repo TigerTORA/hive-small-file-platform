@@ -34,8 +34,9 @@ class TestHiveConnectionManager:
         """创建连接管理器实例"""
         with (
             patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"),
-            patch("app.engines.connection_manager.WebHDFSClient"),
+            patch("app.engines.connection_manager.WebHDFSClient.from_cluster") as mock_hdfs,
         ):
+            mock_hdfs.return_value = Mock(spec=WebHDFSClient)
             return HiveConnectionManager(mock_cluster)
 
     def test_init_creates_clients(self, mock_cluster):
@@ -44,17 +45,18 @@ class TestHiveConnectionManager:
             patch(
                 "app.engines.connection_manager.MySQLHiveMetastoreConnector"
             ) as mock_metastore,
-            patch("app.engines.connection_manager.WebHDFSClient") as mock_webhdfs,
+            patch(
+                "app.engines.connection_manager.WebHDFSClient.from_cluster"
+            ) as mock_webhdfs,
         ):
+            mock_webhdfs.return_value = Mock(spec=WebHDFSClient)
 
             manager = HiveConnectionManager(mock_cluster)
 
             # 验证创建了 MetaStore 连接器
             mock_metastore.assert_called_once_with(mock_cluster.hive_metastore_url)
             # 验证创建了 WebHDFS 客户端
-            mock_webhdfs.assert_called_once_with(
-                namenode_url=mock_cluster.hdfs_namenode_url, user=mock_cluster.hdfs_user
-            )
+            mock_webhdfs.assert_called_once_with(mock_cluster)
 
             assert manager.cluster == mock_cluster
             assert hasattr(manager, "metastore_connector")
@@ -174,8 +176,9 @@ class TestHiveConnectionManager:
         """测试上下文管理器功能"""
         with (
             patch("app.engines.connection_manager.MySQLHiveMetastoreConnector"),
-            patch("app.engines.connection_manager.WebHDFSClient"),
+            patch("app.engines.connection_manager.WebHDFSClient.from_cluster") as mock_hdfs,
         ):
+            mock_hdfs.return_value = Mock(spec=WebHDFSClient)
 
             manager = HiveConnectionManager(mock_cluster)
             manager.cleanup_connections = Mock()

@@ -38,9 +38,24 @@ class HybridTableScanner:
             return MySQLHiveMetastoreConnector(url)
 
     def _initialize_hdfs_scanner(self) -> None:
+        auth_type = (getattr(self.cluster, "auth_type", "NONE") or "NONE").upper()
+        kerberos_kwargs = {}
+        if auth_type == "KERBEROS":
+            kerberos_kwargs = {
+                "kerberos_principal": getattr(self.cluster, "kerberos_principal", None),
+                "kerberos_keytab_path": getattr(
+                    self.cluster, "kerberos_keytab_path", None
+                ),
+                "kerberos_realm": getattr(self.cluster, "kerberos_realm", None),
+                "kerberos_ticket_cache": getattr(
+                    self.cluster, "kerberos_ticket_cache", None
+                ),
+            }
         self.hdfs_scanner = WebHDFSScanner(
             self.cluster.hdfs_namenode_url,
             user=getattr(self.cluster, "hdfs_user", "hdfs") or "hdfs",
+            auth_type=auth_type,
+            **kerberos_kwargs,
         )
 
     def test_connections(self) -> Dict[str, Any]:
@@ -61,7 +76,15 @@ class HybridTableScanner:
         try:
             self._initialize_hdfs_scanner()
             hdfs_ok = self.hdfs_scanner.connect() if self.hdfs_scanner else False
-            hdfs_result = {"status": "success" if hdfs_ok else "error", "mode": "real"}
+            diagnostic = (
+                self.hdfs_scanner.last_diagnostic() if self.hdfs_scanner else None
+            )
+            hdfs_result = {
+                "status": "success" if hdfs_ok else "error",
+                "mode": "real",
+            }
+            if diagnostic:
+                hdfs_result.update(diagnostic.as_dict())
             if self.hdfs_scanner:
                 self.hdfs_scanner.disconnect()
         except Exception as e:

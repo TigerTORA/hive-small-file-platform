@@ -17,6 +17,10 @@ def _cluster_payload(name="c-cls"):
         "hdfs_namenode_url": "hdfs://localhost:9000",
         "hdfs_user": "hdfs",
         "auth_type": "NONE",
+        "kerberos_principal": None,
+        "kerberos_keytab_path": None,
+        "kerberos_realm": None,
+        "kerberos_ticket_cache": None,
         "small_file_threshold": 128 * 1024 * 1024,
         "scan_enabled": True,
     }
@@ -184,3 +188,48 @@ async def test_create_cluster_with_validation_failure(db_session, monkeypatch):
     payload = _cluster_payload("c-validate")
     with pytest.raises(Exception):
         await clusters_api.create_cluster(ClusterCreate(**payload), True, db_session)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_cluster_requires_kerberos_fields(db_session):
+    import app.api.clusters as clusters_api
+    from app.schemas.cluster import ClusterCreate
+
+    kerb_payload = _cluster_payload("kerb-cls")
+    kerb_payload.update({"auth_type": "KERBEROS"})
+
+    # missing Kerberos fields should fail validation
+    with pytest.raises(Exception):
+        ClusterCreate(**kerb_payload)
+
+    kerb_payload["kerberos_principal"] = "hive/cdp-master@EXAMPLE.COM"
+    kerb_payload["kerberos_keytab_path"] = "/etc/security/keytabs/hive.keytab"
+    kerb_payload["kerberos_realm"] = "EXAMPLE.COM"
+    kerb_payload["kerberos_ticket_cache"] = "/tmp/krb5cc_test"
+
+    created = await clusters_api.create_cluster(
+        ClusterCreate(**kerb_payload), False, db_session
+    )
+    assert created.auth_type == "KERBEROS"
+    assert created.kerberos_principal == "hive/cdp-master@EXAMPLE.COM"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_kerberos_metrics_endpoint(monkeypatch):
+    import app.api.clusters as clusters_api
+
+    monkeypatch.setattr(
+        clusters_api.enhanced_connection_service,
+        "get_kerberos_metrics",
+        lambda: {"kerberos_failures": {"KERBEROS_AUTHENTICATION_FAILED": 3}},
+    )
+
+    payload = await clusters_api.get_kerberos_metrics()
+
+    assert "metrics" in payload
+    assert (
+        payload["metrics"]["kerberos_failures"]["KERBEROS_AUTHENTICATION_FAILED"]
+        == 3
+    )

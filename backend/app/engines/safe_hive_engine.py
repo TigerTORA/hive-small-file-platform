@@ -66,9 +66,7 @@ class SafeHiveMergeEngine(BaseMergeEngine):
         self.progress_callback: Optional[Callable[[str, str], None]] = None
 
         # 初始化WebHDFS客户端用于精确的文件统计
-        self.webhdfs_client = WebHDFSClient(
-            namenode_url=cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
-        )
+        self.webhdfs_client = WebHDFSClient.from_cluster(cluster)
 
         # 初始化YARN监控器（如果配置了YARN RM URL）
         self.yarn_monitor = None
