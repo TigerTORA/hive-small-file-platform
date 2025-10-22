@@ -23,9 +23,7 @@ class HiveConnectionManager:
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
         self.metastore_connector = HiveMetastoreConnector(cluster.hive_metastore_url)
-        self.webhdfs_client = WebHDFSClient(
-            namenode_url=cluster.hdfs_namenode_url, user=cluster.hdfs_user or "hdfs"
-        )
+        self.webhdfs_client = WebHDFSClient.from_cluster(cluster)
 
         # 初始化YARN监控器（如果配置了YARN RM URL）
         self.yarn_monitor = None

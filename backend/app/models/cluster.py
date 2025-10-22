@@ -27,12 +27,16 @@ class Cluster(Base):
     # HDFS connection info
     hdfs_namenode_url = Column(String(500), nullable=False)
     hdfs_user = Column(String(100), default="hdfs")
-    hdfs_password = Column(String(255), nullable=True)  # 用于Kerberos认证
+    hdfs_password = Column(String(255), nullable=True)  # TODO replace when Kerberos fully enabled
 
     # Hive LDAP authentication info
-    auth_type = Column(String(20), default="NONE")  # NONE, LDAP
+    auth_type = Column(String(20), default="NONE")  # NONE, LDAP, KERBEROS
     hive_username = Column(String(100), nullable=True)  # Hive LDAP用户名
     hive_password = Column(String(500), nullable=True)  # Hive LDAP密码(加密存储)
+    kerberos_principal = Column(String(200), nullable=True)
+    kerberos_keytab_path = Column(String(500), nullable=True)
+    kerberos_realm = Column(String(100), nullable=True)
+    kerberos_ticket_cache = Column(String(200), nullable=True)
 
     # YARN monitoring info
     yarn_resource_manager_url = Column(String(200), nullable=True)  # YARN RM地址

@@ -18,14 +18,22 @@ router = APIRouter()
 
 
 @router.get("/")
-async def list_clusters(db: Session = Depends(get_db)):
+async def list_clusters(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    db: Session = Depends(get_db)
+):
     """List all clusters (robust encoding).
 
     Use explicit serialization to avoid validation issues that may produce 500s
     in heterogeneous records created by older versions.
+
+    Args:
+        skip: Number of records to skip (for pagination)
+        limit: Maximum number of records to return (default: 100, max: 1000)
     """
     try:
-        rows = db.query(Cluster).all()
+        rows = db.query(Cluster).offset(skip).limit(limit).all()
         result = []
         for c in rows:
             result.append(
@@ -42,6 +50,10 @@ async def list_clusters(db: Session = Depends(get_db)):
                     "auth_type": (c.auth_type or "NONE"),
                     "hive_username": c.hive_username,
                     "hive_password": None,  # never expose
+                    "kerberos_principal": c.kerberos_principal,
+                    "kerberos_keytab_path": c.kerberos_keytab_path,
+                    "kerberos_realm": c.kerberos_realm,
+                    "kerberos_ticket_cache": c.kerberos_ticket_cache,
                     "yarn_resource_manager_url": c.yarn_resource_manager_url,
                     "small_file_threshold": c.small_file_threshold,
                     "scan_enabled": bool(c.scan_enabled),
@@ -102,7 +114,7 @@ async def create_cluster(
     if validate_connection:
         try:
             # 创建临时集群对象用于连接测试
-            temp_cluster = Cluster(**cluster.dict())
+            temp_cluster = Cluster(**cluster.model_dump())
             scanner = HybridTableScanner(temp_cluster)
             validation_results = scanner.test_connections()
 
@@ -154,7 +166,7 @@ async def create_cluster(
             )
 
     try:
-        db_cluster = Cluster(**cluster.dict())
+        db_cluster = Cluster(**cluster.model_dump())
         db.add(db_cluster)
         db.commit()
         db.refresh(db_cluster)
@@ -196,6 +208,20 @@ async def get_health_metrics(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get health metrics: {str(e)}"
+        )
+
+
+@router.get("/kerberos/metrics")
+async def get_kerberos_metrics():
+    """返回内存中的 Kerberos 连通性指标（供运维监控使用）。"""
+    try:
+        return {
+            "collected_at": datetime.utcnow().isoformat() + "Z",
+            "metrics": enhanced_connection_service.get_kerberos_metrics(),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get Kerberos metrics: {str(e)}"
         )
 
 
@@ -589,7 +615,7 @@ async def test_connection_without_cluster(cluster: ClusterCreate):
 
     try:
         # 创建临时集群对象用于连接测试
-        temp_cluster = Cluster(**cluster.dict())
+        temp_cluster = Cluster(**cluster.model_dump())
         scanner = HybridTableScanner(temp_cluster)
         results = scanner.test_connections()
 

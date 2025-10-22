@@ -72,6 +72,10 @@ def test_get_hive_connection_and_cleanup(monkeypatch):
         def close(self):
             pass
 
+        @classmethod
+        def from_cluster(cls, *args, **kwargs):
+            return cls()
+
     monkeypatch.setattr(cm_mod, "hive", _Hive())
     monkeypatch.setattr(cm_mod, "HiveMetastoreConnector", lambda url: _Meta())
     monkeypatch.setattr(cm_mod, "WebHDFSClient", _Web)

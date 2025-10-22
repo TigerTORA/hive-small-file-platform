@@ -85,6 +85,7 @@ async def set_ec_policy(
 
     def run():
         db_thread = SessionLocal()
+        client: Optional[WebHDFSClient] = None
         try:
             scan_task_manager.safe_update_progress(
                 db_thread,
@@ -291,10 +292,7 @@ async def set_replication(
                 },
             )
 
-            client = WebHDFSClient(
-                cluster.hdfs_namenode_url,
-                cluster.hdfs_user or "hdfs",
-            )
+            client = WebHDFSClient.from_cluster(cluster)
 
             scan_task_manager.safe_update_progress(
                 db_thread, task_id, completed_items=1, current_item="execute"
@@ -357,6 +355,11 @@ async def set_replication(
                 db_thread, task_id, success=False, error_message=str(exc)
             )
         finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
             try:
                 db_thread.close()
             except Exception:

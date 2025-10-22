@@ -246,11 +246,7 @@ class SimpleArchiveEngine:
             raise ValueError(f"无法获取表 {database_name}.{table_name} 的存储位置")
 
         # 调用 WebHDFS 设置策略
-        hdfs = WebHDFSClient(
-            getattr(self.cluster, "hdfs_namenode_url", None)
-            or getattr(self.cluster, "hdfs_url", ""),
-            user=getattr(self.cluster, "hdfs_user", "hdfs") or "hdfs",
-        )
+        hdfs = WebHDFSClient.from_cluster(self.cluster)
         try:
             if recursive:
                 success, fail, errors = hdfs.set_storage_policy_recursive(
@@ -434,11 +430,7 @@ class SimpleArchiveEngine:
         """
         try:
             # 使用 WebHDFS 归档目录（目录重命名/移动），并列出归档文件作为迁移记录
-            hdfs = WebHDFSClient(
-                getattr(self.cluster, "hdfs_namenode_url", None)
-                or getattr(self.cluster, "hdfs_url", ""),
-                user=getattr(self.cluster, "hdfs_user", "hdfs") or "hdfs",
-            )
+            hdfs = WebHDFSClient.from_cluster(self.cluster)
             try:
                 ok, msg = hdfs.archive_directory(
                     source_path, target_path, create_archive_dir=True
@@ -488,11 +480,7 @@ class SimpleArchiveEngine:
             恢复的文件列表
         """
         try:
-            hdfs = WebHDFSClient(
-                getattr(self.cluster, "hdfs_namenode_url", None)
-                or getattr(self.cluster, "hdfs_url", ""),
-                user=getattr(self.cluster, "hdfs_user", "hdfs") or "hdfs",
-            )
+            hdfs = WebHDFSClient.from_cluster(self.cluster)
             try:
                 ok, msg = hdfs.restore_directory(archive_path, restore_path)
                 if not ok:

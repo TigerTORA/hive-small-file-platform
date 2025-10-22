@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  mini-kdc:
+    image: bitnami/kerberos:1.20.1
+    container_name: mini-kdc
+    environment:
+      - KRB5_REALM=EXAMPLE.COM
+      - KRB5_KDC_ADMIN_USER=admin
+      - KRB5_KDC_ADMIN_PASSWORD=admin_password
+      - KRB5_KDC_PASSWORD=kdc_password
+      - KRB5_KDC_PORT_NUMBER=88
+      - KRB5_ADMIN_SERVER_PORT_NUMBER=749
+    ports:
+      - '88:88'
+      - '749:749'
+    volumes:
+      - ./keytabs:/keytabs
+      - ./config:/config
+    healthcheck:
+      test: ['CMD', 'kadmin', '-p', 'admin/admin', '-w', 'admin_password', '-q', 'list_principals']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped

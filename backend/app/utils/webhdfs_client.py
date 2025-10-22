@@ -5,13 +5,29 @@ WebHDFS客户端工具类
 
 import logging
 import os
+import subprocess
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
+from requests import exceptions as requests_exceptions
+
+from app.utils.kerberos_diagnostics import (
+    KerberosDiagnostic,
+    KerberosDiagnosticCode,
+    KerberosDiagnosticError,
+    build_diagnostic,
+    log_kerberos_diagnostic,
+    map_exception_to_diagnostic,
+    raise_diagnostic_error,
+)
+from app.utils.metrics import increment_kerberos_failure, increment_ticket_event
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover
+    from app.models.cluster import Cluster
 
 
 @dataclass
@@ -46,7 +62,17 @@ class HDFSDirectoryStats:
 class WebHDFSClient:
     """WebHDFS客户端"""
 
-    def __init__(self, namenode_url: str, user: str = "hdfs", timeout: int = 30):
+    def __init__(
+        self,
+        namenode_url: str,
+        user: str = "hdfs",
+        timeout: int = 30,
+        auth_type: str = "SIMPLE",
+        kerberos_principal: Optional[str] = None,
+        kerberos_keytab_path: Optional[str] = None,
+        kerberos_realm: Optional[str] = None,
+        kerberos_ticket_cache: Optional[str] = None,
+    ):
         """
         初始化WebHDFS客户端
 
@@ -54,11 +80,25 @@ class WebHDFSClient:
             namenode_url: NameNode的WebHDFS URL (如: http://192.168.0.100:50070)
             user: HDFS用户名，默认hdfs
             timeout: 请求超时时间（秒）
+            auth_type: 认证类型 SIMPLE 或 KERBEROS
+            kerberos_principal: Kerberos principal
+            kerberos_keytab_path: Kerberos keytab路径
+            kerberos_realm: Kerberos Realm
+            kerberos_ticket_cache: Kerberos 票据缓存路径
         """
         self.namenode_url = namenode_url.rstrip("/")
         self.user = user
         self.timeout = timeout
+        self.auth_type = (auth_type or "SIMPLE").upper()
+        self.kerberos_principal = kerberos_principal
+        self.kerberos_keytab_path = kerberos_keytab_path
+        self.kerberos_realm = kerberos_realm
+        self.kerberos_ticket_cache = kerberos_ticket_cache
+        self._ticket_cache_env: Optional[str] = None
+        self._previous_ticket_cache: Optional[str] = None
+        self._last_diagnostic: Optional[KerberosDiagnostic] = None
         self.session = requests.Session()
+        self.session.timeout = timeout
 
         # WebHDFS API基础路径
         if namenode_url.endswith("/webhdfs/v1"):
@@ -69,6 +109,119 @@ class WebHDFSClient:
         logger.info(
             f"Initialized WebHDFS client: {self.namenode_url}, user: {self.user}"
         )
+        if self.auth_type == "KERBEROS":
+            self._configure_kerberos()
+
+    def last_diagnostic(self) -> Optional[KerberosDiagnostic]:
+        return self._last_diagnostic
+
+    def _record_diagnostic(
+        self, diagnostic: KerberosDiagnostic, *, extra: Optional[dict] = None
+    ) -> None:
+        self._last_diagnostic = diagnostic
+        log_kerberos_diagnostic(logger, "error", diagnostic, extra_context=extra)
+        increment_kerberos_failure(diagnostic.code.value)
+
+    @classmethod
+    def from_cluster(
+        cls, cluster: "Cluster", timeout: int = 30  # type: ignore[name-defined]
+    ) -> "WebHDFSClient":
+        auth_type = (getattr(cluster, "auth_type", "NONE") or "NONE").upper()
+        kwargs = {}
+        if auth_type == "KERBEROS":
+            kwargs = {
+                "kerberos_principal": getattr(cluster, "kerberos_principal", None),
+                "kerberos_keytab_path": getattr(cluster, "kerberos_keytab_path", None),
+                "kerberos_realm": getattr(cluster, "kerberos_realm", None),
+                "kerberos_ticket_cache": getattr(
+                    cluster, "kerberos_ticket_cache", None
+                ),
+            }
+        return cls(
+            cluster.hdfs_namenode_url,
+            user=getattr(cluster, "hdfs_user", "hdfs") or "hdfs",
+            timeout=timeout,
+            auth_type=auth_type,
+            **kwargs,
+        )
+
+    def _configure_kerberos(self) -> None:
+        if not REQUESTS_KERBEROS_AVAILABLE:
+            raise_diagnostic_error(
+                KerberosDiagnosticCode.CONFIG_MISSING,
+                detail="requests-kerberos 未安装，无法启用 Kerberos 认证",
+                logger=logger,
+            )
+
+        principal = (self.kerberos_principal or "").strip()
+        if not principal:
+            raise_diagnostic_error(
+                KerberosDiagnosticCode.CONFIG_MISSING,
+                detail="缺少 kerberos_principal",
+                logger=logger,
+            )
+        if self.kerberos_realm and "@" not in principal:
+            principal = f"{principal}@{self.kerberos_realm}"
+        self.kerberos_principal = principal
+
+        if self.kerberos_ticket_cache:
+            expanded = os.path.expanduser(self.kerberos_ticket_cache)
+            self._previous_ticket_cache = os.environ.get("KRB5CCNAME")
+            os.environ["KRB5CCNAME"] = expanded
+            self._ticket_cache_env = expanded
+            logger.debug("Using Kerberos ticket cache: %s", expanded)
+
+        if self.kerberos_keytab_path:
+            path = os.path.expanduser(self.kerberos_keytab_path)
+            if not os.path.exists(path):
+                raise_diagnostic_error(
+                    KerberosDiagnosticCode.KEYTAB_MISSING,
+                    detail=f"Keytab 路径不存在: {path}",
+                    logger=logger,
+                )
+            self._run_kinit(path, principal)
+            increment_ticket_event("kerberos_ticket_renewed")
+        else:
+            logger.debug(
+                "Kerberos keytab path not provided; assuming valid ticket cache exists"
+            )
+
+        self.session.auth = HTTPKerberosAuth(  # type: ignore[call-arg]
+            mutual_authentication=KRB_OPTIONAL
+        )
+        logger.info("Configured WebHDFS client with Kerberos authentication")
+
+    def _run_kinit(self, keytab_path: str, principal: str) -> None:
+        env = os.environ.copy()
+        if self._ticket_cache_env:
+            env["KRB5CCNAME"] = self._ticket_cache_env
+        cmd = ["kinit", "-k", "-t", keytab_path, principal]
+        try:
+            completed = subprocess.run(
+                cmd,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                text=True,
+            )
+            logger.debug("kinit executed successfully for principal %s", principal)
+            increment_ticket_event("kerberos_kinit_success")
+        except FileNotFoundError as exc:
+            diagnostic = build_diagnostic(
+                KerberosDiagnosticCode.KINIT_FAILURE,
+                detail="未找到 kinit 命令，请确认 Kerberos 客户端已安装",
+            )
+            self._record_diagnostic(diagnostic)
+            raise KerberosDiagnosticError(diagnostic, original=exc)
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.strip() if exc.stderr else ""
+            diagnostic = build_diagnostic(
+                KerberosDiagnosticCode.KINIT_FAILURE,
+                detail=f"kinit failed for principal {principal}: {stderr or exc}",
+            )
+            self._record_diagnostic(diagnostic)
+            raise KerberosDiagnosticError(diagnostic, original=exc)
 
     def _build_url(self, path: str, operation: str, **params) -> str:
         """构建WebHDFS API URL（自动归一化 hdfs:// 路径为 HTTP 路径）"""
@@ -121,45 +274,60 @@ class WebHDFSClient:
 
     def test_connection(self) -> Tuple[bool, str]:
         """
-        测试WebHDFS连接
+        测试 WebHDFS 连接，通过根目录 GETFILESTATUS 验证 HTTP/SPNEGO 通路。
 
         Returns:
             (是否连接成功, 错误信息或成功信息)
         """
+        url = self._build_url("/", "GETFILESTATUS")
         try:
-            # 一次主探测 + 两次回退（/warehouse/...、/tmp）
-            probe_paths = ["/", "/warehouse/tablespace/external/hive", "/tmp"]
-            for p in probe_paths:
-                url = self._build_url(p, "LISTSTATUS")
-                logger.info(f"Testing WebHDFS connection: {url}")
-                try:
-                    response = self.session.get(url, timeout=self.timeout)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if "FileStatuses" in data:
-                            logger.info("WebHDFS connection successful")
-                            return True, "WebHDFS连接成功"
-                    # 某些环境不允许 LISTSTATUS 根目录，尝试 GETFILESTATUS
-                    fs = self.get_file_status(p)
-                    if fs is not None:
-                        logger.info("WebHDFS connection successful via GETFILESTATUS")
-                        return True, "WebHDFS连接成功"
-                except Exception:
-                    continue
-            return False, "WebHDFS连接失败（多路径探测均失败）"
+            response = self.session.get(url, timeout=self.timeout, allow_redirects=False)
+            if response.status_code == 200:
+                self._last_diagnostic = None
+                logger.info("Connected to WebHDFS via %s", self.webhdfs_base)
+                return True, "WebHDFS connection succeeded"
 
-        except requests.exceptions.Timeout:
-            error_msg = f"WebHDFS连接超时 ({self.timeout}秒)"
-            logger.error(error_msg)
-            return False, error_msg
-        except requests.exceptions.ConnectionError as e:
-            error_msg = f"WebHDFS连接错误: {str(e)}"
-            logger.error(error_msg)
-            return False, error_msg
-        except Exception as e:
-            error_msg = f"WebHDFS连接异常: {str(e)}"
-            logger.error(error_msg)
-            return False, error_msg
+            diagnostic = self._diagnostic_from_http(response)
+            self._record_diagnostic(
+                diagnostic,
+                extra={"stage": "webhdfs_test", "http_status": response.status_code},
+            )
+            return False, diagnostic.message
+        except KerberosDiagnosticError as kde:
+            self._record_diagnostic(kde.diagnostic, extra={"stage": "webhdfs_test"})
+            return False, kde.diagnostic.message
+        except requests_exceptions.RequestException as exc:
+            diagnostic = map_exception_to_diagnostic(exc)
+            self._record_diagnostic(diagnostic, extra={"stage": "webhdfs_test"})
+            return False, diagnostic.message
+        except Exception as exc:  # pragma: no cover - defensive
+            diagnostic = map_exception_to_diagnostic(exc)
+            self._record_diagnostic(diagnostic, extra={"stage": "webhdfs_test"})
+            return False, diagnostic.message
+
+    def _diagnostic_from_http(self, response: requests.Response) -> KerberosDiagnostic:
+        """根据 HTTP 状态码构建 Kerberos 诊断信息。"""
+        status = response.status_code
+        snippet = response.text[:200] if response.text else ""
+        detail = f"HTTP {status}: {snippet}".strip()
+
+        if status in (401, 403):
+            return build_diagnostic(
+                KerberosDiagnosticCode.AUTHENTICATION_FAILED,
+                detail=detail or "Kerberos authentication failed",
+            )
+        if status in (407,):
+            return build_diagnostic(
+                KerberosDiagnosticCode.CONFIG_MISSING,
+                detail=detail or "Proxy authentication required",
+            )
+        if status in (500, 502, 503, 504):
+            return build_diagnostic(
+                KerberosDiagnosticCode.KDC_UNREACHABLE,
+                detail=detail or "Kerberos service temporarily unavailable",
+            )
+
+        return build_diagnostic(KerberosDiagnosticCode.UNKNOWN, detail=detail or "")
 
     # ---- Storage policy helpers ----
     def set_storage_policy(self, path: str, policy: str) -> Tuple[bool, str]:
@@ -1020,6 +1188,10 @@ class WebHDFSClient:
         if hasattr(self, "session"):
             self.session.close()
             logger.info("WebHDFS client session closed")
+        if self._ticket_cache_env and self._previous_ticket_cache is not None:
+            os.environ["KRB5CCNAME"] = self._previous_ticket_cache
+        elif self._ticket_cache_env:
+            os.environ.pop("KRB5CCNAME", None)
 
 
 # 测试函数
@@ -1049,3 +1221,11 @@ if __name__ == "__main__":
             print(f"Directory stats for {test_path}: {stats}")
 
     client.close()
+try:
+    from requests_kerberos import HTTPKerberosAuth, OPTIONAL as KRB_OPTIONAL
+
+    REQUESTS_KERBEROS_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    REQUESTS_KERBEROS_AVAILABLE = False
+    HTTPKerberosAuth = None  # type: ignore
+    KRB_OPTIONAL = None  # type: ignore

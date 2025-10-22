@@ -134,6 +134,10 @@ async def test_tables_partition_metrics_with_stub_scanner(db_session, monkeypatc
         def close(self):
             pass
 
+        @classmethod
+        def from_cluster(cls, *args, **kwargs):
+            return cls()
+
     monkeypatch.setattr(tables_mod, "MySQLHiveMetastoreConnector", lambda url: _Conn())
     monkeypatch.setattr(tables_mod, "WebHDFSClient", _Web)
 

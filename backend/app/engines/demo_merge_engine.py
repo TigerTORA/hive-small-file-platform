@@ -25,9 +25,7 @@ class DemoMergeEngine:
 
     def __init__(self, cluster: Cluster):
         self.cluster = cluster
-        self.webhdfs_client = WebHDFSClient(
-            cluster.hdfs_namenode_url, cluster.hdfs_user
-        )
+        self.webhdfs_client = WebHDFSClient.from_cluster(cluster)
         self.metastore_connector = HiveMetastoreConnector(cluster.hive_metastore_url)
 
         # YARN监控（如果配置了）

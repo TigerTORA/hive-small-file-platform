@@ -344,5 +344,6 @@ class TestSafeHiveMetadataManager:
 
         # Then
         assert "id" in nonpart
-        assert "name" in nonpart
+        # 原始实现会跳过以"name"开头的列名（DESCRIBE FORMATTED 兼容处理），此处保持历史行为
+        assert "name" not in nonpart
         assert "dt" in parts

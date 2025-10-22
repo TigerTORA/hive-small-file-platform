@@ -1,27 +1,15 @@
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
 
+from app.utils.kerberos_diagnostics import KerberosDiagnosticError
 from app.utils.webhdfs_client import WebHDFSClient
 
 logger = logging.getLogger(__name__)
-
-# 尝试导入Kerberos相关模块
-try:
-    from requests_gssapi import OPTIONAL, HTTPSPNEGOAuth
-
-    KERBEROS_AVAILABLE = True
-    logger.info("Kerberos authentication support available (via GSSAPI)")
-except ImportError:
-    logger.warning(
-        "Kerberos authentication not available - install requests-gssapi for Kerberos support"
-    )
-    KERBEROS_AVAILABLE = False
-
 
 class WebHDFSScanner:
     """
@@ -35,6 +23,12 @@ class WebHDFSScanner:
         user: str = "hdfs",
         webhdfs_port: int = 9870,
         password: str = None,
+        *,
+        auth_type: str = "SIMPLE",
+        kerberos_principal: Optional[str] = None,
+        kerberos_keytab_path: Optional[str] = None,
+        kerberos_realm: Optional[str] = None,
+        kerberos_ticket_cache: Optional[str] = None,
     ):
         """
         初始化WebHDFS/HttpFS扫描器
@@ -47,6 +41,7 @@ class WebHDFSScanner:
         self.user = user
         self.password = password
         self._connected = False
+        self._last_diagnostic = None
         self.auth = None
         self.is_httpfs = False
 
@@ -79,38 +74,42 @@ class WebHDFSScanner:
             self.webhdfs_base_url = f"http://{namenode_url}:{webhdfs_port}/webhdfs/v1"
 
         # 统一客户端（带路径归一与多端口回退）
-        self._client = WebHDFSClient(self.webhdfs_base_url, user=self.user)
-
-        # 设置认证方式
-        if KERBEROS_AVAILABLE:
-            try:
-                # 尝试使用GSSAPI Kerberos认证
-                self.auth = HTTPSPNEGOAuth(mutual_authentication=OPTIONAL)
-                logger.info(
-                    f"Using Kerberos authentication (GSSAPI) for {'HttpFS' if self.is_httpfs else 'WebHDFS'}"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Kerberos auth: {e}")
-                self.auth = None
-
+        self._client = WebHDFSClient(
+            self.webhdfs_base_url,
+            user=self.user,
+            auth_type=auth_type,
+            kerberos_principal=kerberos_principal,
+            kerberos_keytab_path=kerberos_keytab_path,
+            kerberos_realm=kerberos_realm,
+            kerberos_ticket_cache=kerberos_ticket_cache,
+        )
         logger.info(
             f"{'HttpFS' if self.is_httpfs else 'WebHDFS'} base URL: {self.webhdfs_base_url}"
         )
 
         # HTTP会话
-        self.session = requests.Session()
+        self.session = self._client.session
         self.session.timeout = 30
+        self.auth = self.session.auth
 
     def connect(self) -> bool:
         """测试WebHDFS连接"""
         try:
             ok, msg = self._client.test_connection()
             self._connected = ok
+            self._last_diagnostic = self._client.last_diagnostic()
             if ok:
                 logger.info(f"Connected to WebHDFS via {self.webhdfs_base_url}")
             else:
                 logger.error(f"WebHDFS connection failed: {msg}")
             return ok
+        except KerberosDiagnosticError as kde:
+            self._last_diagnostic = kde.diagnostic
+            logger.error(
+                "Kerberos diagnostic during WebHDFS connect: %s",
+                kde.diagnostic.message,
+            )
+            return False
         except Exception as e:
             logger.error(f"Failed to connect to WebHDFS: {e}")
             return False
@@ -126,7 +125,11 @@ class WebHDFSScanner:
             self._client.close()
         except Exception:
             pass
+        self._last_diagnostic = None
         logger.info("Disconnected from WebHDFS")
+
+    def last_diagnostic(self):
+        return self._last_diagnostic
 
     def _normalize_path(self, path: str) -> str:
         """将HDFS URI转换为HTTP路径"""
@@ -152,10 +155,7 @@ class WebHDFSScanner:
         params.update({"op": operation, "user.name": self.user})
 
         # 使用认证（如果可用）
-        if self.auth:
-            return self.session.get(url, params=params, auth=self.auth)
-        else:
-            return self.session.get(url, params=params)
+        return self.session.get(url, params=params)
 
     def test_connection(self) -> Dict[str, any]:
         """测试WebHDFS/HttpFS连接"""

@@ -22,7 +22,9 @@ from app.config.database import Base
 from app.models.cluster import Cluster
 from app.models.merge_task import MergeTask
 from app.models.scan_task import ScanTask
+from app.models.scan_task_log import ScanTaskLogDB
 from app.models.table_metric import TableMetric
+from app.models.task_log import TaskLog
 
 # 演示数据预设
 DEMO_PRESETS = {
@@ -466,6 +468,188 @@ class DemoDataGenerator:
             session.close()
 
 
+def _cleanup_e2e_demo(session, cluster_id: int) -> None:
+    """清理指定集群下的 E2E Demo 任务与日志。"""
+    merge_ids = [
+        row[0]
+        for row in session.query(MergeTask.id)
+        .filter(MergeTask.cluster_id == cluster_id)
+        .all()
+    ]
+    if merge_ids:
+        session.query(TaskLog).filter(TaskLog.task_id.in_(merge_ids)).delete(
+            synchronize_session=False
+        )
+        session.query(MergeTask).filter(MergeTask.id.in_(merge_ids)).delete(
+            synchronize_session=False
+        )
+
+    scan_ids = [
+        row[0]
+        for row in session.query(ScanTask.id)
+        .filter(ScanTask.cluster_id == cluster_id)
+        .all()
+    ]
+    if scan_ids:
+        session.query(ScanTaskLogDB).filter(
+            ScanTaskLogDB.scan_task_id.in_(scan_ids)
+        ).delete(synchronize_session=False)
+        session.query(ScanTask).filter(ScanTask.id.in_(scan_ids)).delete(
+            synchronize_session=False
+        )
+
+    session.commit()
+
+
+def seed_e2e_demo(session, cluster_name: str, reset: bool = False) -> None:
+    """为 Story 6.11 准备固定的 Demo 数据。"""
+    cluster = (
+        session.query(Cluster).filter(Cluster.name == cluster_name).first()
+    )
+    if not cluster:
+        raise SystemExit(f"未找到名称为 '{cluster_name}' 的集群")
+
+    if reset:
+        _cleanup_e2e_demo(session, cluster.id)
+
+    now = datetime.utcnow()
+    scan_start = now - timedelta(minutes=4)
+
+    scan_task = ScanTask(
+        task_id="E2E-DEMO-SCAN",
+        cluster_id=cluster.id,
+        task_type="cluster",
+        task_name="E2E Demo Scan",
+        status="completed",
+        total_items=10,
+        completed_items=10,
+        current_item=None,
+        total_tables_scanned=10,
+        total_files_found=120,
+        total_small_files=32,
+        start_time=scan_start,
+        end_time=now,
+        duration=(now - scan_start).total_seconds(),
+        warnings=None,
+    )
+    session.add(scan_task)
+    session.commit()
+    session.refresh(scan_task)
+
+    scan_logs = [
+        ("INFO", "开始扫描集群 (E2E Demo)", "demo_db", None),
+        ("INFO", "扫描表 demo_db.orders", "demo_db", "orders"),
+        ("INFO", "扫描表 demo_db.events", "demo_db", "events"),
+        ("INFO", "扫描完成，发现 32 个小文件", None, None),
+    ]
+    for level, message, db_name, table_name in scan_logs:
+        session.add(
+            ScanTaskLogDB(
+                scan_task_id=scan_task.id,
+                level=level,
+                message=message,
+                database_name=db_name,
+                table_name=table_name,
+            )
+        )
+    session.commit()
+
+    success_task = MergeTask(
+        cluster_id=cluster.id,
+        task_name="E2E Demo Merge Success",
+        database_name="demo_db",
+        table_name="demo_orders",
+        partition_filter="dt='2025-01-01'",
+        target_file_size=256 * 1024 * 1024,
+        target_storage_format="PARQUET",
+        target_compression="SNAPPY",
+        use_ec=False,
+        status="success",
+        progress=100.0,
+        current_phase="completed",
+        execution_phase="validation",
+        progress_percentage=100.0,
+        processed_files_count=180,
+        total_files_count=180,
+        files_before=180,
+        files_after=6,
+        size_saved=2 * 1024 * 1024 * 1024,
+        started_time=now - timedelta(minutes=12),
+        completed_time=now - timedelta(minutes=9),
+    )
+
+    failed_task = MergeTask(
+        cluster_id=cluster.id,
+        task_name="E2E Demo Merge Failed",
+        database_name="demo_db",
+        table_name="demo_events",
+        partition_filter="dt='2025-01-02'",
+        target_file_size=256 * 1024 * 1024,
+        target_storage_format="PARQUET",
+        target_compression="SNAPPY",
+        use_ec=False,
+        status="failed",
+        error_message="模拟失败：Hive 报错，已触发回滚",
+        progress=45.0,
+        current_phase="rollback",
+        execution_phase="rollback",
+        progress_percentage=45.0,
+        processed_files_count=80,
+        total_files_count=200,
+        files_before=200,
+        files_after=None,
+        size_saved=None,
+        started_time=now - timedelta(minutes=8),
+        completed_time=now - timedelta(minutes=7, seconds=15),
+    )
+
+    session.add_all([success_task, failed_task])
+    session.commit()
+    session.refresh(success_task)
+    session.refresh(failed_task)
+
+    success_logs = [
+        ("INFO", "任务开始：准备合并 demo_db.demo_orders", "initialization", 0.0),
+        ("INFO", "创建临时表 demo_orders_temp_20250101", "preparing", 25.0),
+        ("INFO", "执行 safe_merge，合并 180 → 6 个文件", "merging", 75.0),
+        ("INFO", "数据校验通过，开始清理临时表", "validation", 95.0),
+        ("INFO", "任务成功完成", "completed", 100.0),
+    ]
+    failed_logs = [
+        ("INFO", "任务开始：准备合并 demo_db.demo_events", "initialization", 0.0),
+        ("WARNING", "检测到 HDFS 小文件数量异常 (200)", "analysis", 30.0),
+        ("ERROR", "Hive 执行失败：执行 INSERT OVERWRITE 时发生权限错误", "merging", 45.0),
+        ("INFO", "已触发自动回滚，清理临时表", "rollback", 45.0),
+    ]
+
+    for level, message, phase, progress in success_logs:
+        session.add(
+            TaskLog(
+                task_id=success_task.id,
+                log_level=level,
+                message=message,
+                phase=phase,
+                progress_percentage=progress,
+            )
+        )
+    for level, message, phase, progress in failed_logs:
+        session.add(
+            TaskLog(
+                task_id=failed_task.id,
+                log_level=level,
+                message=message,
+                phase=phase,
+                progress_percentage=progress,
+            )
+        )
+    session.commit()
+
+    print("✅ 已生成 Story 6.11 E2E Demo 数据:")
+    print(f"   • 集群: {cluster.name} (id={cluster.id})")
+    print(f"   • 扫描任务 ID: {scan_task.id}")
+    print(f"   • 合并任务 ID: success={success_task.id}, failed={failed_task.id}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="生成 Hive 小文件治理平台演示数据")
     parser.add_argument(
@@ -482,6 +666,21 @@ def main():
         help="数据库连接URL",
     )
     parser.add_argument("--clear", action="store_true", help="清理现有数据")
+    parser.add_argument(
+        "--seed-e2e",
+        action="store_true",
+        help="仅生成 Story 6.11 E2E Demo 数据",
+    )
+    parser.add_argument(
+        "--e2e-cluster-name",
+        default="CDP-14",
+        help="E2E Demo 使用的集群名称",
+    )
+    parser.add_argument(
+        "--e2e-reset",
+        action="store_true",
+        help="生成 E2E Demo 数据前清理旧数据",
+    )
 
     args = parser.parse_args()
 
@@ -499,6 +698,19 @@ def main():
     print()
 
     generator = DemoDataGenerator(args.database_url, args.preset)
+
+    if args.seed_e2e:
+        session = generator.SessionLocal()
+        try:
+            seed_e2e_demo(
+                session,
+                cluster_name=args.e2e_cluster_name,
+                reset=args.e2e_reset,
+            )
+        finally:
+            session.close()
+        return
+
     generator.generate_all()
 
 

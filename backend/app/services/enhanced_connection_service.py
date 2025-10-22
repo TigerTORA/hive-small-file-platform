@@ -18,8 +18,15 @@ from urllib.parse import urlparse
 
 from app.models.cluster import Cluster
 from app.monitor.hive_connector import HiveMetastoreConnector
+from app.monitor.beeline_connector import BeelineConnector
 from app.monitor.mysql_hive_connector import MySQLHiveMetastoreConnector
 from app.monitor.webhdfs_scanner import WebHDFSScanner
+from app.utils.kerberos_diagnostics import (
+    KerberosDiagnostic,
+    KerberosDiagnosticError,
+    map_exception_to_diagnostic,
+)
+from app.utils.metrics import increment_kerberos_failure, snapshot_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +64,9 @@ class ConnectionResult:
     attempt_count: int = 1
     retry_count: int = 0
     timestamp: datetime = None
+    diagnostic_code: Optional[str] = None
+    diagnostic_message: Optional[str] = None
+    recommended_action: Optional[str] = None
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -87,6 +97,17 @@ class EnhancedConnectionService:
         self._circuit_breakers: Dict[Tuple[int, ConnectionType], int] = {}  # 熔断器状态
         self._last_successful_check: Dict[Tuple[int, ConnectionType], datetime] = {}
         self._lock = threading.Lock()
+
+    def _apply_diagnostic(
+        self, result: ConnectionResult, diagnostic: Optional[KerberosDiagnostic]
+    ) -> ConnectionResult:
+        if diagnostic:
+            result.diagnostic_code = diagnostic.code.value
+            result.diagnostic_message = diagnostic.message
+            result.recommended_action = diagnostic.recommended_action
+            increment_kerberos_failure(diagnostic.code.value)
+        return result
+
 
     def _classify_error(
         self, error: Exception, connection_type: ConnectionType
@@ -276,19 +297,33 @@ class EnhancedConnectionService:
         connection_type = ConnectionType.HDFS
 
         try:
+            auth_type = (getattr(cluster, "auth_type", "NONE") or "NONE").upper()
+            kerberos_kwargs = {}
+            if auth_type == "KERBEROS":
+                kerberos_kwargs = {
+                    "kerberos_principal": getattr(cluster, "kerberos_principal", None),
+                    "kerberos_keytab_path": getattr(cluster, "kerberos_keytab_path", None),
+                    "kerberos_realm": getattr(cluster, "kerberos_realm", None),
+                    "kerberos_ticket_cache": getattr(cluster, "kerberos_ticket_cache", None),
+                }
             scanner = WebHDFSScanner(
                 cluster.hdfs_namenode_url,
                 user=getattr(cluster, "hdfs_user", "hdfs") or "hdfs",
+                auth_type=auth_type,
+                **kerberos_kwargs,
             )
 
             # 测试连接
             success = scanner.connect()
             response_time = (time.time() - start_time) * 1000
+            diagnostic = None
+            if hasattr(scanner, "last_diagnostic"):
+                diagnostic = scanner.last_diagnostic()
 
             try:
                 scanner.disconnect()
-            except:
-                pass  # 忽略断开连接的错误
+            except Exception:
+                pass
 
             if success:
                 return ConnectionResult(
@@ -296,26 +331,39 @@ class EnhancedConnectionService:
                     status="success",
                     response_time_ms=response_time,
                 )
-            else:
-                return ConnectionResult(
-                    connection_type=connection_type,
-                    status="failed",
-                    response_time_ms=response_time,
-                    failure_type=FailureType.SERVICE_UNAVAILABLE,
-                    error_message="HDFS connection failed",
-                )
 
+            result = ConnectionResult(
+                connection_type=connection_type,
+                status="failed",
+                response_time_ms=response_time,
+                failure_type=FailureType.SERVICE_UNAVAILABLE,
+                error_message="HDFS connection failed",
+            )
+            return self._apply_diagnostic(result, diagnostic)
+
+        except KerberosDiagnosticError as kde:
+            diagnostic = kde.diagnostic
+            response_time = (time.time() - start_time) * 1000
+            result = ConnectionResult(
+                connection_type=connection_type,
+                status="failed",
+                response_time_ms=response_time,
+                failure_type=FailureType.AUTHENTICATION_FAILED,
+                error_message=diagnostic.message,
+            )
+            return self._apply_diagnostic(result, diagnostic)
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
             failure_type = self._classify_error(e, connection_type)
-
-            return ConnectionResult(
+            diagnostic = map_exception_to_diagnostic(e)
+            result = ConnectionResult(
                 connection_type=connection_type,
                 status="failed",
                 response_time_ms=response_time,
                 failure_type=failure_type,
                 error_message=str(e),
             )
+            return self._apply_diagnostic(result, diagnostic)
 
     def _test_hiveserver2_connection(self, cluster: Cluster) -> ConnectionResult:
         """测试HiveServer2连接"""
@@ -344,6 +392,39 @@ class EnhancedConnectionService:
                 )
 
             # TCP连接成功，尝试真实的Hive连接测试
+            if (getattr(cluster, "auth_type", "NONE") or "NONE").upper() == "KERBEROS":
+                try:
+                    connector = BeelineConnector.from_cluster(
+                        cluster, timeout=int(self.config.timeout_seconds)
+                    )
+                    beeline_result = connector.test_connection()
+                    response_time = (time.time() - start_time) * 1000
+                    if beeline_result.get("status") == "success":
+                        return ConnectionResult(
+                            connection_type=connection_type,
+                            status="success",
+                            response_time_ms=response_time,
+                        )
+                    message = beeline_result.get("message") or beeline_result.get(
+                        "details", {}
+                    ).get("error", "Kerberos HiveServer2 authentication failed")
+                    return ConnectionResult(
+                        connection_type=connection_type,
+                        status="failed",
+                        response_time_ms=response_time,
+                        failure_type=FailureType.AUTHENTICATION_FAILED,
+                        error_message=message,
+                    )
+                except Exception as beeline_error:
+                    response_time = (time.time() - start_time) * 1000
+                    return ConnectionResult(
+                        connection_type=connection_type,
+                        status="failed",
+                        response_time_ms=response_time,
+                        failure_type=FailureType.AUTHENTICATION_FAILED,
+                        error_message=str(beeline_error),
+                    )
+
             try:
                 from pyhive import hive
 
@@ -545,12 +626,17 @@ class EnhancedConnectionService:
                         }
                     )
                 else:
-                    logs.append(
-                        {
-                            "level": "ERROR",
-                            "message": f"{conn_type.value}: {result.error_message} (attempts: {result.attempt_count})",
-                        }
-                    )
+                    log_entry = {
+                        "level": "ERROR",
+                        "message": f"{conn_type.value}: {result.error_message} (attempts: {result.attempt_count})",
+                    }
+                    if result.diagnostic_code:
+                        log_entry["diagnostic_code"] = result.diagnostic_code
+                    if result.diagnostic_message:
+                        log_entry["diagnostic_message"] = result.diagnostic_message
+                    if result.recommended_action:
+                        log_entry["recommended_action"] = result.recommended_action
+                    logs.append(log_entry)
 
                     # 生成修复建议
                     if result.failure_type:
@@ -558,6 +644,8 @@ class EnhancedConnectionService:
                             result.failure_type, conn_type
                         )
                         suggestions.extend(conn_suggestions)
+                    if result.recommended_action:
+                        suggestions.append(result.recommended_action)
 
             except Exception as e:
                 logs.append(
@@ -596,6 +684,9 @@ class EnhancedConnectionService:
                     "error_message": result.error_message,
                     "attempt_count": result.attempt_count,
                     "retry_count": result.retry_count,
+                    "diagnostic_code": result.diagnostic_code,
+                    "diagnostic_message": result.diagnostic_message,
+                    "recommended_action": result.recommended_action,
                 }
                 for conn_type, result in results.items()
             },
@@ -623,6 +714,9 @@ class EnhancedConnectionService:
                     "attempt_count": result.attempt_count,
                     "retry_count": result.retry_count,
                     "timestamp": result.timestamp.isoformat(),
+                    "diagnostic_code": result.diagnostic_code,
+                    "diagnostic_message": result.diagnostic_message,
+                    "recommended_action": result.recommended_action,
                 }
                 for result in recent_history
             ]
@@ -675,6 +769,10 @@ class EnhancedConnectionService:
                 "failure_types": failure_types,
                 "period_hours": hours,
             }
+
+    def get_kerberos_metrics(self) -> Dict[str, Dict[str, int]]:
+        """获取内存累积的 Kerberos 指标快照。"""
+        return snapshot_metrics()
 
 
 # 全局服务实例
