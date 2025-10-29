@@ -117,55 +117,18 @@ export const useTableActions = (
       }
 
       if (mergeForm.ec) {
-        const ssh = getHarSshDefaults(clusterId.value)
-        if (!ssh || !ssh.host) {
-          ElMessage.warning('请先在集群管理维护 SSH 配置')
-        } else {
-          const ecResp = await storageApi.setEcPolicy(cid, {
-            path,
-            policy: mergeForm.ecPolicy || 'RS-6-3-1024k',
-            recursive: mergeForm.ecRecursive!,
-            ssh_host: ssh.host,
-            ssh_user: ssh.user || 'hdfs',
-            ssh_port: ssh.port || 22,
-            ssh_key_path: ssh.keyPath,
-            kinit_principal: ssh.principal,
-            kinit_keytab: ssh.keytab
-          })
-          if ((ecResp as any)?.task_id) additionalTasks.push((ecResp as any).task_id)
-        }
+        ElMessage.warning('EC 策略功能依赖的 HAR SSH 配置已下线，暂不支持该操作')
+        mergeForm.ec = false
       }
 
       if (mergeForm.runMover) {
-        const ssh = getHarSshDefaults(clusterId.value)
-        if (!ssh || !ssh.host) {
-          ElMessage.warning('请先在集群管理维护 SSH 配置')
-        } else {
-          const mover = await storageApi.runMover(cid, {
-            path,
-            ssh_host: ssh.host,
-            ssh_user: ssh.user || 'hdfs',
-            ssh_port: ssh.port || 22,
-            ssh_key_path: ssh.keyPath,
-            kinit_principal: ssh.principal,
-            kinit_keytab: ssh.keytab
-          })
-          if ((mover as any)?.task_id) additionalTasks.push((mover as any).task_id)
-        }
+        ElMessage.warning('HDFS Mover 功能依赖的 HAR SSH 配置已下线，暂不支持该操作')
+        mergeForm.runMover = false
       }
 
       return { taskId: task.id, additionalTasks }
     } finally {
       creating.value = false
-    }
-  }
-
-  const getHarSshDefaults = (clusterId: number) => {
-    try {
-      const raw = localStorage.getItem(`har-ssh.${clusterId}`)
-      return raw ? JSON.parse(raw) : null
-    } catch (error) {
-      return null
     }
   }
 
