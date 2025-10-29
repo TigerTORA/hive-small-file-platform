@@ -1,0 +1,62 @@
+{
+  "testName": "9.2-cluster-mgmt",
+  "timestamp": "2025-10-27T01:14:36.216Z",
+  "summary": {
+    "totalMessages": 5,
+    "errors": 1,
+    "warnings": 0
+  },
+  "errors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "timestamp": 1761527675578,
+      "location": "http://localhost:3000/vite.svg"
+    }
+  ],
+  "warnings": [],
+  "allMessages": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "timestamp": 1761527675459,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "timestamp": 1761527675466,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "log",
+      "text": "[FeatureFlags] Development mode: feature flags available in window object",
+      "timestamp": 1761527675507,
+      "location": "http://localhost:3000/src/utils/feature-flags.ts",
+      "args": [
+        "[FeatureFlags] Development mode: feature flags available in window object"
+      ]
+    },
+    {
+      "type": "info",
+      "text": "<Suspense> is an experimental feature and its API will likely change.",
+      "timestamp": 1761527675543,
+      "location": "http://localhost:3000/node_modules/.vite/deps/chunk-OIEGXR4S.js?v=54705fa6",
+      "args": [
+        "<Suspense> is an experimental feature and its API will likely change."
+      ]
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "timestamp": 1761527675578,
+      "location": "http://localhost:3000/vite.svg"
+    }
+  ]
+}

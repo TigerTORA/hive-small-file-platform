@@ -1,0 +1,49 @@
+{
+  "testName": "9.2-cluster-mgmt",
+  "timestamp": "2025-10-27T01:28:11.278Z",
+  "summary": {
+    "totalMessages": 4,
+    "errors": 0,
+    "warnings": 0
+  },
+  "errors": [],
+  "warnings": [],
+  "allMessages": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "timestamp": 1761528490431,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "timestamp": 1761528490438,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "log",
+      "text": "[FeatureFlags] Development mode: feature flags available in window object",
+      "timestamp": 1761528490482,
+      "location": "http://localhost:3000/src/utils/feature-flags.ts",
+      "args": [
+        "[FeatureFlags] Development mode: feature flags available in window object"
+      ]
+    },
+    {
+      "type": "info",
+      "text": "<Suspense> is an experimental feature and its API will likely change.",
+      "timestamp": 1761528490515,
+      "location": "http://localhost:3000/node_modules/.vite/deps/chunk-OIEGXR4S.js?v=54705fa6",
+      "args": [
+        "<Suspense> is an experimental feature and its API will likely change."
+      ]
+    }
+  ]
+}

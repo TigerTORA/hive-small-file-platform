@@ -1,0 +1,678 @@
+{
+  "config": {
+    "configFile": "/Users/luohu/new_project/hive-small-file-platform/tests/playwright.config.ts",
+    "rootDir": "/Users/luohu/new_project/hive-small-file-platform/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "reports/html",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "reports/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/luohu/new_project/hive-small-file-platform/tests/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/luohu/new_project/hive-small-file-platform/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "9.2-cluster-mgmt.spec.ts",
+      "file": "9.2-cluster-mgmt.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "9.2 集群管理操作",
+          "file": "9.2-cluster-mgmt.spec.ts",
+          "line": 24,
+          "column": 6,
+          "specs": [
+            {
+              "title": "应该正常访问集群管理页面",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4260,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 访问集群管理页面\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/01_clusters_page_loaded_1761529208811.png\n"
+                        },
+                        {
+                          "text": "步骤2: 验证页面加载成功\n"
+                        },
+                        {
+                          "text": "步骤3: 验证URL正确\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 3.93秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-11-921Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:07.465Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-b91b3d844199f2696d1e",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 45,
+              "column": 7
+            },
+            {
+              "title": "应该显示集群列表",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2238,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 获取集群数量\n"
+                        },
+                        {
+                          "text": "集群数量: 7\n"
+                        },
+                        {
+                          "text": "步骤2: 获取集群名称\n"
+                        },
+                        {
+                          "text": "集群列表: production-cluster, demo-archive, CDP-14, E2E-REAL, TEST-CDP-E2E-1761528768735, TEST-CDP-E2E-1761529008247, TEST-CDP-E2E-1761529144556\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/02_cluster_list_1761529214090.png\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 1.91秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-14-176Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:12.017Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-e6e855741975637a17ca",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 67,
+              "column": 7
+            },
+            {
+              "title": "UI数据应该与API数据一致",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1259,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 获取UI显示的集群数据\n"
+                        },
+                        {
+                          "text": "UI集群列表: production-cluster, demo-archive, CDP-14, E2E-REAL, TEST-CDP-E2E-1761528768735, TEST-CDP-E2E-1761529008247, TEST-CDP-E2E-1761529144556\n"
+                        },
+                        {
+                          "text": "步骤2: 调用API获取集群数据\n"
+                        },
+                        {
+                          "text": "API返回集群数量: 7\n"
+                        },
+                        {
+                          "text": "步骤3: 对比UI与API数据\n"
+                        },
+                        {
+                          "text": "✅ UI数据与API数据一致\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/03_data_validation_1761529215342.png\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 0.92秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-15-441Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:14.259Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-abe42b4299accdb29c68",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 97,
+              "column": 7
+            },
+            {
+              "title": "应该能选择集群",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1426,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 获取集群列表\n"
+                        },
+                        {
+                          "text": "步骤2: 选择第一个集群\n"
+                        },
+                        {
+                          "text": "已选择集群: production-cluster\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/04_cluster_selected_1761529216624.png\n"
+                        },
+                        {
+                          "text": "步骤3: 验证集群选择已保存\n"
+                        },
+                        {
+                          "text": "localStorage中的集群: 1\n"
+                        },
+                        {
+                          "text": "✓ 集群选择已保存到localStorage\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 1.08秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-16-838Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:15.523Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-2e576645460573a20e41",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 141,
+              "column": 7
+            },
+            {
+              "title": "未选择集群时应该被路由守卫拦截",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3141,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 访问首页并清除集群选择状态\n"
+                        },
+                        {
+                          "text": "步骤2: 尝试访问表管理页面\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/06_route_guard_redirect_1761529219884.png\n"
+                        },
+                        {
+                          "text": "步骤3: 验证路由守卫拦截\n"
+                        },
+                        {
+                          "text": "当前路由: /clusters?redirect=/tables\n"
+                        },
+                        {
+                          "text": "✅ 路由守卫正常工作\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 2.81秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-19-999Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:16.954Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-4de03aa0010a808ecb20",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 177,
+              "column": 7
+            },
+            {
+              "title": "应该能测试集群连接",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6361,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 获取测试集群\n"
+                        },
+                        {
+                          "text": "测试集群: production-cluster\n"
+                        },
+                        {
+                          "text": "步骤2: 点击测试连接按钮\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/05_before_connection_test_1761529221162.png\n"
+                        },
+                        {
+                          "text": "步骤3: 验证连接测试结果\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/06_after_connection_test_1761529226300.png\n"
+                        },
+                        {
+                          "text": "连接测试结果: ✗ 失败（测试环境正常）\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 6.03秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-26-391Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:20.099Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-f0aa854909169eb95d73",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 213,
+              "column": 7
+            },
+            {
+              "title": "应该能创建新集群",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6914,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "步骤1: 记录初始集群数量\n"
+                        },
+                        {
+                          "text": "初始集群数量: 7\n"
+                        },
+                        {
+                          "text": "步骤2: 点击添加集群按钮\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/07_create_dialog_opened_1761529229583.png\n"
+                        },
+                        {
+                          "text": "步骤3: 填写集群表单\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/08_create_form_filled_1761529229724.png\n"
+                        },
+                        {
+                          "text": "步骤4: 提交集群创建表单\n"
+                        },
+                        {
+                          "text": "📸 截图已保存: /Users/luohu/new_project/hive-small-file-platform/docs/screenshots/9_2-cluster-mgmt/09_after_create_1761529232151.png\n"
+                        },
+                        {
+                          "text": "步骤5: 验证集群列表已更新\n"
+                        },
+                        {
+                          "text": "创建后集群数量: 8\n"
+                        },
+                        {
+                          "text": "✓ 新集群 \"TEST-CDP-E2E-1761529229682\" 已添加到列表\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 6.59秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-33-286Z.json\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:26.465Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-aa64956ad2b2caba7381",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 242,
+              "column": 7
+            },
+            {
+              "title": "应该能编辑和删除集群",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/Users/luohu/new_project/hive-small-file-platform/tests/e2e/9.2-cluster-mgmt.spec.ts",
+                        "line": 296,
+                        "column": 8
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:33.383Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/Users/luohu/new_project/hive-small-file-platform/tests/e2e/9.2-cluster-mgmt.spec.ts",
+                            "line": 296,
+                            "column": 8
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-d5a8ebc356317b2d988f",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 296,
+              "column": 8
+            },
+            {
+              "title": "应该无Console错误",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5251,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "🎯 Console监控已启动\n"
+                        },
+                        {
+                          "text": "✅ 测试通过，耗时: 4.86秒\n"
+                        },
+                        {
+                          "text": "🛑 Console监控已停止\n"
+                        },
+                        {
+                          "text": "📝 Console日志已保存: /Users/luohu/new_project/hive-small-file-platform/tests/reports/console-logs/9.2-cluster-mgmt_2025-10-27T01-40-38-494Z.json\n"
+                        },
+                        {
+                          "text": "📝 更新功能测试清单...\n"
+                        },
+                        {
+                          "text": "✅ 已更新测试状态: 9.2 -> ✅ 已通过\n"
+                        },
+                        {
+                          "text": "📦 已创建备份: /Users/luohu/new_project/hive-small-file-platform/docs/functional-test-checklist.md.backup_1761529238653\n"
+                        },
+                        {
+                          "text": "💾 文档已更新: /Users/luohu/new_project/hive-small-file-platform/docs/functional-test-checklist.md\n"
+                        },
+                        {
+                          "text": "✅ 功能测试清单已更新\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T01:40:33.384Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e7a4855940ba78523cf-309104a8d29ebfcf5068",
+              "file": "9.2-cluster-mgmt.spec.ts",
+              "line": 349,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-10-27T01:40:07.169Z",
+    "duration": 45386.709,
+    "expected": 8,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

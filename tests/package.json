@@ -1,0 +1,29 @@
+{
+  "name": "hive-platform-e2e-tests",
+  "version": "1.0.0",
+  "description": "Hive小文件平台端到端自动化测试",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:9.1": "playwright test 9.1-homepage",
+    "test:9.2": "playwright test 9.2-cluster-mgmt",
+    "test:9.3": "playwright test 9.3-table-mgmt",
+    "test:9.4": "playwright test 9.4-task-center",
+    "test:9.5": "playwright test 9.5-complete-flow",
+    "test:all": "playwright test --grep='9\\.'",
+    "report": "playwright show-report reports/html",
+    "install-browsers": "playwright install chromium"
+  },
+  "keywords": ["e2e", "playwright", "testing", "hive"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "dotenv": "^16.3.0",
+    "axios": "^1.6.0"
+  }
+}

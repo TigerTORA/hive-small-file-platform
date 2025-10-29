@@ -1,0 +1,326 @@
+{
+  "testName": "9.2-cluster-mgmt",
+  "timestamp": "2025-10-27T01:28:55.879Z",
+  "summary": {
+    "totalMessages": 12,
+    "errors": 0,
+    "warnings": 0
+  },
+  "errors": [],
+  "warnings": [],
+  "allMessages": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "timestamp": 1761528531035,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connecting..."
+      ]
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "timestamp": 1761528531048,
+      "location": "http://localhost:3000/@vite/client",
+      "args": [
+        "[vite] connected."
+      ]
+    },
+    {
+      "type": "log",
+      "text": "[FeatureFlags] Development mode: feature flags available in window object",
+      "timestamp": 1761528531094,
+      "location": "http://localhost:3000/src/utils/feature-flags.ts",
+      "args": [
+        "[FeatureFlags] Development mode: feature flags available in window object"
+      ]
+    },
+    {
+      "type": "info",
+      "text": "<Suspense> is an experimental feature and its API will likely change.",
+      "timestamp": 1761528531129,
+      "location": "http://localhost:3000/node_modules/.vite/deps/chunk-OIEGXR4S.js?v=54705fa6",
+      "args": [
+        "<Suspense> is an experimental feature and its API will likely change."
+      ]
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "timestamp": 1761528531162,
+      "location": "http://localhost:3000/vite.svg"
+    },
+    {
+      "type": "warning",
+      "text": "[ECharts] DEPRECATED: hoverAnimation is deprecated, use emphasis.scale instead.",
+      "timestamp": 1761528534990,
+      "location": "http://localhost:3000/node_modules/.vite/deps/chunk-JNQTHI5Y.js?v=54705fa6",
+      "args": [
+        "[ECharts] DEPRECATED: hoverAnimation is deprecated, use emphasis.scale instead."
+      ]
+    },
+    {
+      "type": "log",
+      "text": "✅ PieChart option已更新",
+      "timestamp": 1761528535246,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "✅ PieChart option已更新"
+      ]
+    },
+    {
+      "type": "log",
+      "text": "✅ PieChart option已更新",
+      "timestamp": 1761528535249,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "✅ PieChart option已更新"
+      ]
+    },
+    {
+      "type": "log",
+      "text": "✅ PieChart option已更新",
+      "timestamp": 1761528535251,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "✅ PieChart option已更新"
+      ]
+    },
+    {
+      "type": "log",
+      "text": "🔄 PieChart watch触发，新数据: {newData: Array(5), hasChart: true, dataLength: 5, firstItem: Object}",
+      "timestamp": 1761528535242,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "🔄 PieChart watch触发，新数据:",
+        {
+          "newData": [
+            {
+              "name": "可压缩小文件",
+              "value": 171663,
+              "description": "可以进行合并优化的小文件",
+              "details": {
+                "count": 171663,
+                "size_gb": 19341.52
+              }
+            },
+            {
+              "name": "不可压缩-ACID表",
+              "value": 0,
+              "description": "事务表，不支持合并",
+              "details": {
+                "count": 0,
+                "size_gb": 0
+              }
+            },
+            {
+              "name": "不可压缩-数据湖表",
+              "value": 0,
+              "description": "Hudi/Iceberg/Delta表",
+              "details": {
+                "count": 0,
+                "size_gb": 0
+              }
+            },
+            {
+              "name": "不可压缩-其他",
+              "value": 0,
+              "description": "其他不支持压缩的情况",
+              "details": {
+                "count": 0,
+                "size_gb": 0
+              }
+            },
+            {
+              "name": "正常大文件",
+              "value": 134876,
+              "description": ">=128MB的文件",
+              "details": {
+                "count": 134876,
+                "size_gb": 14803.48
+              }
+            }
+          ],
+          "hasChart": true,
+          "dataLength": 5,
+          "firstItem": {
+            "name": "可压缩小文件",
+            "value": 171663,
+            "description": "可以进行合并优化的小文件",
+            "details": {
+              "count": 171663,
+              "size_gb": 19341.52
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "log",
+      "text": "🔄 PieChart watch触发，新数据: {newData: Array(5), hasChart: true, dataLength: 5, firstItem: Object}",
+      "timestamp": 1761528535247,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "🔄 PieChart watch触发，新数据:",
+        {
+          "newData": [
+            {
+              "name": "1-7天",
+              "value": 775.64,
+              "details": {
+                "partitions": {
+                  "count": 0,
+                  "size_gb": 0
+                },
+                "tables": {
+                  "count": 4,
+                  "size_gb": 775.64
+                }
+              }
+            },
+            {
+              "name": "1周-1月",
+              "value": 2921.22,
+              "details": {
+                "partitions": {
+                  "count": 10837,
+                  "size_gb": 182.02
+                },
+                "tables": {
+                  "count": 3,
+                  "size_gb": 2921.22
+                }
+              }
+            },
+            {
+              "name": "1-6月",
+              "value": 30448.14,
+              "details": {
+                "partitions": {
+                  "count": 996,
+                  "size_gb": 0.18
+                },
+                "tables": {
+                  "count": 53,
+                  "size_gb": 30448.14
+                }
+              }
+            },
+            {
+              "name": "6-12月",
+              "value": 0,
+              "details": {
+                "partitions": {
+                  "count": 4,
+                  "size_gb": 0
+                },
+                "tables": {
+                  "count": 0,
+                  "size_gb": 0
+                }
+              }
+            },
+            {
+              "name": "1年以上",
+              "value": 0,
+              "details": {
+                "partitions": {
+                  "count": 0,
+                  "size_gb": 0
+                },
+                "tables": {
+                  "count": 0,
+                  "size_gb": 0
+                }
+              }
+            }
+          ],
+          "hasChart": true,
+          "dataLength": 5,
+          "firstItem": {
+            "name": "1-7天",
+            "value": 775.64,
+            "details": {
+              "partitions": {
+                "count": 0,
+                "size_gb": 0
+              },
+              "tables": {
+                "count": 4,
+                "size_gb": 775.64
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "log",
+      "text": "🔄 PieChart watch触发，新数据: {newData: Array(3), hasChart: true, dataLength: 3, firstItem: Object}",
+      "timestamp": 1761528535249,
+      "location": "http://localhost:3000/src/components/charts/PieChart.vue",
+      "args": [
+        "🔄 PieChart watch触发，新数据:",
+        {
+          "newData": [
+            {
+              "name": "ORC·ZLIB",
+              "value": 19,
+              "description": "ORC(ZLIB压缩)",
+              "details": {
+                "table_count": 19,
+                "total_size_gb": 13256.57,
+                "small_files": 70230,
+                "total_files": 118031,
+                "percentage": 31.7,
+                "original_name": "ORC(ZLIB压缩)"
+              }
+            },
+            {
+              "name": "TEXT·无压缩",
+              "value": 18,
+              "description": "TEXT(无压缩)",
+              "details": {
+                "table_count": 18,
+                "total_size_gb": 10708.77,
+                "small_files": 39448,
+                "total_files": 76777,
+                "percentage": 30,
+                "original_name": "TEXT(无压缩)"
+              }
+            },
+            {
+              "name": "PARQUET·SNAPPY",
+              "value": 23,
+              "description": "PARQUET(SNAPPY压缩)",
+              "details": {
+                "table_count": 23,
+                "total_size_gb": 10179.66,
+                "small_files": 61985,
+                "total_files": 111731,
+                "percentage": 38.3,
+                "original_name": "PARQUET(SNAPPY压缩)"
+              }
+            }
+          ],
+          "hasChart": true,
+          "dataLength": 3,
+          "firstItem": {
+            "name": "ORC·ZLIB",
+            "value": 19,
+            "description": "ORC(ZLIB压缩)",
+            "details": {
+              "table_count": 19,
+              "total_size_gb": 13256.57,
+              "small_files": 70230,
+              "total_files": 118031,
+              "percentage": 31.7,
+              "original_name": "ORC(ZLIB压缩)"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
